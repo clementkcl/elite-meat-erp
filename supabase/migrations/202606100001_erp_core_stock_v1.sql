@@ -422,143 +422,205 @@ alter table public.stock_take_sessions enable row level security;
 alter table public.stock_take_lines enable row level security;
 alter table public.stock_reports enable row level security;
 
+drop policy if exists "authenticated can read departments" on public.departments;
 create policy "authenticated can read departments"
 on public.departments for select to authenticated using (true);
+drop policy if exists "admins can insert departments" on public.departments;
 create policy "admins can insert departments"
 on public.departments for insert to authenticated with check (public.has_role('admin'));
+drop policy if exists "admins can update departments" on public.departments;
 create policy "admins can update departments"
 on public.departments for update to authenticated using (public.has_role('admin')) with check (public.has_role('admin'));
+drop policy if exists "admins can delete departments" on public.departments;
 create policy "admins can delete departments"
 on public.departments for delete to authenticated using (public.has_role('admin'));
 
+drop policy if exists "authenticated can read branches" on public.branches;
 create policy "authenticated can read branches"
 on public.branches for select to authenticated using (true);
+drop policy if exists "admins can insert branches" on public.branches;
 create policy "admins can insert branches"
 on public.branches for insert to authenticated with check (public.has_role('admin'));
+drop policy if exists "admins can update branches" on public.branches;
 create policy "admins can update branches"
 on public.branches for update to authenticated using (public.has_role('admin')) with check (public.has_role('admin'));
+drop policy if exists "admins can delete branches" on public.branches;
 create policy "admins can delete branches"
 on public.branches for delete to authenticated using (public.has_role('admin'));
 
+drop policy if exists "authenticated can read outlets" on public.outlets;
 create policy "authenticated can read outlets"
 on public.outlets for select to authenticated using (true);
+drop policy if exists "admins can insert outlets" on public.outlets;
 create policy "admins can insert outlets"
 on public.outlets for insert to authenticated with check (public.has_role('admin'));
+drop policy if exists "admins can update outlets" on public.outlets;
 create policy "admins can update outlets"
 on public.outlets for update to authenticated using (public.has_role('admin')) with check (public.has_role('admin'));
+drop policy if exists "admins can delete outlets" on public.outlets;
 create policy "admins can delete outlets"
 on public.outlets for delete to authenticated using (public.has_role('admin'));
 
+drop policy if exists "authenticated can read roles" on public.roles;
 create policy "authenticated can read roles"
 on public.roles for select to authenticated using (true);
+drop policy if exists "admins can insert roles" on public.roles;
 create policy "admins can insert roles"
 on public.roles for insert to authenticated with check (public.has_role('admin'));
+drop policy if exists "admins can update roles" on public.roles;
 create policy "admins can update roles"
 on public.roles for update to authenticated using (public.has_role('admin')) with check (public.has_role('admin'));
+drop policy if exists "admins can delete roles" on public.roles;
 create policy "admins can delete roles"
 on public.roles for delete to authenticated using (public.has_role('admin'));
 
+drop policy if exists "users can read own profile" on public.profiles;
 create policy "users can read own profile"
 on public.profiles for select to authenticated using (id = auth.uid() or public.has_role('admin'));
+drop policy if exists "admins can insert profiles" on public.profiles;
 create policy "admins can insert profiles"
 on public.profiles for insert to authenticated with check (public.has_role('admin'));
+drop policy if exists "admins can update profiles" on public.profiles;
 create policy "admins can update profiles"
 on public.profiles for update to authenticated using (public.has_role('admin')) with check (public.has_role('admin'));
+drop policy if exists "admins can delete profiles" on public.profiles;
 create policy "admins can delete profiles"
 on public.profiles for delete to authenticated using (public.has_role('admin'));
 
+drop policy if exists "users can read own profile roles" on public.profile_roles;
 create policy "users can read own profile roles"
 on public.profile_roles for select to authenticated using (profile_id = auth.uid() or public.has_role('admin'));
+drop policy if exists "admins can insert profile roles" on public.profile_roles;
 create policy "admins can insert profile roles"
 on public.profile_roles for insert to authenticated with check (public.has_role('admin'));
+drop policy if exists "admins can update profile roles" on public.profile_roles;
 create policy "admins can update profile roles"
 on public.profile_roles for update to authenticated using (public.has_role('admin')) with check (public.has_role('admin'));
+drop policy if exists "admins can delete profile roles" on public.profile_roles;
 create policy "admins can delete profile roles"
 on public.profile_roles for delete to authenticated using (public.has_role('admin'));
 
+drop policy if exists "authenticated can read brands" on public.brands;
 create policy "authenticated can read brands"
 on public.brands for select to authenticated using (true);
+drop policy if exists "stock admins can insert brands" on public.brands;
 create policy "stock admins can insert brands"
 on public.brands for insert to authenticated with check (public.can_administer_stock());
+drop policy if exists "stock admins can update brands" on public.brands;
 create policy "stock admins can update brands"
 on public.brands for update to authenticated using (public.can_administer_stock()) with check (public.can_administer_stock());
+drop policy if exists "stock admins can delete brands" on public.brands;
 create policy "stock admins can delete brands"
 on public.brands for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read origins" on public.origins;
 create policy "authenticated can read origins"
 on public.origins for select to authenticated using (true);
+drop policy if exists "stock admins can insert origins" on public.origins;
 create policy "stock admins can insert origins"
 on public.origins for insert to authenticated with check (public.can_administer_stock());
+drop policy if exists "stock admins can update origins" on public.origins;
 create policy "stock admins can update origins"
 on public.origins for update to authenticated using (public.can_administer_stock()) with check (public.can_administer_stock());
+drop policy if exists "stock admins can delete origins" on public.origins;
 create policy "stock admins can delete origins"
 on public.origins for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read stock locations" on public.stock_locations;
 create policy "authenticated can read stock locations"
 on public.stock_locations for select to authenticated using (true);
+drop policy if exists "stock admins can insert stock locations" on public.stock_locations;
 create policy "stock admins can insert stock locations"
 on public.stock_locations for insert to authenticated with check (public.can_administer_stock());
+drop policy if exists "stock admins can update stock locations" on public.stock_locations;
 create policy "stock admins can update stock locations"
 on public.stock_locations for update to authenticated using (public.can_administer_stock()) with check (public.can_administer_stock());
+drop policy if exists "stock admins can delete stock locations" on public.stock_locations;
 create policy "stock admins can delete stock locations"
 on public.stock_locations for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read items" on public.items;
 create policy "authenticated can read items"
 on public.items for select to authenticated using (true);
+drop policy if exists "stock admins can insert items" on public.items;
 create policy "stock admins can insert items"
 on public.items for insert to authenticated with check (public.can_administer_stock());
+drop policy if exists "stock admins can update items" on public.items;
 create policy "stock admins can update items"
 on public.items for update to authenticated using (public.can_administer_stock()) with check (public.can_administer_stock());
+drop policy if exists "stock admins can delete items" on public.items;
 create policy "stock admins can delete items"
 on public.items for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read stock units" on public.stock_units;
 create policy "authenticated can read stock units"
 on public.stock_units for select to authenticated using (true);
+drop policy if exists "stock operators can insert stock units" on public.stock_units;
 create policy "stock operators can insert stock units"
 on public.stock_units for insert to authenticated with check (public.can_manage_stock());
+drop policy if exists "stock operators can update stock units" on public.stock_units;
 create policy "stock operators can update stock units"
 on public.stock_units for update to authenticated using (public.can_manage_stock()) with check (public.can_manage_stock());
+drop policy if exists "stock admins can delete stock units" on public.stock_units;
 create policy "stock admins can delete stock units"
 on public.stock_units for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read stock movements" on public.stock_movements;
 create policy "authenticated can read stock movements"
 on public.stock_movements for select to authenticated using (true);
+drop policy if exists "stock operators can insert stock movements" on public.stock_movements;
 create policy "stock operators can insert stock movements"
 on public.stock_movements for insert to authenticated with check (public.can_manage_stock());
+drop policy if exists "stock admins can update stock movements" on public.stock_movements;
 create policy "stock admins can update stock movements"
 on public.stock_movements for update to authenticated using (public.can_administer_stock()) with check (public.can_administer_stock());
+drop policy if exists "stock admins can delete stock movements" on public.stock_movements;
 create policy "stock admins can delete stock movements"
 on public.stock_movements for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read scan logs" on public.barcode_scan_logs;
 create policy "authenticated can read scan logs"
 on public.barcode_scan_logs for select to authenticated using (true);
+drop policy if exists "stock operators can insert scan logs" on public.barcode_scan_logs;
 create policy "stock operators can insert scan logs"
 on public.barcode_scan_logs for insert to authenticated with check (public.can_manage_stock());
+drop policy if exists "stock admins can update scan logs" on public.barcode_scan_logs;
 create policy "stock admins can update scan logs"
 on public.barcode_scan_logs for update to authenticated using (public.can_administer_stock()) with check (public.can_administer_stock());
+drop policy if exists "stock admins can delete scan logs" on public.barcode_scan_logs;
 create policy "stock admins can delete scan logs"
 on public.barcode_scan_logs for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read no barcode stock" on public.no_barcode_stock;
 create policy "authenticated can read no barcode stock"
 on public.no_barcode_stock for select to authenticated using (true);
+drop policy if exists "stock operators can insert no barcode stock" on public.no_barcode_stock;
 create policy "stock operators can insert no barcode stock"
 on public.no_barcode_stock for insert to authenticated with check (public.can_manage_stock());
+drop policy if exists "stock operators can update no barcode stock" on public.no_barcode_stock;
 create policy "stock operators can update no barcode stock"
 on public.no_barcode_stock for update to authenticated using (public.can_manage_stock()) with check (public.can_manage_stock());
+drop policy if exists "stock admins can delete no barcode stock" on public.no_barcode_stock;
 create policy "stock admins can delete no barcode stock"
 on public.no_barcode_stock for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read no barcode movements" on public.no_barcode_movements;
 create policy "authenticated can read no barcode movements"
 on public.no_barcode_movements for select to authenticated using (true);
+drop policy if exists "stock operators can insert no barcode movements" on public.no_barcode_movements;
 create policy "stock operators can insert no barcode movements"
 on public.no_barcode_movements for insert to authenticated with check (public.can_manage_stock());
+drop policy if exists "stock admins can update no barcode movements" on public.no_barcode_movements;
 create policy "stock admins can update no barcode movements"
 on public.no_barcode_movements for update to authenticated using (public.can_administer_stock()) with check (public.can_administer_stock());
+drop policy if exists "stock admins can delete no barcode movements" on public.no_barcode_movements;
 create policy "stock admins can delete no barcode movements"
 on public.no_barcode_movements for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read stock take sessions" on public.stock_take_sessions;
 create policy "authenticated can read stock take sessions"
 on public.stock_take_sessions for select to authenticated using (true);
+drop policy if exists "stock operators can create draft stock take sessions" on public.stock_take_sessions;
 create policy "stock operators can create draft stock take sessions"
 on public.stock_take_sessions for insert to authenticated
 with check (
@@ -566,6 +628,7 @@ with check (
   and status = 'DRAFT'
   and (created_by is null or created_by = auth.uid())
 );
+drop policy if exists "stock operators can submit draft stock take sessions" on public.stock_take_sessions;
 create policy "stock operators can submit draft stock take sessions"
 on public.stock_take_sessions for update to authenticated
 using (public.can_manage_stock() and status = 'DRAFT')
@@ -576,52 +639,71 @@ with check (
   and approved_by is null
   and approved_at is null
 );
+drop policy if exists "stock admins can review approve or reject stock take sessions" on public.stock_take_sessions;
 create policy "stock admins can review approve or reject stock take sessions"
 on public.stock_take_sessions for update to authenticated
 using (public.can_administer_stock())
 with check (public.can_administer_stock());
+drop policy if exists "stock admins can delete stock take sessions" on public.stock_take_sessions;
 create policy "stock admins can delete stock take sessions"
 on public.stock_take_sessions for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read stock take lines" on public.stock_take_lines;
 create policy "authenticated can read stock take lines"
 on public.stock_take_lines for select to authenticated using (true);
+drop policy if exists "stock operators can insert draft stock take lines" on public.stock_take_lines;
 create policy "stock operators can insert draft stock take lines"
 on public.stock_take_lines for insert to authenticated with check (public.can_edit_stock_take_session(session_id));
+drop policy if exists "stock operators can update draft stock take lines" on public.stock_take_lines;
 create policy "stock operators can update draft stock take lines"
 on public.stock_take_lines for update to authenticated
 using (public.can_edit_stock_take_session(session_id))
 with check (public.can_edit_stock_take_session(session_id));
+drop policy if exists "stock admins can delete stock take lines" on public.stock_take_lines;
 create policy "stock admins can delete stock take lines"
 on public.stock_take_lines for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read stock reports" on public.stock_reports;
 create policy "authenticated can read stock reports"
 on public.stock_reports for select to authenticated using (true);
+drop policy if exists "stock operators can insert stock reports" on public.stock_reports;
 create policy "stock operators can insert stock reports"
 on public.stock_reports for insert to authenticated with check (public.can_manage_stock());
+drop policy if exists "stock admins can update stock reports" on public.stock_reports;
 create policy "stock admins can update stock reports"
 on public.stock_reports for update to authenticated using (public.can_administer_stock()) with check (public.can_administer_stock());
+drop policy if exists "stock admins can delete stock reports" on public.stock_reports;
 create policy "stock admins can delete stock reports"
 on public.stock_reports for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read files" on public.files;
 create policy "authenticated can read files"
 on public.files for select to authenticated using (true);
+drop policy if exists "authenticated can insert files" on public.files;
 create policy "authenticated can insert files"
 on public.files for insert to authenticated with check (owner_id = auth.uid() or public.can_manage_stock());
+drop policy if exists "file owners and stock admins can update files" on public.files;
 create policy "file owners and stock admins can update files"
 on public.files for update to authenticated
 using (owner_id = auth.uid() or public.can_administer_stock())
 with check (owner_id = auth.uid() or public.can_administer_stock());
+drop policy if exists "file owners and stock admins can delete files" on public.files;
 create policy "file owners and stock admins can delete files"
 on public.files for delete to authenticated using (owner_id = auth.uid() or public.can_administer_stock());
 
+drop policy if exists "stock admins can read audit logs" on public.audit_logs;
 create policy "stock admins can read audit logs"
 on public.audit_logs for select to authenticated using (public.can_administer_stock());
+drop policy if exists "authenticated can insert audit logs" on public.audit_logs;
 create policy "authenticated can insert audit logs"
 on public.audit_logs for insert to authenticated with check (actor_id = auth.uid());
+drop policy if exists "stock admins can delete audit logs" on public.audit_logs;
 create policy "stock admins can delete audit logs"
 on public.audit_logs for delete to authenticated using (public.can_administer_stock());
 
+drop policy if exists "authenticated can read erp files" on storage.objects;
 create policy "authenticated can read erp files"
 on storage.objects for select to authenticated using (bucket_id = 'erp-files');
+drop policy if exists "authenticated can upload erp files" on storage.objects;
 create policy "authenticated can upload erp files"
 on storage.objects for insert to authenticated with check (bucket_id = 'erp-files');

@@ -8,6 +8,7 @@ import {
   ClipboardList,
   DollarSign,
   FileText,
+  LogOut,
   Menu,
   PackageCheck,
   Receipt,
@@ -20,60 +21,239 @@ import { usePathname } from "next/navigation"
 import { useState, type ComponentType, type ReactNode } from "react"
 
 import { signOutAction } from "@/lib/auth/actions"
-import type { CurrentProfile, UserRole } from "@/lib/auth/session"
+import { canAccessModule, type ModuleKey } from "@/lib/auth/access"
+import type { CurrentProfile, UserRole } from "@/lib/auth/types"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { TeamScopeBadge } from "@/components/erp/team-scope-badge"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 
 type NavItem = {
   href: string
   label: string
   icon: ComponentType<{ className?: string }>
   roles?: UserRole[]
+  moduleKey?: ModuleKey
 }
 
+const stockRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "delivery_team_general_worker",
+  "delivery_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "admin",
+  "director",
+]
+
 const stockNav: NavItem[] = [
-  { href: "/stock/dashboard", label: "Stock Dashboard", icon: BarChart3 },
-  { href: "/stock/items", label: "Items", icon: Boxes },
-  { href: "/stock/inbound", label: "Inbound", icon: PackageCheck },
-  { href: "/stock/outbound", label: "Outbound Sales", icon: Receipt },
-  { href: "/stock/transfer", label: "Transfer", icon: Truck },
-  { href: "/stock/receive-transfer", label: "Receive Transfer", icon: Truck },
-  { href: "/stock/return", label: "Return", icon: ClipboardList },
+  {
+    href: "/stock/dashboard",
+    label: "Stock Dashboard",
+    icon: BarChart3,
+    roles: stockRoles,
+    moduleKey: "stock",
+  },
+  {
+    href: "/stock/items",
+    label: "Items",
+    icon: Boxes,
+    roles: stockRoles,
+    moduleKey: "stock",
+  },
+  {
+    href: "/stock/inbound",
+    label: "Inbound",
+    icon: PackageCheck,
+    roles: stockRoles,
+    moduleKey: "stock",
+  },
+  {
+    href: "/stock/outbound",
+    label: "Outbound Sales",
+    icon: Receipt,
+    roles: stockRoles,
+    moduleKey: "stock",
+  },
+  {
+    href: "/stock/transfer",
+    label: "Transfer",
+    icon: Truck,
+    roles: stockRoles,
+    moduleKey: "stock",
+  },
+  {
+    href: "/stock/receive-transfer",
+    label: "Receive Transfer",
+    icon: Truck,
+    roles: stockRoles,
+    moduleKey: "stock",
+  },
+  {
+    href: "/stock/return",
+    label: "Return",
+    icon: ClipboardList,
+    roles: stockRoles,
+    moduleKey: "stock",
+  },
   {
     href: "/stock/no-barcode-inbound",
     label: "No-Barcode Inbound",
     icon: PackageCheck,
+    roles: stockRoles,
+    moduleKey: "stock",
   },
-  { href: "/stock/balance", label: "Balance", icon: Boxes },
-  { href: "/stock/movements", label: "Movements", icon: FileText },
-  { href: "/stock/stock-take", label: "Stock Take", icon: ClipboardList },
-  { href: "/stock/reports", label: "Reports", icon: BarChart3 },
-  { href: "/stock/settings", label: "Stock Settings", icon: Settings },
+  {
+    href: "/stock/balance",
+    label: "Balance",
+    icon: Boxes,
+    roles: stockRoles,
+    moduleKey: "stock",
+  },
+  {
+    href: "/stock/movements",
+    label: "Movements",
+    icon: FileText,
+    roles: stockRoles,
+    moduleKey: "stock",
+  },
+  {
+    href: "/stock/stock-take",
+    label: "Stock Take",
+    icon: ClipboardList,
+    roles: stockRoles,
+    moduleKey: "stock",
+  },
+  {
+    href: "/stock/reports",
+    label: "Reports",
+    icon: BarChart3,
+    roles: stockRoles,
+    moduleKey: "stock",
+  },
+  {
+    href: "/stock/settings",
+    label: "Stock Settings",
+    icon: Settings,
+    roles: ["admin", "director"],
+    moduleKey: "stock",
+  },
 ]
 
 const moduleNav: NavItem[] = [
-  { href: "/delivery", label: "Delivery", icon: Truck },
-  { href: "/attendance", label: "Attendance", icon: CalendarCheck },
-  { href: "/oa-actions", label: "OA Actions", icon: ClipboardList },
-  { href: "/retail", label: "Retail", icon: Building2 },
   {
-    href: "/accounting-finance",
+    href: "/delivery/dashboard",
+    label: "Delivery",
+    icon: Truck,
+    moduleKey: "delivery",
+    roles: ["delivery_team_general_worker", "delivery_manager", "admin", "director"],
+  },
+  {
+    href: "/attendance/today",
+    label: "Attendance",
+    icon: CalendarCheck,
+    moduleKey: "attendance",
+  },
+  {
+    href: "/oa-actions/dashboard",
+    label: "OA Actions",
+    icon: ClipboardList,
+    moduleKey: "oa_actions",
+  },
+  {
+    href: "/retail/dashboard",
+    label: "Retail",
+    icon: Building2,
+    moduleKey: "retail",
+    roles: [
+      "retail_team_general_worker",
+      "retail_manager",
+      "account",
+      "admin",
+      "director",
+    ],
+  },
+  {
+    href: "/processing/dashboard",
+    label: "Processing",
+    icon: PackageCheck,
+    moduleKey: "processing",
+    roles: [
+      "processing_team_general_worker",
+      "processing_manager",
+      "admin",
+      "director",
+    ],
+  },
+  {
+    href: "/cleaning/tasks",
+    label: "Cleaning",
+    icon: ClipboardList,
+    moduleKey: "cleaning",
+    roles: [
+      "retail_manager",
+      "processing_manager",
+      "admin",
+      "director",
+    ],
+  },
+  {
+    href: "/accounting-finance/dashboard",
     label: "Accounting & Finance",
     icon: DollarSign,
+    moduleKey: "accounting_finance",
     roles: ["account", "admin", "director"],
   },
   {
-    href: "/director-reports",
+    href: "/director-reports/dashboard",
     label: "Director Reports",
     icon: Users,
+    moduleKey: "director_reports",
     roles: ["director", "admin"],
   },
   { href: "/settings", label: "Settings", icon: Settings, roles: ["admin"] },
 ]
 
 function canSee(profile: CurrentProfile, item: NavItem) {
-  return !item.roles || item.roles.some((role) => profile.roles.includes(role))
+  const roleAllowed =
+    !item.roles || item.roles.some((role) => profile.roles.includes(role))
+
+  return roleAllowed && canAccessModule(profile, item.moduleKey)
+}
+
+function currentPageLabel(pathname: string) {
+  const visibleItems = [...stockNav, ...moduleNav]
+  const exact = visibleItems.find((item) => pathname === item.href)
+
+  if (exact) {
+    return exact.label
+  }
+
+  const matched = visibleItems
+    .filter((item) => item.href !== "/" && pathname.startsWith(item.href))
+    .sort((a, b) => b.href.length - a.href.length)[0]
+
+  if (matched) {
+    return matched.label
+  }
+
+  const segment = pathname.split("/").filter(Boolean)[0]
+
+  return segment
+    ? segment
+        .split("-")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ")
+    : "Dashboard"
 }
 
 function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
@@ -87,12 +267,19 @@ function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
     <Link
       href={item.href}
       onClick={onClick}
+      aria-current={active ? "page" : undefined}
       className={cn(
-        "flex min-h-9 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/78 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        "group relative flex min-h-9 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/74 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         active && "bg-sidebar-accent text-sidebar-accent-foreground"
       )}
     >
-      <Icon className="size-4" />
+      <span
+        className={cn(
+          "absolute left-0 h-5 w-0.5 rounded-r bg-transparent transition-colors",
+          active && "bg-sidebar-primary"
+        )}
+      />
+      <Icon className={cn("size-4 text-sidebar-foreground/62", active && "text-sidebar-primary")} />
       <span className="truncate">{item.label}</span>
     </Link>
   )
@@ -105,39 +292,46 @@ function SidebarContent({
   profile: CurrentProfile
   close?: () => void
 }) {
+  const visibleStockNav = stockNav.filter((item) => canSee(profile, item))
+  const visibleModuleNav = moduleNav.filter((item) => canSee(profile, item))
+
   return (
-    <div className="flex h-full flex-col gap-5">
-      <div className="px-3 pt-4">
-        <div className="text-lg font-semibold tracking-tight text-sidebar-foreground">
+    <div className="flex h-full flex-col">
+      <div className="border-b border-sidebar-border px-4 py-4">
+        <div className="text-base font-semibold tracking-tight text-sidebar-foreground">
           Elite Meat ERP
         </div>
-        <div className="mt-1 text-xs text-sidebar-foreground/60">
-          Core + Stock Module V1
+        <div className="mt-1 text-xs text-sidebar-foreground/58">
+          Operations workspace
         </div>
       </div>
 
-      <nav className="flex-1 space-y-5 overflow-y-auto px-2 pb-4">
-        <div>
-          <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/45">
-            Stock
+      <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-4">
+        {visibleStockNav.length > 0 ? (
+          <div>
+            <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/45">
+              Stock
+            </div>
+            <div className="space-y-1">
+              {visibleStockNav.map((item) => (
+                <NavLink key={item.href} item={item} onClick={close} />
+              ))}
+            </div>
           </div>
-          <div className="space-y-1">
-            {stockNav.map((item) => (
-              <NavLink key={item.href} item={item} onClick={close} />
-            ))}
-          </div>
-        </div>
+        ) : null}
 
-        <div>
+        {visibleModuleNav.length > 0 ? (
+          <div>
           <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/45">
             ERP Modules
           </div>
           <div className="space-y-1">
-            {moduleNav.filter((item) => canSee(profile, item)).map((item) => (
+            {visibleModuleNav.map((item) => (
               <NavLink key={item.href} item={item} onClick={close} />
             ))}
           </div>
         </div>
+        ) : null}
       </nav>
 
       <div className="border-t border-sidebar-border p-3">
@@ -148,9 +342,10 @@ function SidebarContent({
           {profile.email}
         </div>
         <div className="mt-2 flex flex-wrap gap-1">
+          <TeamScopeBadge profile={profile} className="text-[10px]" />
           {profile.roles.map((role) => (
             <Badge key={role} variant="secondary" className="text-[10px]">
-              {role.replace("_", " ")}
+              {role.replaceAll("_", " ")}
             </Badge>
           ))}
           {profile.demoMode ? (
@@ -182,41 +377,83 @@ export function AppShell({
   profile: CurrentProfile
 }) {
   const [open, setOpen] = useState(false)
+  const pathname = usePathname()
+  const pageLabel = currentPageLabel(pathname)
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen overflow-x-hidden bg-background">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-sidebar-border bg-sidebar lg:block">
         <SidebarContent profile={profile} />
       </aside>
 
-      {open ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <button
-            type="button"
-            aria-label="Close navigation"
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setOpen(false)}
-          />
-          <aside className="relative h-full w-[min(88vw,20rem)] border-r border-sidebar-border bg-sidebar shadow-xl">
-            <SidebarContent profile={profile} close={() => setOpen(false)} />
-          </aside>
-        </div>
-      ) : null}
-
       <div className="lg:pl-72">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-background/92 px-4 backdrop-blur sm:px-6 lg:hidden">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            aria-label="Open navigation"
-            onClick={() => setOpen(true)}
-          >
-            <Menu className="size-4" />
-          </Button>
-          <div className="text-sm font-semibold">Elite Meat ERP</div>
+        <header className="sticky top-0 z-30 hidden h-14 items-center justify-between border-b bg-background/92 px-8 backdrop-blur lg:flex">
+          <div>
+            <div className="text-sm font-semibold">Elite Meat ERP</div>
+            <div className="text-xs text-muted-foreground">
+              {profile.fullName}
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <TeamScopeBadge profile={profile} />
+            {profile.demoMode ? <Badge variant="warning">Demo data</Badge> : null}
+          </div>
         </header>
-        <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+        <header className="sticky top-0 z-30 grid h-14 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b bg-background/92 px-3 backdrop-blur sm:px-4 lg:hidden">
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                aria-label="Open navigation"
+              >
+                <Menu className="size-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="p-0">
+              <SheetHeader className="sr-only">
+                <SheetTitle>Elite Meat ERP navigation</SheetTitle>
+                <SheetDescription>
+                  Module navigation and account actions.
+                </SheetDescription>
+              </SheetHeader>
+              <SidebarContent
+                profile={profile}
+                close={() => setOpen(false)}
+              />
+            </SheetContent>
+          </Sheet>
+
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold">Elite Meat ERP</div>
+            <div className="truncate text-xs text-muted-foreground">
+              {pageLabel}
+            </div>
+          </div>
+
+          <div className="flex min-w-0 items-center justify-end gap-1">
+            <div className="hidden min-w-0 max-w-28 text-right min-[390px]:block">
+              <div className="truncate text-xs font-medium">
+                {profile.fullName}
+              </div>
+              <div className="truncate text-[10px] text-muted-foreground">
+                {profile.demoMode ? "Demo" : profile.roles[0]?.replaceAll("_", " ")}
+              </div>
+            </div>
+            <form action={signOutAction}>
+              <Button
+                type="submit"
+                variant="outline"
+                size="icon"
+                aria-label="Sign out"
+              >
+                <LogOut className="size-4" />
+              </Button>
+            </form>
+          </div>
+        </header>
+        <main className="mx-auto flex w-full max-w-[92rem] min-w-0 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
           {children}
         </main>
       </div>

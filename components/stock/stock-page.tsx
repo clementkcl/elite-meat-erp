@@ -13,10 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DataTable, type DataTableColumn } from "@/components/stock/data-table"
 import { StockDashboardCharts } from "@/components/stock/dashboard-charts"
-import {
-  CsvExportButton,
-  PrintButton,
-} from "@/components/stock/report-actions"
+import { ReportToolbar } from "@/components/ui/report-toolbar"
 import {
   BarcodeInboundForm,
   ItemMasterForm,
@@ -245,6 +242,39 @@ function reportRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRo
   }))
 }
 
+function csvCell(value: string | number | boolean) {
+  return `"${String(value).replaceAll('"', '""')}"`
+}
+
+function buildCsv(rows: TableRow[]) {
+  const headers = Object.keys(rows[0] ?? {})
+
+  if (headers.length === 0) {
+    return ""
+  }
+
+  return [
+    headers.map(csvCell).join(","),
+    ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(",")),
+  ].join("\n")
+}
+
+function buildStockWhatsappSummary(rows: TableRow[]) {
+  const totalCount = rows.reduce((sum, row) => sum + Number(row.count ?? 0), 0)
+  const totalWeight = rows.reduce((sum, row) => sum + Number(row.weightKg ?? 0), 0)
+  const locations = new Set(rows.map((row) => String(row.locationName))).size
+
+  return [
+    "Elite Meat Stock Report",
+    `Locations: ${locations}`,
+    `Report rows: ${rows.length}`,
+    `Total count: ${totalCount}`,
+    `Total weight: ${totalWeight.toLocaleString(undefined, {
+      maximumFractionDigits: 3,
+    })} kg`,
+  ].join("\n")
+}
+
 function masterRows(rows: { name: string; active: boolean }[]): TableRow[] {
   return rows.map((row) => ({
     name: row.name,
@@ -369,6 +399,12 @@ export async function StockPage({
   filters?: MovementFilters
 }) {
   const data = await getStockPageData(filters)
+  const stockReportRows = reportRows(data)
+  const stockReportCsv = buildCsv(stockReportRows)
+  const stockReportCsvHref = `data:text/csv;charset=utf-8,${encodeURIComponent(
+    stockReportCsv
+  )}`
+  const stockWhatsappSummary = buildStockWhatsappSummary(stockReportRows)
 
   return (
     <div className="space-y-5">
@@ -397,6 +433,7 @@ export async function StockPage({
           brands={data.brands}
           origins={data.origins}
           locations={data.locations}
+          barcodeWeightRules={data.barcodeWeightRules}
         />
       ) : null}
 
@@ -413,7 +450,12 @@ export async function StockPage({
       {route === "return" ? <ReturnForm locations={data.locations} /> : null}
 
       {route === "no-barcode-inbound" ? (
-        <NoBarcodeInboundForm items={data.items} locations={data.locations} />
+        <NoBarcodeInboundForm
+          items={data.items}
+          brands={data.brands}
+          origins={data.origins}
+          locations={data.locations}
+        />
       ) : null}
 
       {route === "balance" ? (
@@ -467,16 +509,14 @@ export async function StockPage({
                 Summary totals by location and category.
               </CardDescription>
             </div>
-            <div className="flex gap-2 print:hidden">
-              <CsvExportButton
-                rows={reportRows(data)}
-                filename="elite-meat-stock-report.csv"
-              />
-              <PrintButton />
-            </div>
+            <ReportToolbar
+              csvHref={stockReportCsvHref}
+              filename="elite-meat-stock-report.csv"
+              whatsappText={stockWhatsappSummary}
+            />
           </CardHeader>
           <CardContent>
-            <DataTable columns={reportColumns} data={reportRows(data)} />
+            <DataTable columns={reportColumns} data={stockReportRows} />
           </CardContent>
         </Card>
       ) : null}

@@ -2,11 +2,8 @@
 
 import { redirect } from "next/navigation"
 
+import type { AuthActionState } from "@/lib/auth/action-state"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-
-export type AuthActionState = {
-  error?: string
-}
 
 export async function signInAction(
   _state: AuthActionState,

@@ -1,7 +1,14 @@
 "use client"
 
 import { Save } from "lucide-react"
-import { useActionState, useMemo, useState, type ReactNode } from "react"
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 
 import {
   addStockTakeLineAction,
@@ -12,18 +19,23 @@ import {
   createLocationAction,
   createOriginAction,
   createStockTakeSessionAction,
-  initialStockActionState,
   noBarcodeInboundAction,
   outboundSalesAction,
   receiveTransferAction,
+  rejectStockTakeAction,
   returnStockAction,
   reviewStockTakeAction,
+  scanStockTakeBarcodeAction,
   submitStockTakeAction,
   transferAction,
-  type StockActionState,
 } from "@/lib/stock/actions"
+import {
+  initialStockActionState,
+  type StockActionState,
+} from "@/lib/stock/action-state"
 import type {
   Brand,
+  BarcodeWeightRule,
   Item,
   Origin,
   StockBalanceRow,
@@ -43,6 +55,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { BarcodeField } from "@/components/stock/barcode-scanner"
 
 type StatefulAction = (
   state: StockActionState,
@@ -146,9 +159,17 @@ function WorkflowCard({
   )
 }
 
-function ItemSelect({ items }: { items: Item[] }) {
+function ItemSelect({
+  items,
+  value,
+  onChange,
+}: {
+  items: Item[]
+  value?: string
+  onChange?: (value: string) => void
+}) {
   return (
-    <NativeSelect id="itemId" name="itemId">
+    <NativeSelect id="itemId" name="itemId" value={value} onChange={onChange}>
       <option value="">Select item</option>
       {items.map((item) => (
         <option key={item.id} value={item.id}>
@@ -159,17 +180,75 @@ function ItemSelect({ items }: { items: Item[] }) {
   )
 }
 
+function BrandSelect({
+  brands,
+  value,
+  onChange,
+}: {
+  brands: Brand[]
+  value?: string
+  onChange?: (value: string) => void
+}) {
+  return (
+    <NativeSelect
+      id="brandId"
+      name="brandId"
+      value={value}
+      onChange={onChange}
+      required={false}
+    >
+      <option value="">No brand</option>
+      {brands.map((brand) => (
+        <option key={brand.id} value={brand.id}>
+          {brand.name}
+        </option>
+      ))}
+    </NativeSelect>
+  )
+}
+
+function OriginSelect({
+  origins,
+  value,
+  onChange,
+}: {
+  origins: Origin[]
+  value?: string
+  onChange?: (value: string) => void
+}) {
+  return (
+    <NativeSelect
+      id="originId"
+      name="originId"
+      value={value}
+      onChange={onChange}
+      required={false}
+    >
+      <option value="">No origin</option>
+      {origins.map((origin) => (
+        <option key={origin.id} value={origin.id}>
+          {origin.name}
+        </option>
+      ))}
+    </NativeSelect>
+  )
+}
+
 function LocationSelect({
   locations,
   id = "locationId",
   name = "locationId",
+  value,
+  onChange,
 }: {
   locations: StockLocation[]
   id?: string
   name?: string
+  value?: string
+  onChange?: (value: string) => void
 }) {
   return (
-    <NativeSelect id={id} name={name}>
+    <NativeSelect id={id} name={name} value={value} onChange={onChange}>
       <option value="">Select location</option>
       {locations.map((location) => (
         <option key={location.id} value={location.id}>
@@ -268,87 +347,386 @@ export function MasterDataForms() {
   )
 }
 
+type InboundPreset = {
+  itemId: string
+  brandId: string
+  originId: string
+  locationId: string
+  inboundSource: "supplier_import" | "processing_output" | "return" | "transfer"
+  barcodeWeightStart: string
+  barcodeWeightLength: string
+  barcodeWeightDecimals: string
+  autoSave: boolean
+  saveWeightRule: boolean
+}
+
+const inboundPresetKey = "elite-meat:stock-inbound-preset"
+const inboundScopeKeys: (keyof InboundPreset)[] = [
+  "itemId",
+  "brandId",
+  "originId",
+  "locationId",
+]
+
+function initialInboundPreset(
+  items: Item[] = [],
+  locations: StockLocation[] = []
+): InboundPreset {
+  const fallback: InboundPreset = {
+    itemId: items[0]?.id ?? "",
+    brandId: "",
+    originId: "",
+    locationId: locations[0]?.id ?? "",
+    inboundSource: "supplier_import",
+    barcodeWeightStart: "7",
+    barcodeWeightLength: "5",
+    barcodeWeightDecimals: "2",
+    autoSave: false,
+    saveWeightRule: true,
+  }
+
+  if (typeof window === "undefined") {
+    return fallback
+  }
+
+  try {
+    const saved = window.localStorage.getItem(inboundPresetKey)
+    return saved ? { ...fallback, ...JSON.parse(saved) } : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function applyMatchingWeightRule(
+  preset: InboundPreset,
+  barcodeWeightRules: BarcodeWeightRule[] = []
+) {
+  const matchingRule = barcodeWeightRules.find(
+    (rule) =>
+      rule.itemId === preset.itemId &&
+      (rule.brandId ?? "") === preset.brandId &&
+      (rule.originId ?? "") === preset.originId &&
+      rule.locationId === preset.locationId
+  )
+
+  if (!matchingRule) {
+    return preset
+  }
+
+  return {
+    ...preset,
+    barcodeWeightStart: String(matchingRule.barcodeWeightStart),
+    barcodeWeightLength: String(matchingRule.barcodeWeightLength),
+    barcodeWeightDecimals: String(matchingRule.barcodeWeightDecimals),
+  }
+}
+
+function parseBarcodeWeight(
+  barcode: string,
+  startText: string,
+  lengthText: string,
+  decimalsText: string
+) {
+  const start = Number(startText)
+  const length = Number(lengthText)
+  const decimals = Number(decimalsText)
+
+  if (!barcode || !Number.isFinite(start) || !Number.isFinite(length)) {
+    return ""
+  }
+
+  const raw = barcode.slice(Math.max(start - 1, 0), Math.max(start - 1, 0) + length)
+
+  if (!/^\d+$/.test(raw)) {
+    return ""
+  }
+
+  const divisor = 10 ** Math.max(decimals, 0)
+  return (Number(raw) / divisor).toFixed(Math.max(decimals, 0))
+}
+
 export function BarcodeInboundForm({
-  items,
-  brands,
-  origins,
-  locations,
+  items = [],
+  brands = [],
+  origins = [],
+  locations = [],
+  barcodeWeightRules = [],
 }: {
   items: Item[]
   brands: Brand[]
   origins: Origin[]
   locations: StockLocation[]
+  barcodeWeightRules: BarcodeWeightRule[]
 }) {
+  const formRef = useRef<HTMLFormElement | null>(null)
+  const barcodeInputRef = useRef<HTMLInputElement | null>(null)
+  const [state, formAction, pending] = useActionState(
+    barcodeInboundAction,
+    initialStockActionState
+  )
+  const [barcode, setBarcode] = useState("")
+  const [preset, setPreset] = useState(() =>
+    initialInboundPreset(items, locations)
+  )
+  const [netWeightKg, setNetWeightKg] = useState("")
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(inboundPresetKey, JSON.stringify(preset))
+    } catch {
+      // Ignore unavailable storage, for example private browsing.
+    }
+  }, [preset])
+
+  useEffect(() => {
+    if (state.status !== "success") {
+      return
+    }
+
+    window.setTimeout(() => {
+      setBarcode("")
+      barcodeInputRef.current?.focus()
+    }, 0)
+  }, [state.status, state.message])
+
+  function updatePreset<K extends keyof InboundPreset>(
+    key: K,
+    value: InboundPreset[K]
+  ) {
+    setPreset((current) => {
+      const next = { ...current, [key]: value }
+      return inboundScopeKeys.includes(key)
+        ? applyMatchingWeightRule(next, barcodeWeightRules)
+        : next
+    })
+  }
+
+  function handleBarcodeChange(value: string, submitAfterScan = false) {
+    const parsedWeight = parseBarcodeWeight(
+      value,
+      preset.barcodeWeightStart,
+      preset.barcodeWeightLength,
+      preset.barcodeWeightDecimals
+    )
+
+    setBarcode(value)
+
+    if (parsedWeight) {
+      setNetWeightKg(parsedWeight)
+    }
+
+    const readyToSubmit =
+      submitAfterScan &&
+      preset.autoSave &&
+      preset.itemId &&
+      preset.locationId &&
+      value &&
+      parsedWeight
+
+    if (readyToSubmit) {
+      window.setTimeout(() => formRef.current?.requestSubmit(), 0)
+    }
+  }
+
+  const selectedItem = items.find((item) => item.id === preset.itemId)
+  const selectedBrand = brands.find((brand) => brand.id === preset.brandId)
+  const selectedOrigin = origins.find((origin) => origin.id === preset.originId)
+  const selectedLocation = locations.find(
+    (location) => location.id === preset.locationId
+  )
+
   return (
-    <WorkflowCard
-      title="Barcode inbound"
-      description="Receive a barcode unit into a stock location."
-      action={barcodeInboundAction}
-      submitLabel="Save inbound"
-    >
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="barcode">Barcode</Label>
-          <Input id="barcode" name="barcode" placeholder="EM-BC-000001" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="itemId">Item</Label>
-          <ItemSelect items={items} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="brandId">Brand</Label>
-          <NativeSelect id="brandId" name="brandId" required={false}>
-            <option value="">No brand</option>
-            {brands.map((brand) => (
-              <option key={brand.id} value={brand.id}>
-                {brand.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="originId">Origin</Label>
-          <NativeSelect id="originId" name="originId" required={false}>
-            <option value="">No origin</option>
-            {origins.map((origin) => (
-              <option key={origin.id} value={origin.id}>
-                {origin.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="locationId">Location</Label>
-          <LocationSelect locations={locations} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="netWeightKg">Net weight kg</Label>
-          <Input
-            id="netWeightKg"
-            name="netWeightKg"
-            type="number"
-            step="0.01"
-            min="0"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="batchNo">Batch no.</Label>
-          <Input id="batchNo" name="batchNo" placeholder="B240610-A" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="referenceNo">Reference no.</Label>
-          <Input id="referenceNo" name="referenceNo" placeholder="GRN-1001" />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea id="notes" name="notes" />
-      </div>
-    </WorkflowCard>
+    <Card>
+      <CardHeader>
+        <CardTitle>Continuous barcode inbound</CardTitle>
+        <CardDescription>
+          Select product details once, then keep scanning the same item. Weight
+          can be read from a saved barcode position rule.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form ref={formRef} action={formAction} className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <BarcodeField
+                inputRef={barcodeInputRef}
+                id="barcode"
+                name="barcode"
+                label="Barcode"
+                value={barcode}
+                onChange={(value) => handleBarcodeChange(value)}
+                onScan={(value) => handleBarcodeChange(value, true)}
+                placeholder="Scan or type barcode"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="itemId">Product</Label>
+              <ItemSelect
+                items={items}
+                value={preset.itemId}
+                onChange={(value) => updatePreset("itemId", value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="inboundSource">Inbound source</Label>
+              <NativeSelect
+                id="inboundSource"
+                name="inboundSource"
+                value={preset.inboundSource}
+                onChange={(value) =>
+                  updatePreset(
+                    "inboundSource",
+                    value as InboundPreset["inboundSource"]
+                  )
+                }
+              >
+                <option value="supplier_import">Supplier / import</option>
+                <option value="processing_output">Processing output</option>
+                <option value="return">Return</option>
+                <option value="transfer">Transfer</option>
+              </NativeSelect>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="brandId">Brand</Label>
+              <BrandSelect
+                brands={brands}
+                value={preset.brandId}
+                onChange={(value) => updatePreset("brandId", value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="originId">Origin</Label>
+              <OriginSelect
+                origins={origins}
+                value={preset.originId}
+                onChange={(value) => updatePreset("originId", value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="locationId">Location</Label>
+              <LocationSelect
+                locations={locations}
+                value={preset.locationId}
+                onChange={(value) => updatePreset("locationId", value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="netWeightKg">Net weight kg</Label>
+              <Input
+                id="netWeightKg"
+                name="netWeightKg"
+                type="number"
+                step="0.001"
+                min="0"
+                value={netWeightKg}
+                onChange={(event) => setNetWeightKg(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="barcodeWeightStart">Weight start position</Label>
+              <Input
+                id="barcodeWeightStart"
+                name="barcodeWeightStart"
+                type="number"
+                min="1"
+                value={preset.barcodeWeightStart}
+                onChange={(event) =>
+                  updatePreset("barcodeWeightStart", event.target.value)
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="barcodeWeightLength">Weight digits</Label>
+              <Input
+                id="barcodeWeightLength"
+                name="barcodeWeightLength"
+                type="number"
+                min="1"
+                value={preset.barcodeWeightLength}
+                onChange={(event) =>
+                  updatePreset("barcodeWeightLength", event.target.value)
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="barcodeWeightDecimals">Weight decimals</Label>
+              <Input
+                id="barcodeWeightDecimals"
+                name="barcodeWeightDecimals"
+                type="number"
+                min="0"
+                max="4"
+                value={preset.barcodeWeightDecimals}
+                onChange={(event) =>
+                  updatePreset("barcodeWeightDecimals", event.target.value)
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="batchNo">Batch no.</Label>
+              <Input id="batchNo" name="batchNo" placeholder="B240610-A" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="referenceNo">Reference no.</Label>
+              <Input id="referenceNo" name="referenceNo" placeholder="GRN-1001" />
+            </div>
+          </div>
+
+          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+            <div className="font-medium">Current scan preset</div>
+            <div className="mt-1 text-muted-foreground">
+              {selectedItem
+                ? `${selectedItem.category} / ${selectedItem.section} / ${selectedItem.name}`
+                : "No product"}{" "}
+              - {selectedBrand?.name ?? "No brand"} -{" "}
+              {selectedOrigin?.name ?? "No origin"} -{" "}
+              {selectedLocation?.name ?? "No location"}
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="saveWeightRule"
+                value="true"
+                checked={preset.saveWeightRule}
+                onChange={(event) =>
+                  updatePreset("saveWeightRule", event.target.checked)
+                }
+                className="size-4 rounded border-input"
+              />
+              Save weight-position rule
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={preset.autoSave}
+                onChange={(event) =>
+                  updatePreset("autoSave", event.target.checked)
+                }
+                className="size-4 rounded border-input"
+              />
+              Auto-save after camera scan
+            </label>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea id="notes" name="notes" />
+          </div>
+          <ActionMessage state={state} />
+          <SubmitButton pending={pending}>Save inbound</SubmitButton>
+        </form>
+      </CardContent>
+    </Card>
   )
 }
 
 export function OutboundSalesForm() {
+  const [barcode, setBarcode] = useState("")
+
   return (
     <WorkflowCard
       title="Outbound sales"
@@ -357,10 +735,14 @@ export function OutboundSalesForm() {
       submitLabel="Save outbound"
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="barcode">Barcode</Label>
-          <Input id="barcode" name="barcode" placeholder="EM-BC-000001" />
-        </div>
+        <BarcodeField
+          id="barcode"
+          name="barcode"
+          label="Barcode"
+          value={barcode}
+          onChange={setBarcode}
+          placeholder="EM-BC-000001"
+        />
         <div className="space-y-2">
           <Label htmlFor="referenceNo">Reference no.</Label>
           <Input id="referenceNo" name="referenceNo" placeholder="INV-1001" />
@@ -375,6 +757,8 @@ export function OutboundSalesForm() {
 }
 
 export function TransferForm({ locations }: { locations: StockLocation[] }) {
+  const [barcode, setBarcode] = useState("")
+
   return (
     <WorkflowCard
       title="Create transfer"
@@ -383,10 +767,14 @@ export function TransferForm({ locations }: { locations: StockLocation[] }) {
       submitLabel="Create transfer"
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="barcode">Barcode</Label>
-          <Input id="barcode" name="barcode" placeholder="EM-LN-000003" />
-        </div>
+        <BarcodeField
+          id="barcode"
+          name="barcode"
+          label="Barcode"
+          value={barcode}
+          onChange={setBarcode}
+          placeholder="EM-LN-000003"
+        />
         <div className="space-y-2">
           <Label htmlFor="toLocationId">To location</Label>
           <LocationSelect
@@ -413,6 +801,8 @@ export function ReceiveTransferForm({
 }: {
   locations: StockLocation[]
 }) {
+  const [barcode, setBarcode] = useState("")
+
   return (
     <WorkflowCard
       title="Receive transfer"
@@ -421,10 +811,14 @@ export function ReceiveTransferForm({
       submitLabel="Receive transfer"
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="barcode">Barcode</Label>
-          <Input id="barcode" name="barcode" placeholder="EM-LN-000003" />
-        </div>
+        <BarcodeField
+          id="barcode"
+          name="barcode"
+          label="Barcode"
+          value={barcode}
+          onChange={setBarcode}
+          placeholder="EM-LN-000003"
+        />
         <div className="space-y-2">
           <Label htmlFor="receiveLocationId">Receive location</Label>
           <LocationSelect
@@ -447,6 +841,8 @@ export function ReceiveTransferForm({
 }
 
 export function ReturnForm({ locations }: { locations: StockLocation[] }) {
+  const [barcode, setBarcode] = useState("")
+
   return (
     <WorkflowCard
       title="Stock return"
@@ -455,10 +851,14 @@ export function ReturnForm({ locations }: { locations: StockLocation[] }) {
       submitLabel="Save return"
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="barcode">Barcode</Label>
-          <Input id="barcode" name="barcode" placeholder="EM-OR-000004" />
-        </div>
+        <BarcodeField
+          id="barcode"
+          name="barcode"
+          label="Barcode"
+          value={barcode}
+          onChange={setBarcode}
+          placeholder="EM-OR-000004"
+        />
         <div className="space-y-2">
           <Label htmlFor="locationId">Return location</Label>
           <LocationSelect locations={locations} />
@@ -478,9 +878,13 @@ export function ReturnForm({ locations }: { locations: StockLocation[] }) {
 
 export function NoBarcodeInboundForm({
   items,
+  brands,
+  origins,
   locations,
 }: {
   items: Item[]
+  brands: Brand[]
+  origins: Origin[]
   locations: StockLocation[]
 }) {
   return (
@@ -494,6 +898,14 @@ export function NoBarcodeInboundForm({
         <div className="space-y-2">
           <Label htmlFor="itemId">Item</Label>
           <ItemSelect items={items} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="brandId">Brand</Label>
+          <BrandSelect brands={brands} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="originId">Origin</Label>
+          <OriginSelect origins={origins} />
         </div>
         <div className="space-y-2">
           <Label htmlFor="locationId">Location</Label>
@@ -539,6 +951,10 @@ function StockTakeSessionActions({ session }: { session: StockTakeSession }) {
     approveStockTakeAction,
     initialStockActionState
   )
+  const [rejectState, rejectAction, rejectPending] = useActionState(
+    rejectStockTakeAction,
+    initialStockActionState
+  )
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -572,14 +988,29 @@ function StockTakeSessionActions({ session }: { session: StockTakeSession }) {
         <Button
           type="submit"
           size="sm"
-          disabled={approvePending || session.status === "APPROVED"}
+          disabled={approvePending || session.status !== "REVIEWED"}
         >
           Approve
+        </Button>
+      </form>
+      <form action={rejectAction}>
+        <input type="hidden" name="sessionId" value={session.id} />
+        <Button
+          type="submit"
+          size="sm"
+          variant="destructive"
+          disabled={
+            rejectPending ||
+            (session.status !== "SUBMITTED" && session.status !== "REVIEWED")
+          }
+        >
+          Reject
         </Button>
       </form>
       <ActionMessage state={submitState} />
       <ActionMessage state={reviewState} />
       <ActionMessage state={approveState} />
+      <ActionMessage state={rejectState} />
     </div>
   )
 }
@@ -602,8 +1033,13 @@ export function StockTakeWorkbench({
     sessions[0]?.locationId ?? locations[0]?.id ?? ""
   )
   const [selectedItemId, setSelectedItemId] = useState(items[0]?.id ?? "")
+  const [scanBarcode, setScanBarcode] = useState("")
   const [actualCount, setActualCount] = useState("0")
   const [actualWeightKg, setActualWeightKg] = useState("0")
+  const [scanState, scanAction, scanPending] = useActionState(
+    scanStockTakeBarcodeAction,
+    initialStockActionState
+  )
   const [lineState, lineAction, linePending] = useActionState(
     addStockTakeLineAction,
     initialStockActionState
@@ -646,6 +1082,51 @@ export function StockTakeWorkbench({
           <LocationSelect locations={locations} />
         </div>
       </WorkflowCard>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Scan stock take barcode</CardTitle>
+          <CardDescription>
+            Record a barcode unit against the selected count session.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={scanAction} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="scanSessionId">Session</Label>
+                <NativeSelect
+                  id="scanSessionId"
+                  name="sessionId"
+                  value={selectedSessionId}
+                  onChange={(value) => {
+                    const session = sessions.find((item) => item.id === value)
+                    setSelectedSessionId(value)
+                    setSelectedLocationId(session?.locationId ?? selectedLocationId)
+                  }}
+                >
+                  <option value="">Select session</option>
+                  {sessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {session.sessionNo} - {session.locationName}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </div>
+              <BarcodeField
+                id="stockTakeBarcode"
+                name="barcode"
+                label="Barcode"
+                value={scanBarcode}
+                onChange={setScanBarcode}
+                placeholder="EM-BC-000001"
+              />
+            </div>
+            <ActionMessage state={scanState} />
+            <SubmitButton pending={scanPending}>Record scanned unit</SubmitButton>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

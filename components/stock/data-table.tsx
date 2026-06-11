@@ -12,6 +12,8 @@ import { ArrowUpDown } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/ui/empty-state"
+import { StatusBadge, isStatusLike } from "@/components/ui/status-badge"
 import { cn } from "@/lib/utils"
 
 export type DataTableColumn<T extends Record<string, unknown>> = {
@@ -36,6 +38,14 @@ function formatValue(value: unknown) {
   }
 
   return "-"
+}
+
+function DisplayValue({ value }: { value: unknown }) {
+  if (isStatusLike(value)) {
+    return <StatusBadge value={String(value)} />
+  }
+
+  return formatValue(value)
 }
 
 export function DataTable<T extends Record<string, unknown>>({
@@ -72,12 +82,12 @@ export function DataTable<T extends Record<string, unknown>>({
         cell: ({ getValue }) => (
           <div
             className={cn(
-              "min-w-0 truncate text-sm",
+              "min-w-0 truncate text-sm text-foreground/90",
               column.align === "right" && "text-right tabular-nums"
             )}
             title={String(formatValue(getValue()))}
           >
-            {formatValue(getValue())}
+            <DisplayValue value={getValue()} />
           </div>
         ),
       })),
@@ -95,10 +105,10 @@ export function DataTable<T extends Record<string, unknown>>({
   })
 
   return (
-    <div className="overflow-hidden rounded-lg border bg-card">
+    <div className="overflow-hidden rounded-md border bg-card shadow-xs">
       <div className="w-full overflow-x-auto">
         <table className="w-full min-w-[760px] border-collapse">
-          <thead className="bg-muted/70">
+          <thead className="bg-muted/60">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -135,9 +145,12 @@ export function DataTable<T extends Record<string, unknown>>({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-3 py-10 text-center text-sm text-muted-foreground"
+                  className="px-3 py-6"
                 >
-                  {emptyText}
+                  <EmptyState
+                    title={emptyText}
+                    description="Check your scope, filters, or create the first record."
+                  />
                 </td>
               </tr>
             )}

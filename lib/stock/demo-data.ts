@@ -1,5 +1,6 @@
 import type {
   Brand,
+  BarcodeWeightRule,
   Item,
   NoBarcodeStock,
   Origin,
@@ -110,6 +111,7 @@ export const demoUnits: StockUnit[] = [
     locationId: "loc-jalan-channel",
     status: "IN_STOCK",
     netWeightKg: 22.4,
+    inboundSource: "supplier_import",
     batchNo: "B240610-A",
     receivedAt: "2026-06-01T08:30:00.000Z",
   },
@@ -122,6 +124,7 @@ export const demoUnits: StockUnit[] = [
     locationId: "loc-jalan-channel",
     status: "IN_STOCK",
     netWeightKg: 19.8,
+    inboundSource: "supplier_import",
     batchNo: "B240610-B",
     receivedAt: "2026-06-01T09:00:00.000Z",
   },
@@ -134,6 +137,7 @@ export const demoUnits: StockUnit[] = [
     locationId: "loc-sungai-merah",
     status: "TRANSFER_PENDING",
     netWeightKg: 25.1,
+    inboundSource: "transfer",
     batchNo: "L240603",
     receivedAt: "2026-06-03T10:20:00.000Z",
   },
@@ -146,8 +150,22 @@ export const demoUnits: StockUnit[] = [
     locationId: "loc-director",
     status: "RETURNED",
     netWeightKg: 8.7,
+    inboundSource: "return",
     batchNo: "O240604",
     receivedAt: "2026-06-04T13:10:00.000Z",
+  },
+]
+
+export const demoBarcodeWeightRules: BarcodeWeightRule[] = [
+  {
+    id: "rule-belly-tican-jalan-channel",
+    itemId: "item-meat-belly-boneless",
+    brandId: "brand-tican",
+    originId: "origin-denmark",
+    locationId: "loc-jalan-channel",
+    barcodeWeightStart: 7,
+    barcodeWeightLength: 5,
+    barcodeWeightDecimals: 2,
   },
 ]
 
@@ -155,6 +173,8 @@ export const demoNoBarcodeStock: NoBarcodeStock[] = [
   {
     id: "nb-processed-meatball",
     itemId: "item-processed-meatball",
+    brandId: null,
+    originId: null,
     locationId: "loc-jalan-channel",
     quantity: 80,
     weightKg: 40,
@@ -221,6 +241,7 @@ export const demoStockTakeLines: StockTakeLine[] = [
     id: "take-line-001",
     sessionId: "take-001",
     itemId: "item-meat-belly-boneless",
+    barcode: null,
     itemName: "MEAT / BELLY / BONELESS",
     systemCount: 2,
     actualCount: 2,

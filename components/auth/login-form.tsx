@@ -3,7 +3,8 @@
 import { LogIn } from "lucide-react"
 import { useActionState } from "react"
 
-import { signInAction, type AuthActionState } from "@/lib/auth/actions"
+import type { AuthActionState } from "@/lib/auth/action-state"
+import { signInAction } from "@/lib/auth/actions"
 import { Button } from "@/components/ui/button"
 import {
   Card,

@@ -8,6 +8,7 @@ import {
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import {
   demoBrands,
+  demoBarcodeWeightRules,
   demoItems,
   demoLocations,
   demoMovements,
@@ -19,9 +20,11 @@ import {
 } from "@/lib/stock/demo-data"
 import {
   stockCategories,
+  stockInboundSources,
   stockMovementTypes,
   stockTakeStatuses,
   stockUnitStatuses,
+  type BarcodeWeightRule,
   type Brand,
   type ChartPoint,
   type Item,
@@ -36,6 +39,7 @@ import {
   type StockMovementType,
   type StockPageData,
   type StockReportRow,
+  type StockInboundSource,
   type StockTakeLine,
   type StockTakeSession,
   type StockTakeStatus,
@@ -59,6 +63,10 @@ function isMovementType(value: string): value is StockMovementType {
 
 function isUnitStatus(value: string): value is StockUnitStatus {
   return stockUnitStatuses.includes(value as StockUnitStatus)
+}
+
+function isInboundSource(value: string): value is StockInboundSource {
+  return stockInboundSources.includes(value as StockInboundSource)
 }
 
 function isTakeStatus(value: string): value is StockTakeStatus {
@@ -148,6 +156,7 @@ function mapItem(row: Record<string, unknown>): Item {
 
 function mapUnit(row: Record<string, unknown>): StockUnit {
   const status = readString(row.status, "IN_STOCK")
+  const inboundSource = readString(row.inbound_source, "supplier_import")
 
   return {
     id: readString(row.id),
@@ -158,8 +167,24 @@ function mapUnit(row: Record<string, unknown>): StockUnit {
     locationId: readString(row.location_id),
     status: isUnitStatus(status) ? status : "IN_STOCK",
     netWeightKg: readNumber(row.net_weight_kg),
+    inboundSource: isInboundSource(inboundSource)
+      ? inboundSource
+      : "supplier_import",
     batchNo: readNullableString(row.batch_no),
     receivedAt: readString(row.received_at, new Date().toISOString()),
+  }
+}
+
+function mapBarcodeWeightRule(row: Record<string, unknown>): BarcodeWeightRule {
+  return {
+    id: readString(row.id),
+    itemId: readString(row.item_id),
+    brandId: readNullableString(row.brand_id),
+    originId: readNullableString(row.origin_id),
+    locationId: readString(row.location_id),
+    barcodeWeightStart: readNumber(row.barcode_weight_start, 7),
+    barcodeWeightLength: readNumber(row.barcode_weight_length, 5),
+    barcodeWeightDecimals: readNumber(row.barcode_weight_decimals, 2),
   }
 }
 
@@ -167,6 +192,8 @@ function mapNoBarcodeStock(row: Record<string, unknown>): NoBarcodeStock {
   return {
     id: readString(row.id),
     itemId: readString(row.item_id),
+    brandId: readNullableString(row.brand_id),
+    originId: readNullableString(row.origin_id),
     locationId: readString(row.location_id),
     quantity: readNumber(row.quantity),
     weightKg: readNumber(row.weight_kg),
@@ -206,6 +233,7 @@ function mapStockTakeLine(
     id: readString(row.id),
     sessionId: readString(row.session_id),
     itemId,
+    barcode: readNullableString(row.barcode),
     itemName: formatItemName(items.find((item) => item.id === itemId)),
     systemCount,
     actualCount,
@@ -525,6 +553,7 @@ async function loadSupabaseData(filters: MovementFilters) {
     locationRows,
     itemRows,
     unitRows,
+    barcodeWeightRuleRows,
     noBarcodeRows,
     movementRows,
     stockTakeSessionRows,
@@ -535,6 +564,7 @@ async function loadSupabaseData(filters: MovementFilters) {
     loadRows("stock_locations"),
     loadRows("items"),
     loadRows("stock_units"),
+    loadRows("barcode_weight_rules"),
     loadRows("no_barcode_stock"),
     loadRows("stock_movements"),
     loadRows("stock_take_sessions"),
@@ -547,6 +577,7 @@ async function loadSupabaseData(filters: MovementFilters) {
     !locationRows ||
     !itemRows ||
     !unitRows ||
+    !barcodeWeightRuleRows ||
     !noBarcodeRows ||
     !movementRows ||
     !stockTakeSessionRows ||
@@ -560,6 +591,7 @@ async function loadSupabaseData(filters: MovementFilters) {
   const locations = locationRows.map(mapLocation)
   const items = itemRows.map(mapItem)
   const units = unitRows.map(mapUnit)
+  const barcodeWeightRules = barcodeWeightRuleRows.map(mapBarcodeWeightRule)
   const noBarcodeStock = noBarcodeRows.map(mapNoBarcodeStock)
   const movements = filterMovements(
     movementRows
@@ -583,6 +615,7 @@ async function loadSupabaseData(filters: MovementFilters) {
     locations,
     items,
     units,
+    barcodeWeightRules,
     noBarcodeStock,
     movements,
     balances,
@@ -618,6 +651,7 @@ function buildDemoData(filters: MovementFilters): StockPageData {
     locations: demoLocations,
     items: demoItems,
     units: demoUnits,
+    barcodeWeightRules: demoBarcodeWeightRules,
     noBarcodeStock: demoNoBarcodeStock,
     movements,
     balances,

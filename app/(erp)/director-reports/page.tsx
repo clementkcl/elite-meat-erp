@@ -1,10 +1,5 @@
-import { PlaceholderPage } from "@/components/erp/placeholder-page"
+import { redirect } from "next/navigation"
 
 export default function DirectorReportsPage() {
-  return (
-    <PlaceholderPage
-      title="Director Reports"
-      description="Executive reporting will be added after Stock Module V1."
-    />
-  )
+  redirect("/director-reports/dashboard")
 }

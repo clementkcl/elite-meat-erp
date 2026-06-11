@@ -23,6 +23,13 @@ export const stockUnitStatuses = [
   "DAMAGED",
 ] as const
 
+export const stockInboundSources = [
+  "supplier_import",
+  "processing_output",
+  "return",
+  "transfer",
+] as const
+
 export const stockTakeStatuses = [
   "DRAFT",
   "SUBMITTED",
@@ -34,6 +41,7 @@ export const stockTakeStatuses = [
 export type StockCategory = (typeof stockCategories)[number]
 export type StockMovementType = (typeof stockMovementTypes)[number]
 export type StockUnitStatus = (typeof stockUnitStatuses)[number]
+export type StockInboundSource = (typeof stockInboundSources)[number]
 export type StockTakeStatus = (typeof stockTakeStatuses)[number]
 
 export type Brand = {
@@ -73,13 +81,27 @@ export type StockUnit = {
   locationId: string
   status: StockUnitStatus
   netWeightKg: number
+  inboundSource: StockInboundSource
   batchNo: string | null
   receivedAt: string
+}
+
+export type BarcodeWeightRule = {
+  id: string
+  itemId: string
+  brandId: string | null
+  originId: string | null
+  locationId: string
+  barcodeWeightStart: number
+  barcodeWeightLength: number
+  barcodeWeightDecimals: number
 }
 
 export type NoBarcodeStock = {
   id: string
   itemId: string
+  brandId: string | null
+  originId: string | null
   locationId: string
   quantity: number
   weightKg: number
@@ -143,6 +165,7 @@ export type StockTakeLine = {
   id: string
   sessionId: string
   itemId: string
+  barcode: string | null
   itemName: string
   systemCount: number
   actualCount: number
@@ -170,6 +193,7 @@ export type StockPageData = {
   locations: StockLocation[]
   items: Item[]
   units: StockUnit[]
+  barcodeWeightRules: BarcodeWeightRule[]
   noBarcodeStock: NoBarcodeStock[]
   movements: StockMovement[]
   balances: StockBalanceRow[]

@@ -1,10 +1,5 @@
-import { PlaceholderPage } from "@/components/erp/placeholder-page"
+import { DeliveryPage } from "@/components/delivery/delivery-page"
 
-export default function DeliveryPage() {
-  return (
-    <PlaceholderPage
-      title="Delivery"
-      description="Delivery planning and dispatch will be added after Stock Module V1."
-    />
-  )
+export default function DeliveryHomePage() {
+  return <DeliveryPage route="dashboard" />
 }
