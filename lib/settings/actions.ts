@@ -199,6 +199,15 @@ function selectedModules(formData: FormData): ModuleKey[] {
     )
 }
 
+function selectedOutletModules(formData: FormData): ModuleKey[] {
+  return formData
+    .getAll("outletModules")
+    .map((moduleKey) => String(moduleKey))
+    .filter((moduleKey): moduleKey is ModuleKey =>
+      moduleKeys.includes(moduleKey as ModuleKey)
+    )
+}
+
 export async function updateUserAccessAction(
   _state: SettingsActionState,
   formData: FormData
@@ -210,6 +219,7 @@ export async function updateUserAccessAction(
   }
 
   const roles = selectedRoles(formData)
+  const outletModules = selectedOutletModules(formData)
 
   if (roles.length === 0) {
     return failure("Select at least one role.")
@@ -252,9 +262,25 @@ export async function updateUserAccessAction(
       throw new Error(roleError.message)
     }
 
+    if (parsed.data.outletId) {
+      const moduleRows = moduleKeys.map((moduleKey) => ({
+        outlet_id: parsed.data.outletId,
+        module_key: moduleKey,
+        is_enabled: outletModules.includes(moduleKey),
+      }))
+      const { error: moduleError } = await context.supabase
+        .from("outlet_module_access")
+        .upsert(moduleRows, { onConflict: "outlet_id,module_key" })
+
+      if (moduleError) {
+        throw new Error(moduleError.message)
+      }
+    }
+
     await insertAuditLog(context, "USER_ACCESS_UPDATED", "profiles", parsed.data.profileId, {
       ...parsed.data,
       roles,
+      outletModules: parsed.data.outletId ? outletModules : [],
     })
 
     return "User access updated."

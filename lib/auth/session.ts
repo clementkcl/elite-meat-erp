@@ -19,6 +19,7 @@ const demoProfile: CurrentProfile = {
   departmentId: null,
   departmentName: null,
   branchId: null,
+  branchName: null,
   outletId: null,
   outletName: null,
   stockLocationId: null,
@@ -33,6 +34,24 @@ export function isUserRole(role: string): role is UserRole {
 
 export function hasAnyRole(profile: CurrentProfile, roles: UserRole[]) {
   return roles.some((role) => profile.roles.includes(role))
+}
+
+async function loadNameById(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  table: string,
+  id: string | null
+) {
+  if (!supabase || !id) {
+    return null
+  }
+
+  const { data } = await supabase
+    .from(table)
+    .select("name")
+    .eq("id", id)
+    .maybeSingle()
+
+  return readString(asRecord(data).name) || null
 }
 
 export async function getCurrentProfile(): Promise<CurrentProfile | null> {
@@ -50,26 +69,42 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     return null
   }
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
-    .select("id, email, full_name, department_id, branch_id, outlet_id, stock_location_id, departments(name), outlets(name), stock_locations(name), profile_roles(roles(role_key))")
+    .select("id, email, full_name, department_id, branch_id, outlet_id, stock_location_id")
     .eq("id", user.id)
     .maybeSingle()
 
+  if (error) {
+    console.error("Profile load failed", error.message)
+    return null
+  }
+
+  if (!data) {
+    return demoProfile
+  }
+
   const profile = asRecord(data)
-  const department = asRecord(profile.departments)
-  const outlet = asRecord(profile.outlets)
-  const stockLocation = asRecord(profile.stock_locations)
-  const profileRoles = asRecordArray(profile.profile_roles)
-    .map((entry) => readString(asRecord(entry.roles).role_key))
+  const outletId = readString(profile.outlet_id) || null
+  const departmentId = readString(profile.department_id) || null
+  const branchId = readString(profile.branch_id) || null
+  const stockLocationId = readString(profile.stock_location_id) || null
+  const { data: roleRows, error: roleError } = await supabase
+    .from("profile_roles")
+    .select("role_key")
+    .eq("profile_id", user.id)
+  const profileRoles = roleError
+    ? []
+    : asRecordArray(roleRows)
+    .map((entry) => readString(entry.role_key))
     .filter(isUserRole)
   let moduleAccess: ModuleKey[] = []
 
-  if (readString(profile.outlet_id)) {
+  if (outletId) {
     const { data: moduleRows, error: moduleError } = await supabase
       .from("outlet_module_access")
       .select("module_key")
-      .eq("outlet_id", readString(profile.outlet_id))
+      .eq("outlet_id", outletId)
       .eq("is_enabled", true)
 
     moduleAccess = moduleError
@@ -78,6 +113,13 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
           .map((entry) => readString(entry.module_key))
           .filter(isModuleKey)
   }
+  const [departmentName, branchName, outletName, stockLocationName] =
+    await Promise.all([
+      loadNameById(supabase, "departments", departmentId),
+      loadNameById(supabase, "branches", branchId),
+      loadNameById(supabase, "outlets", outletId),
+      loadNameById(supabase, "stock_locations", stockLocationId),
+    ])
 
   return {
     id: user.id,
@@ -89,14 +131,15 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     roles:
       profileRoles.length > 0
         ? profileRoles
-        : ["retail_team_general_worker"],
-    departmentId: readString(profile.department_id) || null,
-    departmentName: readString(department.name) || null,
-    branchId: readString(profile.branch_id) || null,
-    outletId: readString(profile.outlet_id) || null,
-    outletName: readString(outlet.name) || null,
-    stockLocationId: readString(profile.stock_location_id) || null,
-    stockLocationName: readString(stockLocation.name) || null,
+        : [],
+    departmentId,
+    departmentName,
+    branchId,
+    branchName,
+    outletId,
+    outletName,
+    stockLocationId,
+    stockLocationName,
     moduleAccess,
     demoMode: false,
   }

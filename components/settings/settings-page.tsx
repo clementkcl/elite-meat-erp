@@ -214,12 +214,14 @@ function UserAccessForm({
   outlets,
   departments,
   stockLocations,
+  accessRows,
 }: {
   profiles: SettingsProfile[]
   roles: UserRole[]
   outlets: SettingsOption[]
   departments: SettingsOption[]
   stockLocations: SettingsOption[]
+  accessRows: SettingsPageData["outletModuleAccess"]
 }) {
   const [state, formAction, pending] = useActionState(
     updateUserAccessAction,
@@ -230,11 +232,24 @@ function UserAccessForm({
     () => profiles.find((profile) => profile.id === profileId) ?? profiles[0],
     [profileId, profiles]
   )
+  const [outletSelection, setOutletSelection] = useState({
+    profileId: selectedProfile?.id ?? "",
+    outletId: selectedProfile?.outletId ?? outlets[0]?.id ?? "",
+  })
+  const outletId =
+    outletSelection.profileId === selectedProfile?.id
+      ? outletSelection.outletId
+      : selectedProfile?.outletId ?? ""
+  const enabledModules = new Set(
+    accessRows
+      .filter((row) => row.outletId === outletId && row.isEnabled)
+      .map((row) => row.moduleKey)
+  )
 
   return (
     <SettingsCard
       title="User Access"
-      description="Roles, outlet, department, and stock location assignment."
+      description="Assign profile scope, roles, and the selected outlet's module access."
     >
       <form action={formAction} className="space-y-4">
         <Field label="User">
@@ -269,6 +284,12 @@ function UserAccessForm({
               name="outletId"
               options={outlets}
               defaultValue={selectedProfile?.outletId}
+              onChange={(value) =>
+                setOutletSelection({
+                  profileId: selectedProfile?.id ?? "",
+                  outletId: value,
+                })
+              }
             />
           </Field>
           <Field label="Department">
@@ -285,6 +306,37 @@ function UserAccessForm({
               defaultValue={selectedProfile?.stockLocationId}
             />
           </Field>
+        </div>
+        <div key={`${outletId || "no-outlet"}-modules`} className="space-y-2">
+          <div>
+            <Label>Module access for selected outlet</Label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              These module toggles are saved on the outlet and apply to users assigned to that outlet.
+            </p>
+          </div>
+          {outletId ? (
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {moduleKeys.map((moduleKey) => (
+                <label
+                  key={moduleKey}
+                  className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    name="outletModules"
+                    value={moduleKey}
+                    defaultChecked={enabledModules.has(moduleKey)}
+                    className="size-4"
+                  />
+                  <span>{titleCase(moduleKey)}</span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              Choose an outlet to edit module access.
+            </p>
+          )}
         </div>
         <ActionMessage state={state} />
         <SubmitButton pending={pending}>Update user</SubmitButton>
@@ -629,6 +681,7 @@ export function SettingsPage({ data }: { data: SettingsPageData }) {
           outlets={data.outlets}
           departments={data.departments}
           stockLocations={data.stockLocations}
+          accessRows={data.outletModuleAccess}
         />
         <OutletModuleForm
           outlets={data.outlets}

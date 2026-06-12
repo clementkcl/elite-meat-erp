@@ -38,6 +38,7 @@ function assert(condition, message) {
 
 const requiredRoutes = [
   "app/(erp)/home/page.tsx",
+  "app/(erp)/debug/profile/page.tsx",
   "app/(erp)/stock/inbound/page.tsx",
   "app/(erp)/stock/outbound/page.tsx",
   "app/(erp)/stock/transfer/page.tsx",
@@ -74,6 +75,37 @@ assert(
     !accessHelper.includes("if (!profile.outletId)"),
   "Non-admin users must need explicit module access even when outlet assignment is missing"
 )
+
+const authSession = read("lib/auth/session.ts")
+assert(
+  authSession.includes('.from("profiles")') &&
+    authSession.includes('.select("id, email, full_name, department_id, branch_id, outlet_id, stock_location_id")') &&
+    authSession.includes('.from("profile_roles")') &&
+    authSession.includes('.select("role_key")') &&
+    !authSession.includes("profile_roles("),
+  "Profile loader must load profile_roles separately instead of embedding profile_roles inside profiles"
+)
+
+const debugProfilePage = read("app/(erp)/debug/profile/page.tsx")
+for (const fragment of [
+  'process.env.NODE_ENV === "production"',
+  "notFound()",
+  "authUser?.id",
+  "authEmail",
+  "appLoadedCurrentProfile",
+  "profileByAuthId",
+  "profilesByAuthEmail",
+  "rolesByAuthId",
+  "rolesByEmailProfileId",
+  "roleNames",
+  "moduleAccessRowsForResolvedOutlet",
+  "likelyCauseHints",
+]) {
+  assert(
+    debugProfilePage.includes(fragment),
+    `Debug profile page missing: ${fragment}`
+  )
+}
 
 const serviceRolePattern =
   /SUPABASE_SERVICE|SERVICE_ROLE|service_role|service-role|supabase_service/i
@@ -388,6 +420,15 @@ for (const fragment of [
 
 const seedSql = read("supabase/seed.sql")
 for (const fragment of [
+  "cross join (",
+  "('accounting_finance')",
+  "('director_reports')",
+  "'clementkc@elitempsb.com'",
+  "'clementkl@elitempsb.com'",
+  "'clementkcl@elitempsb.com'",
+  "delete from public.profile_roles role",
+  "('admin')",
+  "('director')",
   "'ORD-SEED-PICKUP-001'",
   "'ORD-SEED-DELIVERY-001'",
   "'CUST-JC-PICKUP-001'",
@@ -619,6 +660,7 @@ const settingsActions = read("lib/settings/actions.ts")
 const settingsData = read("lib/settings/data.ts")
 for (const fragment of [
   "User Access",
+  "Module access for selected outlet",
   "Outlet Module Access",
   "Payment Types",
   "Claim Categories",
@@ -632,6 +674,7 @@ for (const fragment of [
 for (const fragment of [
   "updateUserAccessAction",
   "updateOutletModuleAccessAction",
+  "outletModules",
   "saveCustomerAction",
   "saveBarcodeWeightRuleAction",
   "Only admin can change ERP settings.",

@@ -90,9 +90,10 @@ Valid role keys are `retail_team_general_worker`, `retail_manager`,
 so team-scoped RLS can isolate outlet, delivery team, processing department, and
 stock-location data. Admin assigns scope once; normal staff workflows should use
 that assigned scope instead of asking staff to pick an outlet every time.
-Outlet module availability is controlled by `outlet_module_access`; for example,
-Jalan Channel can use Retail, Processing, and Stock while Wonderful can use
-Processing and Stock.
+Outlet module availability is controlled by `outlet_module_access`. The demo
+seed enables all ERP modules for every demo outlet so local test users can move
+between modules without extra setup. Production projects can disable modules per
+outlet from Settings.
 
 ## Local Development
 

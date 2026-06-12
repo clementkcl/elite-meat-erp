@@ -754,3 +754,88 @@ Remaining issues:
 Next recommended task:
 
 - Add real Supabase QA scripts or browser/manual evidence for the full order -> outbound -> failed delivery -> return movement flow, then implement no-barcode/standalone failed-return stock resolution if the business needs it for MVP.
+
+## Latest Local Demo Profile Scope Fix
+
+Task completed:
+
+- Fixed local/demo profile scope for `clementkcl@elitempsb.com`.
+- Checked the possible email variants `clementkc`, `clementkl`, and `clementkcl`.
+- Kept production RLS/access logic unchanged.
+
+Files changed:
+
+- `README.md`
+- `supabase/seed.sql`
+- `scripts/smoke-routes.mjs`
+- `HANDOFF.md`
+
+What changed:
+
+- Demo seed now enables every current ERP module in `outlet_module_access` for every demo outlet.
+- Existing profiles with these emails are updated to a valid broad testing scope:
+  - `clementkc@elitempsb.com`
+  - `clementkl@elitempsb.com`
+  - `clementkcl@elitempsb.com`
+- Matching Clement profiles are assigned the `admin` and `director` roles only, replacing stale/default role rows.
+- Matching Clement profiles are scoped to the `DIRECTOR` outlet, `Management` department, and `DIRECTOR` stock location. Admin/director roles still give global access in the app.
+
+Root cause:
+
+- The Auth user could sign in, but the seed did not include or upgrade `clementkcl@elitempsb.com`.
+- The Auth trigger-created profile therefore had no outlet, department, or stock location.
+- With no explicit role rows, the app fell back to `retail_team_general_worker`, and with no outlet the user had no module access rows to read.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Required local reseed command:
+
+- `supabase db seed`
+
+Remaining issue:
+
+- The seed updates existing Auth-triggered profile rows. If the Auth user does not exist yet, sign in/create `clementkcl@elitempsb.com` first, then run `supabase db seed` again.
+
+## Latest Admin Settings User Access UI Pass
+
+Task completed:
+
+- Improved `/settings` so admin can assign user outlet, department, stock location, roles, and selected outlet module access from one User Access form.
+- Kept production RLS and access helpers unchanged.
+- Reused existing `profiles`, `profile_roles`, and `outlet_module_access` tables.
+
+Files changed:
+
+- `components/settings/settings-page.tsx`
+- `lib/settings/actions.ts`
+- `scripts/smoke-routes.mjs`
+- `HANDOFF.md`
+- `docs/codex-current-status.md`
+
+What changed:
+
+- User Access form now includes module checkboxes for the selected outlet.
+- Saving User Access updates:
+  - `profiles.outlet_id`
+  - `profiles.department_id`
+  - `profiles.stock_location_id`
+  - `profile_roles`
+  - `outlet_module_access` for the selected outlet
+- The module access UI clearly notes that module toggles are outlet-level and apply to users assigned to that outlet.
+- Existing separate Outlet Module Access form remains available for outlet-level edits.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issue:
+
+- Module access is still outlet-level, not per-user. This matches the current data model and RLS design. A future per-user module override would need a new table and RLS plan.

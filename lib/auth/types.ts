@@ -22,6 +22,7 @@ export type CurrentProfile = {
   departmentId: string | null
   departmentName: string | null
   branchId: string | null
+  branchName: string | null
   outletId: string | null
   outletName: string | null
   stockLocationId: string | null

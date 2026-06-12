@@ -48,36 +48,19 @@ on conflict (name) do update set is_active = true;
 insert into public.outlet_module_access (outlet_id, module_key, is_enabled)
 select outlet.id, module.module_key, true
 from public.outlets outlet
-join lateral (
+cross join (
   values
-    ('JALAN CHANNEL', 'stock'),
-    ('JALAN CHANNEL', 'orders'),
-    ('JALAN CHANNEL', 'retail'),
-    ('JALAN CHANNEL', 'processing'),
-    ('JALAN CHANNEL', 'attendance'),
-    ('JALAN CHANNEL', 'cleaning'),
-    ('JALAN CHANNEL', 'oa_actions'),
-    ('SUNGAI MERAH', 'stock'),
-    ('SUNGAI MERAH', 'orders'),
-    ('SUNGAI MERAH', 'retail'),
-    ('SUNGAI MERAH', 'delivery'),
-    ('SUNGAI MERAH', 'attendance'),
-    ('SUNGAI MERAH', 'cleaning'),
-    ('SUNGAI MERAH', 'oa_actions'),
-    ('WONDERFUL', 'stock'),
-    ('WONDERFUL', 'orders'),
-    ('WONDERFUL', 'processing'),
-    ('WONDERFUL', 'attendance'),
-    ('WONDERFUL', 'cleaning'),
-    ('WONDERFUL', 'oa_actions'),
-    ('SUNGAI MAAW', 'retail'),
-    ('SUNGAI MAAW', 'orders'),
-    ('SUNGAI MAAW', 'delivery'),
-    ('SUNGAI MAAW', 'attendance'),
-    ('SUNGAI MAAW', 'cleaning'),
-    ('SUNGAI MAAW', 'oa_actions')
-) as module(outlet_name, module_key)
-  on module.outlet_name = outlet.name
+    ('stock'),
+    ('orders'),
+    ('retail'),
+    ('processing'),
+    ('delivery'),
+    ('attendance'),
+    ('cleaning'),
+    ('oa_actions'),
+    ('accounting_finance'),
+    ('director_reports')
+) as module(module_key)
 on conflict (outlet_id, module_key) do update set
   is_enabled = excluded.is_enabled;
 
@@ -188,6 +171,54 @@ from public.outlets outlet
 join public.stock_locations stock_location on stock_location.name = outlet.name
 where profile.stock_location_id is null
   and profile.outlet_id = outlet.id;
+
+update public.profiles profile
+set
+  full_name = coalesce(nullif(profile.full_name, ''), 'Clement KCL'),
+  branch_id = branch.id,
+  outlet_id = outlet.id,
+  department_id = department.id,
+  stock_location_id = stock_location.id
+from public.branches branch
+join public.outlets outlet on outlet.name = 'DIRECTOR'
+join public.departments department on department.name = 'Management'
+join public.stock_locations stock_location on stock_location.name = 'DIRECTOR'
+where branch.name = 'Elite Meat Main'
+  and lower(profile.email) in (
+    'clementkc@elitempsb.com',
+    'clementkl@elitempsb.com',
+    'clementkcl@elitempsb.com'
+  );
+
+with target_profiles as (
+  select id
+  from public.profiles
+  where lower(email) in (
+    'clementkc@elitempsb.com',
+    'clementkl@elitempsb.com',
+    'clementkcl@elitempsb.com'
+  )
+)
+delete from public.profile_roles role
+using target_profiles target
+where role.profile_id = target.id;
+
+insert into public.profile_roles (profile_id, role_key)
+select target.id, role.role_key
+from (
+  select id
+  from public.profiles
+  where lower(email) in (
+    'clementkc@elitempsb.com',
+    'clementkl@elitempsb.com',
+    'clementkcl@elitempsb.com'
+  )
+) target
+cross join (values
+  ('admin'),
+  ('director')
+) as role(role_key)
+on conflict do nothing;
 
 insert into public.brands (name) values
   ('TICAN'),
