@@ -9,7 +9,8 @@ import {
   type CurrentProfile,
   type UserRole,
 } from "@/lib/auth/session"
-import { asRecord } from "@/lib/records"
+import { canAccessModule } from "@/lib/auth/access"
+import { asRecord, readString } from "@/lib/records"
 import {
   createSupabaseServerClient,
   type SupabaseServerClient,
@@ -22,15 +23,21 @@ import {
   deliveryStatuses,
 } from "@/lib/delivery/types"
 
-const deliveryOperatorRoles: UserRole[] = [
+const deliveryAccessRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
   "delivery_team_general_worker",
   "delivery_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "account",
   "admin",
 ]
 
 const deliveryManagerRoles: UserRole[] = ["delivery_manager", "admin"]
 
 const deliveryPaymentRoles: UserRole[] = [
+  "delivery_team_general_worker",
   "delivery_manager",
   "account",
   "admin",
@@ -95,6 +102,10 @@ const paymentSchema = z.object({
 
 const proofUploadSchema = z.object({
   orderId: z.string().trim().min(1),
+  deliveryOutcome: z.enum(["DELIVERED", "FAILED"]).default("DELIVERED"),
+  receiverName: z.string().trim().min(2),
+  latitude: z.coerce.number().min(-90).max(90),
+  longitude: z.coerce.number().min(-180).max(180),
 })
 
 type DeliveryActionContext = {
@@ -145,6 +156,10 @@ async function getActionContext(roles: UserRole[]) {
 
   if (!hasAnyRole(profile, roles)) {
     return { error: "Your role does not allow this delivery action." }
+  }
+
+  if (!canAccessModule(profile, "delivery")) {
+    return { error: "Your outlet does not have delivery access." }
   }
 
   const supabase = await createSupabaseServerClient()
@@ -221,7 +236,7 @@ async function ensureOrderExists(
 ) {
   const { data, error } = await supabase
     .from("delivery_orders")
-    .select("id, order_no")
+    .select("id, order_no, status, proof_file_id")
     .eq("id", orderId)
     .maybeSingle()
 
@@ -236,6 +251,39 @@ async function ensureOrderExists(
   }
 
   return order
+}
+
+function isDeliveryCompletionStatus(status: string) {
+  return status === "DELIVERED" || status === "FAILED"
+}
+
+function assertProofBeforeDeliveryCompletion(
+  order: Record<string, unknown>,
+  nextStatus: string
+) {
+  if (!isDeliveryCompletionStatus(nextStatus)) {
+    return
+  }
+
+  if (readString(order.proof_file_id)) {
+    return
+  }
+
+  throw new Error(
+    "Upload proof of delivery before marking this delivery delivered or failed."
+  )
+}
+
+function assertProofUploadAllowed(order: Record<string, unknown>) {
+  const status = readString(order.status)
+
+  if (["OUT_FOR_DELIVERY", "DELIVERED", "FAILED"].includes(status)) {
+    return
+  }
+
+  throw new Error(
+    "Proof photos can only be uploaded after the delivery is out for delivery."
+  )
 }
 
 function safeFileName(name: string) {
@@ -273,7 +321,7 @@ export async function createDeliveryOrderAction(
     return parsed
   }
 
-  return runDeliveryAction(formData, deliveryOperatorRoles, async (context) => {
+  return runDeliveryAction(formData, deliveryAccessRoles, async (context) => {
     if (parsed.sourceType !== "manual" && !parsed.sourceReference) {
       throw new Error("Enter a source reference for retail sale or WhatsApp orders.")
     }
@@ -365,8 +413,16 @@ export async function updateDeliveryStatusAction(
     return parsed
   }
 
-  return runDeliveryAction(formData, deliveryOperatorRoles, async (context) => {
-    await ensureOrderExists(context.supabase, parsed.orderId)
+  return runDeliveryAction(formData, deliveryAccessRoles, async (context) => {
+    const order = await ensureOrderExists(context.supabase, parsed.orderId)
+
+    if (parsed.status === "FAILED") {
+      throw new Error(
+        "Upload failed delivery proof so receiver/contact, photo, GPS, and return workflow are recorded."
+      )
+    }
+
+    assertProofBeforeDeliveryCompletion(order, parsed.status)
 
     const { error } = await context.supabase
       .from("delivery_orders")
@@ -453,7 +509,7 @@ export async function recordDriverLocationAction(
     return parsed
   }
 
-  return runDeliveryAction(formData, deliveryOperatorRoles, async (context) => {
+  return runDeliveryAction(formData, deliveryAccessRoles, async (context) => {
     if (parsed.orderId) {
       await ensureOrderExists(context.supabase, parsed.orderId)
     }
@@ -555,8 +611,10 @@ export async function uploadProofOfDeliveryAction(
     return parsed
   }
 
-  return runDeliveryAction(formData, deliveryOperatorRoles, async (context) => {
+  return runDeliveryAction(formData, deliveryAccessRoles, async (context) => {
     const order = await ensureOrderExists(context.supabase, parsed.orderId)
+    assertProofUploadAllowed(order)
+
     const fileValue = formData.get("proofFile")
 
     if (!(fileValue instanceof File) || fileValue.size === 0) {
@@ -598,13 +656,43 @@ export async function uploadProofOfDeliveryAction(
     }
 
     const fileId = String(asRecord(fileData).id ?? "")
+    const nextStatus = parsed.deliveryOutcome
     const { error: orderError } = await context.supabase
       .from("delivery_orders")
-      .update({ proof_file_id: fileId })
+      .update({
+        proof_file_id: fileId,
+        proof_receiver_name: parsed.receiverName,
+        proof_latitude: parsed.latitude,
+        proof_longitude: parsed.longitude,
+        proof_uploaded_at: new Date().toISOString(),
+        status: nextStatus,
+        failed_return_status:
+          nextStatus === "FAILED" ? "NO_STOCK_LINK" : "NOT_REQUIRED",
+        failed_return_required_units: 0,
+        failed_return_completed_units: 0,
+        failed_return_logged_at:
+          nextStatus === "FAILED" ? new Date().toISOString() : null,
+      })
       .eq("id", parsed.orderId)
 
     if (orderError) {
       throw new Error(orderError.message)
+    }
+
+    const { error: statusError } = await context.supabase
+      .from("delivery_status_logs")
+      .insert({
+        order_id: parsed.orderId,
+        status: nextStatus,
+        notes:
+          nextStatus === "FAILED"
+            ? `Failed delivery proof uploaded. Contact: ${parsed.receiverName}. Standalone delivery has no linked order stock; return follow-up is required.`
+            : `Proof uploaded. Receiver: ${parsed.receiverName}.`,
+        created_by: context.profile.id,
+      })
+
+    if (statusError) {
+      throw new Error(statusError.message)
     }
 
     await insertAuditLog(
@@ -617,9 +705,17 @@ export async function uploadProofOfDeliveryAction(
         orderNo: String(order.order_no ?? ""),
         objectPath,
         fileId,
+        receiverName: parsed.receiverName,
+        latitude: parsed.latitude,
+        longitude: parsed.longitude,
+        status: nextStatus,
+        failedReturnStatus:
+          nextStatus === "FAILED" ? "NO_STOCK_LINK" : "NOT_REQUIRED",
       }
     )
 
-    return "Proof of delivery uploaded."
+    return nextStatus === "FAILED"
+      ? "Failed delivery proof uploaded. Standalone stock return follow-up is required."
+      : "Proof of delivery uploaded and delivery marked delivered."
   })
 }

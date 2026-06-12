@@ -20,7 +20,9 @@ import {
 } from "@/components/oa-actions/oa-forms"
 import { ApprovalTimeline } from "@/components/oa-actions/approval-timeline"
 import { DataTable, type DataTableColumn } from "@/components/stock/data-table"
+import { moduleAccessBlock } from "@/lib/auth/module-guard"
 import { getCurrentProfile } from "@/lib/auth/session"
+import type { UserRole } from "@/lib/auth/types"
 import { getOaPageData } from "@/lib/oa-actions/data"
 import type {
   AdvanceRequest,
@@ -40,6 +42,18 @@ export type OaRoute =
   | "my-requests"
 
 type TableRow = Record<string, string | number | boolean>
+
+const oaRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "delivery_team_general_worker",
+  "delivery_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "account",
+  "admin",
+  "director",
+]
 
 const titles: Record<OaRoute, { title: string; description: string }> = {
   dashboard: {
@@ -292,6 +306,12 @@ function filterOwnData(data: OaPageData, profileId?: string) {
 }
 
 export async function OaPage({ route }: { route: OaRoute }) {
+  const blocked = await moduleAccessBlock("oa_actions", "OA Actions", oaRoles)
+
+  if (blocked) {
+    return blocked
+  }
+
   const [data, profile] = await Promise.all([
     getOaPageData(),
     getCurrentProfile(),

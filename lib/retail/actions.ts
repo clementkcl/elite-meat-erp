@@ -9,6 +9,7 @@ import {
   type CurrentProfile,
   type UserRole,
 } from "@/lib/auth/session"
+import { canAccessModule, type ModuleKey } from "@/lib/auth/access"
 import {
   asRecord,
   asRecordArray,
@@ -325,7 +326,7 @@ function canUseWorkScope(
   )
 }
 
-async function getActionContext(roles: UserRole[]) {
+async function getActionContext(roles: UserRole[], moduleKey: ModuleKey) {
   const profile = await getCurrentProfile()
 
   if (!profile) {
@@ -334,6 +335,12 @@ async function getActionContext(roles: UserRole[]) {
 
   if (!hasAnyRole(profile, roles)) {
     return { error: "Your role does not allow this retail action." }
+  }
+
+  if (!canAccessModule(profile, moduleKey)) {
+    return {
+      error: `Your outlet does not have ${moduleKey.replaceAll("_", " ")} access.`,
+    }
   }
 
   const supabase = await createSupabaseServerClient()
@@ -364,9 +371,10 @@ function revalidateRetailPaths() {
 async function runRetailAction(
   formData: FormData,
   roles: UserRole[],
-  callback: (context: RetailActionContext, formData: FormData) => Promise<string>
+  callback: (context: RetailActionContext, formData: FormData) => Promise<string>,
+  moduleKey: ModuleKey = "retail"
 ) {
-  const context = await getActionContext(roles)
+  const context = await getActionContext(roles, moduleKey)
 
   if ("error" in context) {
     return failure(context.error ?? "Action unavailable.")
@@ -1352,7 +1360,7 @@ export async function createRetailProcessingBatchAction(
     )
 
     return `Processing batch ${batchNo} saved.`
-  })
+  }, "processing")
 }
 
 export async function reviewRetailProcessingBatchAction(
@@ -1391,7 +1399,7 @@ export async function reviewRetailProcessingBatchAction(
     )
 
     return "Processing batch reviewed."
-  })
+  }, "processing")
 }
 
 export async function createRetailCleaningTaskAction(
@@ -1435,7 +1443,7 @@ export async function createRetailCleaningTaskAction(
     )
 
     return "Cleaning task saved."
-  })
+  }, "cleaning")
 }
 
 export async function completeRetailCleaningTaskAction(
@@ -1496,7 +1504,7 @@ export async function completeRetailCleaningTaskAction(
     )
 
     return "Cleaning task updated."
-  })
+  }, "cleaning")
 }
 
 export async function createRetailExpenseAction(

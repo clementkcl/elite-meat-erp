@@ -7,7 +7,7 @@ export default async function LoginPage() {
   const profile = await getCurrentProfile()
 
   if (profile && !profile.demoMode) {
-    redirect("/stock/dashboard")
+    redirect("/dashboard")
   }
 
   return (

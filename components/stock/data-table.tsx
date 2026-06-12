@@ -9,6 +9,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table"
 import { ArrowUpDown } from "lucide-react"
+import { useRouter } from "next/navigation"
 import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -52,11 +53,14 @@ export function DataTable<T extends Record<string, unknown>>({
   columns,
   data,
   emptyText = "No records found.",
+  getRowHref,
 }: {
   columns: DataTableColumn<T>[]
   data: T[]
   emptyText?: string
+  getRowHref?: (row: T) => string | undefined
 }) {
+  const router = useRouter()
   const [sorting, setSorting] = useState<SortingState>([])
   const tableColumns = useMemo<ColumnDef<T>[]>(
     () =>
@@ -129,7 +133,31 @@ export function DataTable<T extends Record<string, unknown>>({
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-t transition-colors hover:bg-muted/40"
+                  tabIndex={getRowHref?.(row.original) ? 0 : undefined}
+                  onClick={() => {
+                    const href = getRowHref?.(row.original)
+
+                    if (href) {
+                      router.push(href)
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") {
+                      return
+                    }
+
+                    const href = getRowHref?.(row.original)
+
+                    if (href) {
+                      event.preventDefault()
+                      router.push(href)
+                    }
+                  }}
+                  className={cn(
+                    "border-t transition-colors hover:bg-muted/40",
+                    getRowHref?.(row.original) &&
+                      "cursor-pointer focus-visible:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  )}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="max-w-72 px-3 py-3">

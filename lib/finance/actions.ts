@@ -9,6 +9,7 @@ import {
   type CurrentProfile,
   type UserRole,
 } from "@/lib/auth/session"
+import { canAccessModule } from "@/lib/auth/access"
 import { asRecord, readString } from "@/lib/records"
 import {
   createSupabaseServerClient,
@@ -141,6 +142,10 @@ async function getActionContext(roles: UserRole[]) {
 
   if (!hasAnyRole(profile, roles)) {
     return { error: "Your role does not allow this finance action." }
+  }
+
+  if (!canAccessModule(profile, "accounting_finance")) {
+    return { error: "Your outlet does not have accounting finance access." }
   }
 
   const supabase = await createSupabaseServerClient()

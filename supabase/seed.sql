@@ -51,23 +51,27 @@ from public.outlets outlet
 join lateral (
   values
     ('JALAN CHANNEL', 'stock'),
+    ('JALAN CHANNEL', 'orders'),
     ('JALAN CHANNEL', 'retail'),
     ('JALAN CHANNEL', 'processing'),
     ('JALAN CHANNEL', 'attendance'),
     ('JALAN CHANNEL', 'cleaning'),
     ('JALAN CHANNEL', 'oa_actions'),
     ('SUNGAI MERAH', 'stock'),
+    ('SUNGAI MERAH', 'orders'),
     ('SUNGAI MERAH', 'retail'),
     ('SUNGAI MERAH', 'delivery'),
     ('SUNGAI MERAH', 'attendance'),
     ('SUNGAI MERAH', 'cleaning'),
     ('SUNGAI MERAH', 'oa_actions'),
     ('WONDERFUL', 'stock'),
+    ('WONDERFUL', 'orders'),
     ('WONDERFUL', 'processing'),
     ('WONDERFUL', 'attendance'),
     ('WONDERFUL', 'cleaning'),
     ('WONDERFUL', 'oa_actions'),
     ('SUNGAI MAAW', 'retail'),
+    ('SUNGAI MAAW', 'orders'),
     ('SUNGAI MAAW', 'delivery'),
     ('SUNGAI MAAW', 'attendance'),
     ('SUNGAI MAAW', 'cleaning'),
@@ -76,6 +80,107 @@ join lateral (
   on module.outlet_name = outlet.name
 on conflict (outlet_id, module_key) do update set
   is_enabled = excluded.is_enabled;
+
+insert into public.erp_claim_categories (code, name, sort_order) values
+  ('TRAVEL', 'Travel', 10),
+  ('MEAL', 'Meal', 20),
+  ('MEDICAL', 'Medical', 30),
+  ('OTHER', 'Other', 100)
+on conflict (code) do update set
+  name = excluded.name,
+  sort_order = excluded.sort_order,
+  is_active = true;
+
+insert into public.erp_leave_types (code, name, default_days, sort_order) values
+  ('ANNUAL', 'Annual Leave', 8, 10),
+  ('MEDICAL', 'Medical Leave', 14, 20),
+  ('EMERGENCY', 'Emergency Leave', 0, 30),
+  ('OTHER', 'Other', 0, 100)
+on conflict (code) do update set
+  name = excluded.name,
+  default_days = excluded.default_days,
+  sort_order = excluded.sort_order,
+  is_active = true;
+
+insert into public.customer_categories (code, name, credit_term_days, is_credit, sort_order) values
+  ('RETAIL', 'Retail', 0, false, 10),
+  ('WHOLESALE', 'Wholesale', 14, true, 20),
+  ('VIP', 'VIP', 14, true, 30),
+  ('OTHER', 'Other', 0, false, 100)
+on conflict (code) do update set
+  name = excluded.name,
+  credit_term_days = excluded.credit_term_days,
+  is_credit = excluded.is_credit,
+  sort_order = excluded.sort_order,
+  is_active = true;
+
+insert into public.customers (
+  customer_code,
+  name,
+  phone,
+  address,
+  category_id,
+  outlet_id,
+  credit_term_days,
+  latitude,
+  longitude
+)
+select
+  seed.customer_code,
+  seed.name,
+  seed.phone,
+  seed.address,
+  category.id,
+  outlet.id,
+  seed.credit_term_days,
+  seed.latitude,
+  seed.longitude
+from (values
+  (
+    'CUST-JC-PICKUP-001',
+    'Jalan Channel Pickup Customer',
+    '+60 12-200 3001',
+    'Jalan Channel retail counter',
+    'RETAIL',
+    'JALAN CHANNEL',
+    0,
+    2.2871000,
+    111.8320000
+  ),
+  (
+    'CUST-SM-CREDIT-001',
+    'Sungai Merah Delivery Customer',
+    '+60 12-200 3002',
+    'Sungai Merah outlet loading bay',
+    'VIP',
+    'SUNGAI MERAH',
+    30,
+    2.3123000,
+    111.8460000
+  )
+) as seed(
+  customer_code,
+  name,
+  phone,
+  address,
+  category_code,
+  outlet_name,
+  credit_term_days,
+  latitude,
+  longitude
+)
+join public.customer_categories category on category.code = seed.category_code
+join public.outlets outlet on outlet.name = seed.outlet_name
+on conflict (customer_code) do update set
+  name = excluded.name,
+  phone = excluded.phone,
+  address = excluded.address,
+  category_id = excluded.category_id,
+  outlet_id = excluded.outlet_id,
+  credit_term_days = excluded.credit_term_days,
+  latitude = excluded.latitude,
+  longitude = excluded.longitude,
+  is_active = true;
 
 update public.profiles profile
 set stock_location_id = stock_location.id
@@ -177,6 +282,330 @@ where item.item_code = 'MEAT-BELLY-BONE-IN'
 on conflict (item_id, brand_id, origin_id, location_id) do update set
   quantity = greatest(public.no_barcode_stock.quantity, excluded.quantity),
   weight_kg = greatest(public.no_barcode_stock.weight_kg, excluded.weight_kg);
+
+insert into public.stock_units (
+  barcode,
+  item_id,
+  brand_id,
+  origin_id,
+  location_id,
+  status,
+  net_weight_kg,
+  batch_no,
+  received_at
+)
+select
+  seed.barcode,
+  item.id,
+  brand.id,
+  origin.id,
+  stock_location.id,
+  'IN_STOCK'::public.stock_unit_status,
+  seed.net_weight_kg,
+  'SEED-ORDER-OUTBOUND',
+  '2026-06-10 08:30:00+08'::timestamptz
+from (values
+  ('EM-SEED-OUT-001', 'MEAT-BELLY-BONELESS', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 12.500),
+  ('EM-SEED-OUT-002', 'MEAT-BELLY-BONELESS', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 11.750),
+  ('EM-SEED-OUT-003', 'MEAT-LOIN-BONELESS', 'RIVASAM', 'SPAIN', 'SUNGAI MERAH', 9.250)
+) as seed(barcode, item_code, brand_name, origin_name, stock_location_name, net_weight_kg)
+join public.items item on item.item_code = seed.item_code
+left join public.brands brand on brand.name = seed.brand_name
+left join public.origins origin on origin.name = seed.origin_name
+join public.stock_locations stock_location on stock_location.name = seed.stock_location_name
+on conflict (barcode) do nothing;
+
+insert into public.stock_movements (
+  movement_type,
+  item_id,
+  stock_unit_id,
+  barcode,
+  to_location_id,
+  quantity,
+  weight_kg,
+  reference_no,
+  notes,
+  source_type,
+  created_by
+)
+select
+  'INBOUND'::public.stock_movement_type,
+  stock_unit.item_id,
+  stock_unit.id,
+  stock_unit.barcode,
+  stock_unit.location_id,
+  1,
+  stock_unit.net_weight_kg,
+  'SEED-ORDER-OUTBOUND',
+  'Seed barcode stock for order outbound testing',
+  'supplier_import',
+  first_profile.id
+from public.stock_units stock_unit
+left join lateral (
+  select id
+  from public.profiles
+  order by created_at
+  limit 1
+) first_profile on true
+where stock_unit.barcode in ('EM-SEED-OUT-001', 'EM-SEED-OUT-002', 'EM-SEED-OUT-003')
+  and not exists (
+    select 1
+    from public.stock_movements existing
+    where existing.barcode = stock_unit.barcode
+      and existing.reference_no = 'SEED-ORDER-OUTBOUND'
+      and existing.movement_type = 'INBOUND'::public.stock_movement_type
+  );
+
+insert into public.customer_orders (
+  order_no,
+  customer_name,
+  customer_phone,
+  order_date,
+  required_date,
+  fulfillment_type,
+  delivery_required,
+  status,
+  remarks,
+  outlet_id,
+  department_id,
+  created_by,
+  updated_by
+)
+select
+  seed.order_no,
+  seed.customer_name,
+  seed.customer_phone,
+  seed.order_date::date,
+  seed.required_date::date,
+  seed.fulfillment_type::public.customer_order_fulfillment,
+  seed.delivery_required,
+  seed.status::public.customer_order_status,
+  seed.remarks,
+  outlet.id,
+  department.id,
+  first_profile.id,
+  first_profile.id
+from (values
+  (
+    'ORD-SEED-PICKUP-001',
+    'Jalan Channel Pickup Customer',
+    '+60 12-200 3001',
+    '2026-06-10',
+    '2026-06-11',
+    'PICKUP',
+    false,
+    'READY_FOR_PICKUP',
+    'Seed ready pickup order for outbound sales scan.',
+    'JALAN CHANNEL',
+    'Retail'
+  ),
+  (
+    'ORD-SEED-DELIVERY-001',
+    'Sungai Merah Delivery Customer',
+    '+60 12-200 3002',
+    '2026-06-10',
+    '2026-06-11',
+    'DELIVERY',
+    true,
+    'READY_FOR_DELIVERY',
+    'Seed ready delivery order for driver list testing.',
+    'SUNGAI MERAH',
+    'Delivery'
+  )
+) as seed(
+  order_no,
+  customer_name,
+  customer_phone,
+  order_date,
+  required_date,
+  fulfillment_type,
+  delivery_required,
+  status,
+  remarks,
+  outlet_name,
+  department_name
+)
+join public.outlets outlet on outlet.name = seed.outlet_name
+left join public.departments department on department.name = seed.department_name
+left join lateral (
+  select id
+  from public.profiles
+  order by created_at
+  limit 1
+) first_profile on true
+on conflict (order_no) do update set
+  customer_name = excluded.customer_name,
+  customer_phone = excluded.customer_phone,
+  order_date = excluded.order_date,
+  required_date = excluded.required_date,
+  fulfillment_type = excluded.fulfillment_type,
+  delivery_required = excluded.delivery_required,
+  status = excluded.status,
+  remarks = excluded.remarks,
+  outlet_id = excluded.outlet_id,
+  department_id = excluded.department_id,
+  updated_by = excluded.updated_by;
+
+update public.customer_orders customer_order
+set customer_id = customer.id,
+    source_type = 'manual_erp',
+    source_reference = customer_order.order_no
+from public.customers customer
+where (
+    (customer_order.order_no = 'ORD-SEED-PICKUP-001' and customer.customer_code = 'CUST-JC-PICKUP-001')
+    or (customer_order.order_no = 'ORD-SEED-DELIVERY-001' and customer.customer_code = 'CUST-SM-CREDIT-001')
+  );
+
+insert into public.customer_order_items (
+  order_id,
+  item_id,
+  requested_quantity,
+  requested_weight_kg,
+  prepared_quantity,
+  prepared_weight_kg,
+  prepared_by,
+  prepared_at,
+  status,
+  notes
+)
+select
+  customer_order.id,
+  item.id,
+  seed.requested_quantity,
+  seed.requested_weight_kg,
+  seed.prepared_quantity,
+  seed.prepared_weight_kg,
+  first_profile.id,
+  '2026-06-10 09:00:00+08'::timestamptz,
+  'PREPARED'::public.customer_order_item_status,
+  seed.notes
+from (values
+  ('ORD-SEED-PICKUP-001', 'MEAT-BELLY-BONELESS', 2.000, 24.250, 2.000, 24.250, 'Seed prepared pickup order line.'),
+  ('ORD-SEED-DELIVERY-001', 'MEAT-LOIN-BONELESS', 1.000, 9.250, 1.000, 9.250, 'Seed prepared delivery order line.')
+) as seed(
+  order_no,
+  item_code,
+  requested_quantity,
+  requested_weight_kg,
+  prepared_quantity,
+  prepared_weight_kg,
+  notes
+)
+join public.customer_orders customer_order on customer_order.order_no = seed.order_no
+join public.items item on item.item_code = seed.item_code
+left join lateral (
+  select id
+  from public.profiles
+  order by created_at
+  limit 1
+) first_profile on true
+where not exists (
+  select 1
+  from public.customer_order_items existing
+  where existing.order_id = customer_order.id
+    and existing.item_id = item.id
+    and existing.notes = seed.notes
+);
+
+insert into public.order_stock_reservations (
+  order_id,
+  order_item_id,
+  item_id,
+  location_id,
+  reserved_quantity,
+  reserved_weight_kg,
+  status,
+  created_by
+)
+select
+  customer_order_item.order_id,
+  customer_order_item.id,
+  customer_order_item.item_id,
+  stock_location.id,
+  customer_order_item.requested_quantity,
+  customer_order_item.requested_weight_kg,
+  'ACTIVE',
+  first_profile.id
+from public.customer_order_items customer_order_item
+join public.customer_orders customer_order on customer_order.id = customer_order_item.order_id
+left join public.stock_locations stock_location on stock_location.name =
+  case
+    when customer_order.order_no = 'ORD-SEED-DELIVERY-001' then 'SUNGAI MERAH'
+    else 'JALAN CHANNEL'
+  end
+left join lateral (
+  select id
+  from public.profiles
+  order by created_at
+  limit 1
+) first_profile on true
+where customer_order.order_no in ('ORD-SEED-PICKUP-001', 'ORD-SEED-DELIVERY-001')
+  and not exists (
+    select 1
+    from public.order_stock_reservations existing
+    where existing.order_item_id = customer_order_item.id
+  );
+
+insert into public.order_preparation_logs (
+  order_id,
+  order_item_id,
+  item_id,
+  prepared_quantity,
+  prepared_weight_kg,
+  prepared_by,
+  notes
+)
+select
+  customer_order_item.order_id,
+  customer_order_item.id,
+  customer_order_item.item_id,
+  customer_order_item.prepared_quantity,
+  customer_order_item.prepared_weight_kg,
+  customer_order_item.prepared_by,
+  'Seed preparation log'
+from public.customer_order_items customer_order_item
+join public.customer_orders customer_order on customer_order.id = customer_order_item.order_id
+where customer_order.order_no in ('ORD-SEED-PICKUP-001', 'ORD-SEED-DELIVERY-001')
+  and not exists (
+    select 1
+    from public.order_preparation_logs existing
+    where existing.order_item_id = customer_order_item.id
+      and existing.notes = 'Seed preparation log'
+  );
+
+insert into public.order_notification_events (
+  order_id,
+  event_type,
+  channel,
+  payload,
+  status,
+  created_by
+)
+select
+  customer_order.id,
+  seed.event_type::public.order_notification_event_type,
+  'WHATSAPP',
+  jsonb_build_object('source', 'seed', 'orderNo', customer_order.order_no),
+  'PENDING',
+  first_profile.id
+from (values
+  ('ORD-SEED-PICKUP-001', 'READY_TO_PICKUP'),
+  ('ORD-SEED-DELIVERY-001', 'READY_TO_PICKUP')
+) as seed(order_no, event_type)
+join public.customer_orders customer_order on customer_order.order_no = seed.order_no
+left join lateral (
+  select id
+  from public.profiles
+  order by created_at
+  limit 1
+) first_profile on true
+where not exists (
+  select 1
+  from public.order_notification_events existing
+  where existing.order_id = customer_order.id
+    and existing.event_type = seed.event_type::public.order_notification_event_type
+    and existing.payload->>'source' = 'seed'
+);
 
 insert into public.vehicles (vehicle_no, vehicle_type, capacity_kg) values
   ('EM-LORRY-01', 'LORRY', 1800),
@@ -620,6 +1049,47 @@ left join public.outlets outlet on outlet.name = seed.outlet_name
 on conflict (item_id, brand_id, origin_id, outlet_id, effective_from) do update set
   unit_price = excluded.unit_price,
   is_active = true;
+
+insert into public.customer_price_rules (
+  customer_category_id,
+  customer_id,
+  item_id,
+  brand_id,
+  origin_id,
+  outlet_id,
+  unit_price,
+  effective_from
+)
+select
+  category.id,
+  null::uuid,
+  item.id,
+  brand.id,
+  origin.id,
+  outlet.id,
+  seed.unit_price,
+  '2026-06-01'::date
+from (values
+  ('WHOLESALE', 'MEAT-BELLY-BONELESS', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 38.00),
+  ('VIP', 'MEAT-LOIN-BONELESS', 'RIVASAM', 'SPAIN', 'SUNGAI MERAH', 44.00),
+  ('RETAIL', 'PROCESSED-MEATBALL', null, null, 'JALAN CHANNEL', 18.50)
+) as seed(category_code, item_code, brand_name, origin_name, outlet_name, unit_price)
+join public.customer_categories category on category.code = seed.category_code
+join public.items item on item.item_code = seed.item_code
+left join public.brands brand on brand.name = seed.brand_name
+left join public.origins origin on origin.name = seed.origin_name
+left join public.outlets outlet on outlet.name = seed.outlet_name
+where not exists (
+  select 1
+  from public.customer_price_rules existing
+  where existing.customer_category_id = category.id
+    and existing.customer_id is null
+    and existing.item_id = item.id
+    and existing.brand_id is not distinct from brand.id
+    and existing.origin_id is not distinct from origin.id
+    and existing.outlet_id is not distinct from outlet.id
+    and existing.effective_from = '2026-06-01'::date
+);
 
 insert into public.retail_cash_sessions (
   register_id,

@@ -1,16 +1,16 @@
 # Elite Meat ERP
 
-Core ERP foundation with Stock Module V1, Delivery Module V1, Attendance Module
-V1, OA Actions Module V1, Retail Module V1, Processing V1, Cleaning V1,
-Accounting/Finance V1, and Director V1 built on Next.js App Router, TypeScript,
-Supabase Auth, Supabase PostgreSQL, Supabase Storage, Tailwind CSS, shadcn/ui,
-TanStack Table, and Recharts.
+Core ERP foundation with Stock Module V1, Orders, Delivery Module V1,
+Attendance Module V1, OA Actions Module V1, Retail Module V1, Processing V1,
+Cleaning V1, Accounting/Finance V1, and Director V1 built on Next.js App
+Router, TypeScript, Supabase Auth, Supabase PostgreSQL, Supabase Storage,
+Tailwind CSS, shadcn/ui, TanStack Table, and Recharts.
 
 ## Scope
 
-Stock Module V1, Delivery Module V1, Attendance Module V1, OA Actions Module
-V1, Retail Module V1, Processing V1, Cleaning V1, Accounting/Finance V1, and
-Director V1 are implemented. Settings is still a placeholder page.
+Stock Module V1, Orders, Delivery Module V1, Attendance Module V1, OA Actions
+Module V1, Retail Module V1, Processing V1, Cleaning V1, Accounting/Finance V1,
+Director V1, and Admin Settings V1 are implemented for internal testing.
 
 ## Environment
 
@@ -51,7 +51,28 @@ order:
 13. `supabase/migrations/202606100013_oa_workflow_hardening_v1.sql`
 14. `supabase/migrations/202606100014_finance_invoice_aging_v1.sql`
 15. `supabase/migrations/202606100015_attendance_leave_sync_v1.sql`
-16. `supabase/seed.sql`
+16. `supabase/migrations/202606100016_cleaning_completion_alerts_v1.sql`
+17. `supabase/migrations/202606100017_retail_expense_checker_payment_v1.sql`
+18. `supabase/migrations/202606100018_processing_stock_thresholds_v1.sql`
+19. `supabase/migrations/202606100019_delivery_source_proof_photo_v1.sql`
+20. `supabase/migrations/202606100020_attendance_no_clock_out_v1.sql`
+21. `supabase/migrations/202606100021_orders_workflow_v1.sql`
+22. `supabase/migrations/202606100022_order_outbound_batches_v1.sql`
+23. `supabase/migrations/202606100023_customer_order_delivery_proof_v1.sql`
+24. `supabase/migrations/202606100024_orders_module_access_v1.sql`
+25. `supabase/migrations/202606100025_orders_module_rls_v1.sql`
+26. `supabase/migrations/202606100026_customer_order_delivery_access_v1.sql`
+27. `supabase/migrations/202606100027_orders_delivery_role_tightening_v1.sql`
+28. `supabase/migrations/202606100028_order_outbound_atomic_rpc_v1.sql`
+29. `supabase/migrations/202606100029_order_workflow_guards_v1.sql`
+30. `supabase/migrations/202606100030_director_view_only_order_ops_v1.sql`
+31. `supabase/migrations/202606100031_stock_director_view_scope_v1.sql`
+32. `supabase/migrations/202606100032_admin_settings_customer_pricing_v1.sql`
+33. `supabase/migrations/202606100033_order_item_reservation_rpc_v1.sql`
+34. `supabase/migrations/202606100034_order_reservation_on_picking_v1.sql`
+35. `supabase/migrations/202606100035_part2_delivery_proof_metadata_v1.sql`
+36. `supabase/migrations/202606100036_failed_delivery_return_workflow_v1.sql`
+37. `supabase/seed.sql`
 
 After creating your first Supabase Auth user, assign roles in SQL, for example:
 
@@ -85,6 +106,24 @@ npm run build
 
 Open `http://localhost:3000`.
 
+## Home Routes
+
+- `/dashboard`
+- `/home`
+
+Both routes show the role/access-based shortcut launcher with the current
+viewing scope.
+
+## Settings Route
+
+- `/settings`
+
+Settings V1 lets admin users assign profile roles and outlet/department/stock
+scope, enable modules per outlet, manage payment types, claim categories, leave
+types, customer categories, customer master rows, customer price rules, and
+barcode weight rules. Normal users should not choose outlet/department on every
+workflow; server actions use the profile scope assigned here.
+
 ## Stock Routes
 
 - `/stock/dashboard`
@@ -113,9 +152,29 @@ Open `http://localhost:3000`.
 Delivery V1 includes delivery orders, order items, vehicle setup, status logs,
 driver location records, delivery payments, order source tracking for manual,
 retail sale, and WhatsApp orders, and proof-of-delivery photo uploads to the
-private `erp-files` Supabase Storage bucket. Delivery status now follows the
-operational workflow: Pending, Out for Delivery, Delivered, Failed, and
-Cancelled. Payment types are Cash, Online Transfer, and Credit Term.
+private `erp-files` Supabase Storage bucket. Proof upload captures receiver name
+and GPS. Delivered proof marks the delivery delivered. Failed customer-order
+proof returns linked barcode stock from sales outbound lines to `IN_STOCK`,
+writes return movements/scan logs, and marks standalone deliveries as requiring
+manual return follow-up when no stock link exists. Delivery status now follows
+the operational workflow: Pending, Out for Delivery, Delivered, Failed, and
+Cancelled. Payment types include Cash, Online Transfer, Credit Term, and
+MVP collection records for delivery staff/accounting review.
+
+## Orders Routes
+
+- `/orders`
+- `/orders/new`
+- `/orders/[id]`
+- `/orders/prepare`
+
+Orders includes customer pickup/delivery orders, requested quantity/weight,
+prepared quantity/weight, prepared-by user tracking, picking-time stock
+reservation, ready-for-pickup and ready-for-delivery handoff statuses,
+delivery-team visibility for delivery orders, proof receiver/GPS metadata,
+auto-delivered proof completion, WhatsApp notification placeholder events, and
+order-based outbound batch scanning from `/stock/outbound`. Failed-delivery
+return status is shown on order and delivery views.
 
 ## Attendance Routes
 
@@ -219,8 +278,9 @@ The seed adds:
   SUNGAI MAAW, DIRECTOR
 - Departments: Retail, Processing, Delivery, Stock, Accounting, Admin,
   Management
-- Outlet module access, including Jalan Channel = Retail/Processing/Stock and
-  Wonderful = Processing/Stock
+- Outlet module access, including Orders access for operating outlets,
+  Jalan Channel = Retail/Processing/Stock/Orders, and Wonderful =
+  Processing/Stock/Orders
 - Brands: TICAN, RIVASAM, SEABOARD, VAN ROOI, ABC, ICP, LOCKS
 - Origins: DENMARK, SPAIN, USA, NETHERLAND, BELGIUM, CHINA
 - Items:
@@ -232,6 +292,13 @@ The seed adds:
   - PROCESSED / MEATBALL / MEATBALL
 - Delivery vehicles: EM-LORRY-01, EM-VAN-02
 - Delivery orders: DO-20260610-001, DO-20260610-002
+- Orders module examples: ORD-SEED-PICKUP-001 and ORD-SEED-DELIVERY-001
+- Customer master examples: CUST-JC-PICKUP-001 and CUST-SM-CREDIT-001
+- Customer categories and customer price rules for retail, wholesale, and VIP
+  customers
+- Order reservation rows for seeded prepared customer order items
+- Order outbound test barcodes: EM-SEED-OUT-001, EM-SEED-OUT-002,
+  EM-SEED-OUT-003
 - Attendance work locations with 50m radius and 5-minute late rules
 - OA sample advance, claim, leave request, and payslip rows when profiles exist
 - Retail registers, price rules, one closed cash session, one sale, payment,

@@ -4,6 +4,8 @@ export const stockMovementTypes = [
   "INBOUND",
   "OUTBOUND_SALES",
   "OUTBOUND_TRANSFER",
+  "OUTBOUND_PROCESSING",
+  "OUTBOUND_SPOILED",
   "TRANSFER_RECEIVED",
   "RETURN",
   "STOCK_TAKE_ADJUSTMENT",
@@ -130,6 +132,32 @@ export type StockBalanceRow = {
   totalWeightKg: number
   noBarcodeQuantity: number
   noBarcodeWeightKg: number
+  totalQuantity: number
+  combinedWeightKg: number
+  hasNegativeStock: boolean
+  negativeQuantity: number
+  negativeWeightKg: number
+}
+
+export type NegativeStockAlert = {
+  id: string
+  itemName: string
+  locationName: string
+  quantity: number
+  weightKg: number
+  reason: string
+}
+
+export type StockAgeAlertLevel = "OVER_6_MONTHS" | "OVER_12_MONTHS"
+
+export type StockAgeAlert = {
+  id: string
+  barcode: string
+  itemName: string
+  locationName: string
+  receivedAt: string
+  ageDays: number
+  alertLevel: StockAgeAlertLevel
 }
 
 export type DashboardKpi = {
@@ -205,6 +233,8 @@ export type StockPageData = {
     categoryMix: ChartPoint[]
     locationStock: ChartPoint[]
     movementTrend: MovementTrendPoint[]
+    negativeStockAlerts: NegativeStockAlert[]
+    stockAgeAlerts: StockAgeAlert[]
   }
 }
 

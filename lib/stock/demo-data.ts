@@ -154,6 +154,32 @@ export const demoUnits: StockUnit[] = [
     batchNo: "O240604",
     receivedAt: "2026-06-04T13:10:00.000Z",
   },
+  {
+    id: "unit-age-6m",
+    barcode: "EM-AGE-6M-001",
+    itemId: "item-meat-loin-boneless",
+    brandId: "brand-rivasam",
+    originId: "origin-spain",
+    locationId: "loc-jalan-channel",
+    status: "IN_STOCK",
+    netWeightKg: 10.25,
+    inboundSource: "supplier_import",
+    batchNo: "B251101-AGE",
+    receivedAt: "2025-11-01T08:00:00.000Z",
+  },
+  {
+    id: "unit-age-12m",
+    barcode: "EM-AGE-12M-001",
+    itemId: "item-organs-tongue",
+    brandId: "brand-seaboard",
+    originId: "origin-usa",
+    locationId: "loc-sungai-merah",
+    status: "IN_STOCK",
+    netWeightKg: 8.75,
+    inboundSource: "supplier_import",
+    batchNo: "B250501-AGE",
+    receivedAt: "2025-05-01T08:00:00.000Z",
+  },
 ]
 
 export const demoBarcodeWeightRules: BarcodeWeightRule[] = [
@@ -178,6 +204,15 @@ export const demoNoBarcodeStock: NoBarcodeStock[] = [
     locationId: "loc-jalan-channel",
     quantity: 80,
     weightKg: 40,
+  },
+  {
+    id: "nb-negative-belly-bone-in",
+    itemId: "item-meat-belly-bone-in",
+    brandId: "brand-tican",
+    originId: "origin-denmark",
+    locationId: "loc-sungai-merah",
+    quantity: -2,
+    weightKg: -18.5,
   },
 ]
 

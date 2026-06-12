@@ -8,6 +8,7 @@ import {
   ClipboardList,
   DollarSign,
   FileText,
+  Home,
   LogOut,
   Menu,
   PackageCheck,
@@ -26,6 +27,7 @@ import type { CurrentProfile, UserRole } from "@/lib/auth/types"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { ModuleAccessState } from "@/components/erp/module-access-state"
 import { TeamScopeBadge } from "@/components/erp/team-scope-badge"
 import {
   Sheet,
@@ -33,7 +35,6 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from "@/components/ui/sheet"
 
 type NavItem = {
@@ -42,6 +43,18 @@ type NavItem = {
   icon: ComponentType<{ className?: string }>
   roles?: UserRole[]
   moduleKey?: ModuleKey
+}
+
+type NavGroup = {
+  label: string
+  items: NavItem[]
+}
+
+type RouteAccess = {
+  prefix: string
+  moduleKey?: ModuleKey
+  moduleName: string
+  roles?: UserRole[]
 }
 
 const stockRoles: UserRole[] = [
@@ -53,6 +66,27 @@ const stockRoles: UserRole[] = [
   "processing_manager",
   "admin",
   "director",
+]
+
+const stockOperatorRoles: UserRole[] = stockRoles.filter(
+  (role) => role !== "director"
+)
+
+const orderRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "admin",
+  "director",
+]
+
+const dashboardNav: NavItem[] = [
+  {
+    href: "/dashboard",
+    label: "Home",
+    icon: Home,
+  },
 ]
 
 const stockNav: NavItem[] = [
@@ -74,42 +108,42 @@ const stockNav: NavItem[] = [
     href: "/stock/inbound",
     label: "Inbound",
     icon: PackageCheck,
-    roles: stockRoles,
+    roles: stockOperatorRoles,
     moduleKey: "stock",
   },
   {
     href: "/stock/outbound",
     label: "Outbound Sales",
     icon: Receipt,
-    roles: stockRoles,
+    roles: stockOperatorRoles,
     moduleKey: "stock",
   },
   {
     href: "/stock/transfer",
     label: "Transfer",
     icon: Truck,
-    roles: stockRoles,
+    roles: stockOperatorRoles,
     moduleKey: "stock",
   },
   {
     href: "/stock/receive-transfer",
     label: "Receive Transfer",
     icon: Truck,
-    roles: stockRoles,
+    roles: stockOperatorRoles,
     moduleKey: "stock",
   },
   {
     href: "/stock/return",
     label: "Return",
     icon: ClipboardList,
-    roles: stockRoles,
+    roles: stockOperatorRoles,
     moduleKey: "stock",
   },
   {
     href: "/stock/no-barcode-inbound",
     label: "No-Barcode Inbound",
     icon: PackageCheck,
-    roles: stockRoles,
+    roles: stockOperatorRoles,
     moduleKey: "stock",
   },
   {
@@ -149,26 +183,35 @@ const stockNav: NavItem[] = [
   },
 ]
 
-const moduleNav: NavItem[] = [
+const orderNav: NavItem[] = [
   {
-    href: "/delivery/dashboard",
-    label: "Delivery",
-    icon: Truck,
-    moduleKey: "delivery",
-    roles: ["delivery_team_general_worker", "delivery_manager", "admin", "director"],
+    href: "/orders",
+    label: "Orders",
+    icon: ClipboardList,
+    roles: orderRoles,
+    moduleKey: "orders",
   },
+]
+
+const attendanceNav: NavItem[] = [
   {
     href: "/attendance/today",
     label: "Attendance",
     icon: CalendarCheck,
     moduleKey: "attendance",
   },
+]
+
+const oaNav: NavItem[] = [
   {
     href: "/oa-actions/dashboard",
     label: "OA Actions",
     icon: ClipboardList,
     moduleKey: "oa_actions",
   },
+]
+
+const retailNav: NavItem[] = [
   {
     href: "/retail/dashboard",
     label: "Retail",
@@ -182,6 +225,47 @@ const moduleNav: NavItem[] = [
       "director",
     ],
   },
+]
+
+const deliveryNav: NavItem[] = [
+  {
+    href: "/delivery/dashboard",
+    label: "Delivery",
+    icon: Truck,
+    moduleKey: "delivery",
+    roles: ["delivery_team_general_worker", "delivery_manager", "admin", "director"],
+  },
+]
+
+const accountingNav: NavItem[] = [
+  {
+    href: "/accounting-finance/dashboard",
+    label: "Accounting & Finance",
+    icon: DollarSign,
+    moduleKey: "accounting_finance",
+    roles: ["account", "admin", "director"],
+  },
+]
+
+const directorNav: NavItem[] = [
+  {
+    href: "/director-reports/dashboard",
+    label: "Director Reports",
+    icon: Users,
+    moduleKey: "director_reports",
+    roles: ["director", "admin"],
+  },
+]
+
+const settingsNav: NavItem[] = [
+  { href: "/settings", label: "Settings", icon: Settings, roles: ["admin"] },
+]
+
+const moduleNav: NavItem[] = [
+  ...orderNav,
+  ...attendanceNav,
+  ...oaNav,
+  ...retailNav,
   {
     href: "/processing/dashboard",
     label: "Processing",
@@ -200,27 +284,139 @@ const moduleNav: NavItem[] = [
     icon: ClipboardList,
     moduleKey: "cleaning",
     roles: [
+      "retail_team_general_worker",
       "retail_manager",
+      "processing_team_general_worker",
+      "processing_manager",
+      "admin",
+      "director",
+    ],
+  },
+  ...deliveryNav,
+  ...accountingNav,
+  ...directorNav,
+  ...settingsNav,
+]
+
+const routeAccess: RouteAccess[] = [
+  {
+    prefix: "/stock/inbound",
+    moduleKey: "stock",
+    moduleName: "Stock Inbound",
+    roles: stockOperatorRoles,
+  },
+  {
+    prefix: "/stock/outbound",
+    moduleKey: "stock",
+    moduleName: "Stock Outbound",
+    roles: stockOperatorRoles,
+  },
+  {
+    prefix: "/stock/transfer",
+    moduleKey: "stock",
+    moduleName: "Stock Transfer",
+    roles: stockOperatorRoles,
+  },
+  {
+    prefix: "/stock/receive-transfer",
+    moduleKey: "stock",
+    moduleName: "Receive Transfer",
+    roles: stockOperatorRoles,
+  },
+  {
+    prefix: "/stock/return",
+    moduleKey: "stock",
+    moduleName: "Stock Return",
+    roles: stockOperatorRoles,
+  },
+  {
+    prefix: "/stock/no-barcode-inbound",
+    moduleKey: "stock",
+    moduleName: "No-Barcode Inbound",
+    roles: stockOperatorRoles,
+  },
+  {
+    prefix: "/stock",
+    moduleKey: "stock",
+    moduleName: "Stock",
+    roles: stockRoles,
+  },
+  {
+    prefix: "/orders",
+    moduleKey: "orders",
+    moduleName: "Orders",
+    roles: orderRoles,
+  },
+  { prefix: "/attendance", moduleKey: "attendance", moduleName: "Attendance" },
+  { prefix: "/oa-actions", moduleKey: "oa_actions", moduleName: "OA Actions" },
+  { prefix: "/oa", moduleKey: "oa_actions", moduleName: "OA Actions" },
+  {
+    prefix: "/retail",
+    moduleKey: "retail",
+    moduleName: "Retail",
+    roles: [
+      "retail_team_general_worker",
+      "retail_manager",
+      "account",
+      "admin",
+      "director",
+    ],
+  },
+  {
+    prefix: "/processing",
+    moduleKey: "processing",
+    moduleName: "Processing",
+    roles: [
+      "processing_team_general_worker",
       "processing_manager",
       "admin",
       "director",
     ],
   },
   {
-    href: "/accounting-finance/dashboard",
-    label: "Accounting & Finance",
-    icon: DollarSign,
+    prefix: "/cleaning",
+    moduleKey: "cleaning",
+    moduleName: "Cleaning",
+    roles: [
+      "retail_team_general_worker",
+      "retail_manager",
+      "processing_team_general_worker",
+      "processing_manager",
+      "admin",
+      "director",
+    ],
+  },
+  {
+    prefix: "/delivery",
+    moduleKey: "delivery",
+    moduleName: "Delivery",
+    roles: ["delivery_team_general_worker", "delivery_manager", "admin", "director"],
+  },
+  {
+    prefix: "/accounting-finance",
     moduleKey: "accounting_finance",
+    moduleName: "Accounting & Finance",
     roles: ["account", "admin", "director"],
   },
   {
-    href: "/director-reports/dashboard",
-    label: "Director Reports",
-    icon: Users,
+    prefix: "/accounting",
+    moduleKey: "accounting_finance",
+    moduleName: "Accounting & Finance",
+    roles: ["account", "admin", "director"],
+  },
+  {
+    prefix: "/director-reports",
     moduleKey: "director_reports",
+    moduleName: "Director Reports",
     roles: ["director", "admin"],
   },
-  { href: "/settings", label: "Settings", icon: Settings, roles: ["admin"] },
+  {
+    prefix: "/director",
+    moduleKey: "director_reports",
+    moduleName: "Director Reports",
+    roles: ["director", "admin"],
+  },
+  { prefix: "/settings", moduleName: "Settings", roles: ["admin"] },
 ]
 
 function canSee(profile: CurrentProfile, item: NavItem) {
@@ -231,7 +427,7 @@ function canSee(profile: CurrentProfile, item: NavItem) {
 }
 
 function currentPageLabel(pathname: string) {
-  const visibleItems = [...stockNav, ...moduleNav]
+  const visibleItems = [...dashboardNav, ...stockNav, ...moduleNav]
   const exact = visibleItems.find((item) => pathname === item.href)
 
   if (exact) {
@@ -254,6 +450,26 @@ function currentPageLabel(pathname: string) {
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join(" ")
     : "Dashboard"
+}
+
+function routeAccessForPath(pathname: string) {
+  return routeAccess
+    .filter(
+      (route) =>
+        pathname === route.prefix || pathname.startsWith(`${route.prefix}/`)
+    )
+    .sort((a, b) => b.prefix.length - a.prefix.length)[0]
+}
+
+function canAccessRoute(profile: CurrentProfile, route: RouteAccess | undefined) {
+  if (!route) {
+    return true
+  }
+
+  const roleAllowed =
+    !route.roles || route.roles.some((role) => profile.roles.includes(role))
+
+  return roleAllowed && canAccessModule(profile, route.moduleKey)
 }
 
 function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
@@ -292,8 +508,31 @@ function SidebarContent({
   profile: CurrentProfile
   close?: () => void
 }) {
-  const visibleStockNav = stockNav.filter((item) => canSee(profile, item))
-  const visibleModuleNav = moduleNav.filter((item) => canSee(profile, item))
+  const navGroups: NavGroup[] = [
+    { label: "Dashboard", items: dashboardNav },
+    { label: "Stock", items: stockNav },
+    { label: "Orders", items: orderNav },
+    { label: "Attendance", items: attendanceNav },
+    { label: "OA Actions", items: oaNav },
+    { label: "Retail", items: retailNav },
+    {
+      label: "Processing",
+      items: moduleNav.filter((item) => item.href.startsWith("/processing")),
+    },
+    {
+      label: "Cleaning",
+      items: moduleNav.filter((item) => item.href.startsWith("/cleaning")),
+    },
+    { label: "Delivery", items: deliveryNav },
+    { label: "Accounting", items: accountingNav },
+    { label: "Director", items: directorNav },
+    { label: "Settings", items: settingsNav },
+  ]
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canSee(profile, item)),
+    }))
+    .filter((group) => group.items.length > 0)
 
   return (
     <div className="flex h-full flex-col">
@@ -307,31 +546,18 @@ function SidebarContent({
       </div>
 
       <nav className="flex-1 space-y-5 overflow-y-auto px-2 py-4">
-        {visibleStockNav.length > 0 ? (
-          <div>
+        {navGroups.map((group) => (
+          <div key={group.label}>
             <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/45">
-              Stock
+              {group.label}
             </div>
             <div className="space-y-1">
-              {visibleStockNav.map((item) => (
+              {group.items.map((item) => (
                 <NavLink key={item.href} item={item} onClick={close} />
               ))}
             </div>
           </div>
-        ) : null}
-
-        {visibleModuleNav.length > 0 ? (
-          <div>
-          <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/45">
-            ERP Modules
-          </div>
-          <div className="space-y-1">
-            {visibleModuleNav.map((item) => (
-              <NavLink key={item.href} item={item} onClick={close} />
-            ))}
-          </div>
-        </div>
-        ) : null}
+        ))}
       </nav>
 
       <div className="border-t border-sidebar-border p-3">
@@ -379,6 +605,8 @@ export function AppShell({
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const pageLabel = currentPageLabel(pathname)
+  const routeGate = routeAccessForPath(pathname)
+  const canAccessCurrentRoute = canAccessRoute(profile, routeGate)
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-background">
@@ -401,17 +629,22 @@ export function AppShell({
         </header>
         <header className="sticky top-0 z-30 grid h-14 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b bg-background/92 px-3 backdrop-blur sm:px-4 lg:hidden">
           <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                aria-label="Open navigation"
-              >
-                <Menu className="size-4" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="p-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-controls="erp-mobile-navigation"
+              aria-expanded={open}
+              aria-label="Open navigation"
+              onClick={() => setOpen(true)}
+            >
+              <Menu className="size-4" />
+            </Button>
+            <SheetContent
+              id="erp-mobile-navigation"
+              side="left"
+              className="p-0"
+            >
               <SheetHeader className="sr-only">
                 <SheetTitle>Elite Meat ERP navigation</SheetTitle>
                 <SheetDescription>
@@ -454,7 +687,11 @@ export function AppShell({
           </div>
         </header>
         <main className="mx-auto flex w-full max-w-[92rem] min-w-0 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-          {children}
+          {canAccessCurrentRoute ? (
+            children
+          ) : (
+            <ModuleAccessState moduleName={routeGate?.moduleName ?? "Module"} />
+          )}
         </main>
       </div>
     </div>

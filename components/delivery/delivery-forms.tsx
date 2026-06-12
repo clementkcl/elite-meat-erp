@@ -190,6 +190,10 @@ function paymentTypeLabel(value: string) {
     return "Credit term"
   }
 
+  if (value === "EWALLET") {
+    return "E-wallet"
+  }
+
   return value
     .replaceAll("_", " ")
     .toLowerCase()
@@ -330,11 +334,13 @@ export function DeliveryStatusForm({ orders }: { orders: DeliveryOrder[] }) {
         <div className="space-y-2">
           <Label htmlFor="status">Status</Label>
           <NativeSelect id="status" name="status">
-            {deliveryStatuses.map((status) => (
-              <option key={status} value={status}>
-                {status.replaceAll("_", " ")}
-              </option>
-            ))}
+            {deliveryStatuses
+              .filter((status) => status !== "FAILED")
+              .map((status) => (
+                <option key={status} value={status}>
+                  {status.replaceAll("_", " ")}
+                </option>
+              ))}
           </NativeSelect>
         </div>
       </div>
@@ -350,7 +356,7 @@ export function ProofUploadForm({ orders }: { orders: DeliveryOrder[] }) {
   return (
     <WorkflowCard
       title="Proof of delivery"
-      description="Attach proof photo to a delivered order."
+      description="Upload proof photo, receiver/contact name, and GPS. Successful proof marks delivered; failed proof marks failed and flags return follow-up."
       action={uploadProofOfDeliveryAction}
       submitLabel="Upload proof"
       submitIcon="upload"
@@ -363,6 +369,37 @@ export function ProofUploadForm({ orders }: { orders: DeliveryOrder[] }) {
         <div className="space-y-2">
           <Label htmlFor="proofFile">File</Label>
           <Input id="proofFile" name="proofFile" type="file" accept="image/*" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="deliveryOutcome">Outcome</Label>
+          <NativeSelect id="deliveryOutcome" name="deliveryOutcome">
+            <option value="DELIVERED">Delivered</option>
+            <option value="FAILED">Failed</option>
+          </NativeSelect>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="receiverName">Receiver/contact name</Label>
+          <Input id="receiverName" name="receiverName" required />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="proofLatitude">GPS latitude</Label>
+          <Input
+            id="proofLatitude"
+            name="latitude"
+            type="number"
+            step="0.0000001"
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="proofLongitude">GPS longitude</Label>
+          <Input
+            id="proofLongitude"
+            name="longitude"
+            type="number"
+            step="0.0000001"
+            required
+          />
         </div>
       </div>
     </WorkflowCard>

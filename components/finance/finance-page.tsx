@@ -18,6 +18,8 @@ import {
 import { AdminReviewForm, PaidRequestForm } from "@/components/oa-actions/oa-forms"
 import { DataTable, type DataTableColumn } from "@/components/stock/data-table"
 import { RecentActivityList } from "@/components/ui/recent-activity-list"
+import { moduleAccessBlock } from "@/lib/auth/module-guard"
+import type { UserRole } from "@/lib/auth/types"
 import { getFinancePageData } from "@/lib/finance/data"
 import type { FinanceContainer, FinanceInvoice } from "@/lib/finance/types"
 import { getOaPageData } from "@/lib/oa-actions/data"
@@ -32,6 +34,8 @@ export type FinanceRoute =
   | "containers"
 
 type TableRow = Record<string, string | number | boolean>
+
+const financeRoles: UserRole[] = ["account", "admin", "director"]
 
 const titles: Record<FinanceRoute, { title: string; description: string }> = {
   dashboard: {
@@ -259,6 +263,16 @@ function requestRows(requests: UnifiedOaRequest[]): TableRow[] {
 }
 
 export async function FinancePage({ route }: { route: FinanceRoute }) {
+  const blocked = await moduleAccessBlock(
+    "accounting_finance",
+    "Accounting / Finance",
+    financeRoles
+  )
+
+  if (blocked) {
+    return blocked
+  }
+
   const [finance, oa] = await Promise.all([
     getFinancePageData(),
     getOaPageData(),

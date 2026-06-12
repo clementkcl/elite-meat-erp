@@ -10,6 +10,7 @@ export const deliveryPaymentTypes = [
   "CREDIT",
   "CASH",
   "ONLINE_TRANSFER",
+  "EWALLET",
 ] as const
 
 export const deliveryPaymentStatuses = [
@@ -60,6 +61,9 @@ export type DeliveryOrder = {
   requestedDeliveryDate: string | null
   proofFileId: string | null
   proofPath: string
+  failedReturnStatus: string
+  failedReturnRequiredUnits: number
+  failedReturnCompletedUnits: number
   notes: string
   createdAt: string
 }

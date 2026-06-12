@@ -8,6 +8,18 @@ Use this checklist for internal testing after applying migrations in order and r
 - Confirm `npm run lint`, `npm run typecheck`, `npm run build`, and `npm run smoke` pass.
 - Create test users in Supabase Auth and assign `profiles`, `profile_roles`, `outlet_id`, `department_id`, and `stock_location_id`.
 - Verify non-admin users show a scope badge in the sidebar/header.
+- After running `supabase/seed.sql`, use `ORD-SEED-PICKUP-001` with `EM-SEED-OUT-001` and `EM-SEED-OUT-002` for the first order outbound test.
+- After running `supabase/seed.sql`, use `ORD-SEED-DELIVERY-001` to verify delivery-required Orders module records in `/delivery/driver` and `/delivery/orders`.
+- After running `supabase/seed.sql`, use `CUST-JC-PICKUP-001` and `CUST-SM-CREDIT-001` to verify customer master, price category, and credit customer data.
+
+## Admin Settings
+
+- Happy path: admin opens `/settings`, assigns a user role, outlet, department, and stock location, then signs in as that user and verifies the sidebar and "Viewing" scope reflect the assignment.
+- Happy path: admin disables one module for an outlet, signs in as a scoped user from that outlet, and verifies that module shortcut/category is hidden and direct route access is blocked.
+- Happy path: admin adds a payment type, claim category, leave type, customer category, customer, customer price rule, and barcode weight rule.
+- Blocked path: non-admin direct visits `/settings` and sees the module access block.
+- Blocked path: non-admin attempts a settings server action and must receive an admin-only error/RLS rejection.
+- Blocked path: create a customer price rule without category or customer; the form action must reject it.
 
 ## Stock
 
@@ -21,13 +33,19 @@ Use this checklist for internal testing after applying migrations in order and r
 - Blocked path: stock take scan a barcode from the wrong location; action must fail.
 - Blocked path: general worker tries to approve/reject stock take; RLS/action must block it.
 - Blocked path: general worker tries another location; server action must show missing/wrong stock-location access.
+- Blocked path: director can view stock dashboards/reports and approve submitted stock take, but direct visits to `/stock/inbound`, `/stock/outbound`, `/stock/transfer`, `/stock/receive-transfer`, `/stock/return`, and `/stock/no-barcode-inbound` must show the module access block or fail the server action.
 
 ## Delivery
 
 - Happy path: delivery team creates an order with customer location, vehicle, driver, status, payment type, and payment status.
 - Happy path: delivery order records source as manual, retail sale, or WhatsApp with a source reference.
 - Happy path: driver updates progress, proof photo upload/file reference, and driver location.
+- Happy path: customer-order delivery is moved to `OUT_FOR_DELIVERY`, failed proof photo/contact/GPS is uploaded, linked barcode stock returns to `IN_STOCK`, `stock_movements` contains `RETURN` rows with the customer order id as reference, and the order shows failed return status.
+- Happy path: standalone delivery failed proof records `NO_STOCK_LINK` so staff can see manual return follow-up is required.
 - Blocked path: proof upload rejects non-image files.
+- Blocked path: direct delivery/customer-order status update to `FAILED` without proof is rejected with a clear proof/return-workflow message.
+- Blocked path: failed delivery with missing photo, receiver/contact name, latitude, or longitude is rejected server-side.
+- Blocked path: attempt partial failed delivery; MVP should return all linked outbound barcode lines or report a pending/no-link status instead of silently losing stock.
 - Blocked path: delivery user assigned to another department/team must not see or update the first team order.
 - Blocked path: normal delivery worker must not delete vehicles, orders, payments, or status logs.
 
@@ -99,10 +117,27 @@ Use this checklist for internal testing after applying migrations in order and r
 - Happy path: director dashboard defaults to the current month and shows sales, cash received, expenses, stock weight, low stock, pending delivery, pending OA, attendance, cleaning, processing, AR/AP, and container ETA cards.
 - Happy path: director approvals page approves/rejects OA, finance, and retail pending items.
 - Happy path: reports page supports print/PDF view, WhatsApp summary copy, and CSV download.
+- Blocked path: director can view customer orders and delivery handoff records, but routine order creation/preparation, order outbound confirmation, and delivery status/proof actions must be unavailable or rejected.
 - Blocked path: non-director/non-admin cannot access director report routes through sidebar and must be blocked by route-level role checks/RLS.
 
 ## Browser Smoke Routes
 
+- Mobile navigation happy path: set viewport to 390px wide, sign in, tap the hamburger button, verify the left drawer opens with the same role-based navigation as desktop, tap one menu item, and verify the drawer closes without horizontal scrolling.
+- Mobile navigation blocked path: sign in as a role without Orders or Director access, open the mobile drawer, and verify restricted categories/routes are absent; direct URL access should show the module access block.
+- Order workflow happy path: create a pickup order, add at least one item with requested quantity or weight, prepare every item with prepared quantity or weight, mark the order ready, then verify it appears as ready for outbound.
+- Order scope happy path: sign in as admin/director, create an order with an outlet scope, then sign in as a user assigned to that outlet and verify the order appears.
+- Order reservation happy path: after adding an order item, verify no `order_stock_reservations` row exists yet; after preparing/picking the item, verify one active reservation row exists for the prepared item, quantity/weight, and assigned stock location.
+- Order reservation release happy path: cancel an order after picking/preparation has created an active reservation, verify the reservation remains `ACTIVE`, then use `Release reserved stock` and verify the reservation changes to `RELEASED`.
+- Order reservation release blocked path: try to release reservations for a non-cancelled order or a cancelled order with no active reservations; the server should reject it clearly.
+- Order workflow blocked path: try to mark an order ready before all items are prepared; the form should keep the submit path disabled or the server should reject it.
+- Delivery order integration happy path: create a delivery-required order, prepare it, mark it ready, then verify the delivery list shows the customer order as `Pending`.
+- Delivery order action path: from `/delivery/orders`, move the customer order to `Out for delivery`, upload delivered proof after it is in progress, and verify the proof upload marks it `Delivered`.
+- Failed delivery return path: after order outbound as `SALES`, move the customer order to `Out for delivery`, upload failed proof, then verify stock units become `IN_STOCK`, return movement and scan logs exist, and the delivery/order page shows returned or pending return status.
+- Delivery order integration blocked path: try to update a delivery order from `READY_FOR_DELIVERY` directly to `DELIVERED`; the action must reject the invalid transition.
+- Order outbound happy path: select a ready customer order, scan multiple barcodes, confirm outbound as `SALES`, and verify the outbound batch, batch lines, stock movements, scan logs, and stock unit statuses.
+- Seeded outbound happy path: select `ORD-SEED-PICKUP-001`, scan `EM-SEED-OUT-001` and `EM-SEED-OUT-002`, confirm `SALES`, and verify the scanned list clears after success.
+- Order outbound transfer path: select `TRANSFER`, verify confirm stays disabled until a destination is selected, confirm the batch, and verify stock units are `TRANSFER_PENDING` until receive-transfer scan.
+- Order outbound blocked path: scan duplicate, missing, sold/outbounded, or mixed-location barcodes; each invalid case should show a clear error and avoid partial stock updates.
 - Visit `/stock/inbound`, `/stock/outbound`, `/stock/transfer`, `/stock/receive-transfer`, `/stock/return`, and `/stock/stock-take`; verify scanner button opens camera permission flow and manual fallback exists.
 - Visit `/delivery/dashboard`, `/attendance/today`, `/oa-actions/dashboard`, `/retail/dashboard`, `/processing/dashboard`, `/cleaning/tasks`, `/accounting-finance/dashboard`, and `/director-reports/dashboard`; verify no runtime error boundary appears.
 - Submit one intentionally invalid form per module and verify the page shows an error state without losing the full page.

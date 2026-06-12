@@ -148,6 +148,9 @@ function mapOrder(
     requestedDeliveryDate: readNullableString(row.requested_delivery_date),
     proofFileId,
     proofPath: proofFileId ? filePaths.get(proofFileId) ?? "-" : "-",
+    failedReturnStatus: readString(row.failed_return_status, "NOT_REQUIRED"),
+    failedReturnRequiredUnits: readNumber(row.failed_return_required_units),
+    failedReturnCompletedUnits: readNumber(row.failed_return_completed_units),
     notes: readString(row.notes, ""),
     createdAt: readString(row.created_at, new Date().toISOString()),
   }

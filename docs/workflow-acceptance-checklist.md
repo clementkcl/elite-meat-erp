@@ -2,6 +2,15 @@
 
 Use this as the acceptance gate before internal pilot use.
 
+## Settings
+
+- [ ] Admin can assign a user role, outlet, department, and stock location.
+- [ ] Admin can enable/disable outlet module access.
+- [ ] Normal users see only modules enabled for their assigned outlet.
+- [ ] Admin can manage payment types, claim categories, leave types, customer categories, customers, customer price rules, and barcode weight rules.
+- [ ] Non-admin users cannot access `/settings` or save settings actions.
+- [ ] Settings changes are written with authenticated user context only; no frontend service-role key is used.
+
 ## Stock
 
 - [ ] Staff can select item, brand, origin, location, inbound source, and weight-position rule once, then keep scanning the same item.
@@ -18,6 +27,33 @@ Use this as the acceptance gate before internal pilot use.
 - [ ] Stock take scan rejects wrong-location barcode.
 - [ ] Stock take adjustment is applied only after admin/director approval.
 - [ ] General worker cannot see another stock location.
+- [ ] Director can view stock dashboards/reports and approve stock take, but cannot run routine stock inbound/outbound/transfer/receive/return/no-barcode workflows.
+- [ ] Order outbound requires a ready customer order before confirmation.
+- [ ] Order outbound shows scanned list, item count, known total weight, and unknown scan count.
+- [ ] Order outbound confirmation stays disabled until a barcode is scanned.
+- [ ] Order outbound transfer confirmation stays disabled until a destination location is selected.
+- [ ] Order outbound writes outbound batch, batch lines, stock movements, scan logs, and final stock-unit status.
+- [ ] Seeded order outbound can be tested with `ORD-SEED-PICKUP-001`, `EM-SEED-OUT-001`, and `EM-SEED-OUT-002` after running `supabase/seed.sql`.
+
+## Orders
+
+- [ ] Sidebar shows Orders for eligible retail/processing/admin/director users.
+- [ ] Orders routes load: `/orders`, `/orders/new`, `/orders/[id]`, and `/orders/prepare`.
+- [ ] User can create pickup and delivery orders with customer, dates, fulfillment type, delivery flag, remarks, creator, and scope.
+- [ ] User can create internal transfer orders.
+- [ ] Admin/director-created orders require an outlet scope so assigned outlet users can see them.
+- [ ] User can add order items with requested quantity or requested weight.
+- [ ] Adding an order item does not create a stock reservation.
+- [ ] Starting picking/preparation creates an active stock reservation for prepared quantity/weight.
+- [ ] User can prepare each order item with prepared quantity or prepared weight.
+- [ ] Prepared item records `prepared_by` and writes a preparation log.
+- [ ] Order cannot be marked ready until every item is prepared with quantity or weight.
+- [ ] Ready pickup order becomes `READY_FOR_PICKUP`.
+- [ ] Ready delivery order becomes `READY_FOR_DELIVERY`.
+- [ ] Ready pickup, out-for-delivery, and delivered transitions create WhatsApp placeholder events.
+- [ ] Non-admin order operators cannot directly move orders to out-for-delivery, delivered, or failed outside the delivery workflow.
+- [ ] Delivery users cannot directly edit customer, dates, fulfillment, outlet, department, or creator fields on Orders-module records.
+- [ ] Director can view orders but cannot create, prepare, mark ready, or update delivery status/proof as a routine operator.
 
 ## Delivery
 
@@ -29,6 +65,12 @@ Use this as the acceptance gate before internal pilot use.
 - [ ] Non-image proof upload is rejected.
 - [ ] Driver location can be recorded.
 - [ ] Another delivery team cannot see or edit the order.
+- [ ] Delivery-required Orders module records appear in the delivery list as Pending when `READY_FOR_DELIVERY`.
+- [ ] Seeded delivery order `ORD-SEED-DELIVERY-001` appears in the delivery list as Pending after running `supabase/seed.sql`.
+- [ ] `/delivery/orders` can update Orders-module deliveries and upload customer order proof photos.
+- [ ] Delivery team can move customer order from Pending to Out for Delivery, then Delivered, Failed, or Cancelled only through valid transitions.
+- [ ] Customer order proof photo upload accepts image files and rejects non-images.
+- [ ] Customer order proof upload is blocked until the order is out for delivery, delivered, or failed.
 
 ## Attendance
 
@@ -56,6 +98,7 @@ Use this as the acceptance gate before internal pilot use.
 
 - [ ] Daily sales can be recorded for today.
 - [ ] Payment type comes from admin-configurable payment types.
+- [ ] Customer category price rules are available for future retail/order pricing decisions.
 - [ ] Cash session can be opened and closed.
 - [ ] Daily closing can be submitted and checked by a different manager/admin/director.
 - [ ] Outlet expense captures type, amount, receipt image path, submitted by, paid by, and date.
@@ -99,3 +142,11 @@ Use this as the acceptance gate before internal pilot use.
 - [ ] Reports have print/PDF-ready view.
 - [ ] Reports have WhatsApp-ready copy text.
 - [ ] Reports have CSV export where available.
+
+## Navigation
+
+- [ ] At 390px width, the hamburger opens the mobile drawer.
+- [ ] Mobile drawer shows the same role-based categories as desktop.
+- [ ] Tapping a mobile drawer nav item closes the drawer.
+- [ ] Desktop sidebar remains visible and unchanged on large screens.
+- [ ] Page has no horizontal scrolling at 390px width.

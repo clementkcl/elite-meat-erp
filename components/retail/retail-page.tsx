@@ -26,7 +26,9 @@ import {
   RetailSaleForm,
 } from "@/components/retail/retail-forms"
 import { DataTable, type DataTableColumn } from "@/components/stock/data-table"
+import { moduleAccessBlock } from "@/lib/auth/module-guard"
 import { requireCurrentProfile } from "@/lib/auth/session"
+import type { UserRole } from "@/lib/auth/types"
 import { getRetailPageData } from "@/lib/retail/data"
 import type {
   RetailCashSession,
@@ -54,6 +56,54 @@ export type RetailRoute =
   | "prices"
 
 type TableRow = Record<string, string | number | boolean>
+
+const retailRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "account",
+  "admin",
+  "director",
+]
+
+const processingRoles: UserRole[] = [
+  "processing_team_general_worker",
+  "processing_manager",
+  "admin",
+  "director",
+]
+
+const cleaningRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "admin",
+  "director",
+]
+
+function accessForRoute(route: RetailRoute) {
+  if (route === "processing") {
+    return {
+      moduleKey: "processing" as const,
+      moduleName: "Processing",
+      roles: processingRoles,
+    }
+  }
+
+  if (route === "cleaning") {
+    return {
+      moduleKey: "cleaning" as const,
+      moduleName: "Cleaning",
+      roles: cleaningRoles,
+    }
+  }
+
+  return {
+    moduleKey: "retail" as const,
+    moduleName: "Retail",
+    roles: retailRoles,
+  }
+}
 
 const titles: Record<RetailRoute, { title: string; description: string }> = {
   dashboard: {
@@ -543,6 +593,17 @@ function RetailSaleEntry({ data }: { data: RetailPageData }) {
 }
 
 export async function RetailPage({ route }: { route: RetailRoute }) {
+  const access = accessForRoute(route)
+  const blocked = await moduleAccessBlock(
+    access.moduleKey,
+    access.moduleName,
+    access.roles
+  )
+
+  if (blocked) {
+    return blocked
+  }
+
   const profile = await requireCurrentProfile()
   const data = await getRetailPageData()
 
@@ -647,6 +708,22 @@ export async function RetailPage({ route }: { route: RetailRoute }) {
 
       {route === "processing" ? (
         <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Order preparation</CardTitle>
+              <CardDescription>
+                Prepare requested customer order items by quantity and weight
+                before they are marked ready for pickup or delivery. Finished
+                goods only enter stock after packing, barcode labelling, and
+                inbound scan.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="outline">
+                <Link href="/orders/prepare">Prepare customer orders</Link>
+              </Button>
+            </CardContent>
+          </Card>
           <RetailProcessingBatchForm
             outlets={data.outlets}
             stockLocations={data.stockLocations}

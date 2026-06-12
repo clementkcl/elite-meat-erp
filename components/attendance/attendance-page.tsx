@@ -16,7 +16,9 @@ import {
   ClockAttendanceForm,
   WorkLocationForm,
 } from "@/components/attendance/attendance-forms"
+import { moduleAccessBlock } from "@/lib/auth/module-guard"
 import { getCurrentProfile } from "@/lib/auth/session"
+import type { UserRole } from "@/lib/auth/types"
 import { getAttendancePageData } from "@/lib/attendance/data"
 
 export type AttendanceRoute =
@@ -27,6 +29,18 @@ export type AttendanceRoute =
   | "settings"
 
 type TableRow = Record<string, string | number | boolean>
+
+const attendanceRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "delivery_team_general_worker",
+  "delivery_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "account",
+  "admin",
+  "director",
+]
 
 const titles: Record<AttendanceRoute, { title: string; description: string }> = {
   today: {
@@ -228,6 +242,16 @@ function ruleRows(
 }
 
 export async function AttendancePage({ route }: { route: AttendanceRoute }) {
+  const blocked = await moduleAccessBlock(
+    "attendance",
+    "Attendance",
+    attendanceRoles
+  )
+
+  if (blocked) {
+    return blocked
+  }
+
   const [data, profile] = await Promise.all([
     getAttendancePageData(),
     getCurrentProfile(),

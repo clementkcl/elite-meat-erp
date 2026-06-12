@@ -31,7 +31,9 @@ import {
   type MovementFilters,
   type MovementTrendPoint,
   type NoBarcodeStock,
+  type NegativeStockAlert,
   type Origin,
+  type StockAgeAlert,
   type StockBalanceRow,
   type StockCategory,
   type StockLocation,
@@ -52,6 +54,8 @@ const stockableStatuses: StockUnitStatus[] = [
   "TRANSFERRED",
   "RETURNED",
 ]
+const sixMonthStockAgeDays = 183
+const twelveMonthStockAgeDays = 365
 
 function isStockCategory(value: string): value is StockCategory {
   return stockCategories.includes(value as StockCategory)
@@ -298,6 +302,11 @@ function buildBalances(
       totalWeightKg: 0,
       noBarcodeQuantity: 0,
       noBarcodeWeightKg: 0,
+      totalQuantity: 0,
+      combinedWeightKg: 0,
+      hasNegativeStock: false,
+      negativeQuantity: 0,
+      negativeWeightKg: 0,
     }
     grouped.set(key, row)
     return row
@@ -335,9 +344,98 @@ function buildBalances(
     row.noBarcodeWeightKg = roundWeight(row.noBarcodeWeightKg + stock.weightKg)
   })
 
-  return Array.from(grouped.values()).sort((a, b) =>
-    `${a.locationName}${a.itemName}`.localeCompare(`${b.locationName}${b.itemName}`)
-  )
+  return Array.from(grouped.values())
+    .map((row) => {
+      const totalQuantity = row.unitCount + row.noBarcodeQuantity
+      const combinedWeightKg = roundWeight(row.totalWeightKg + row.noBarcodeWeightKg)
+      const negativeQuantity =
+        row.noBarcodeQuantity < 0
+          ? row.noBarcodeQuantity
+          : totalQuantity < 0
+            ? totalQuantity
+            : 0
+      const negativeWeightKg =
+        row.noBarcodeWeightKg < 0
+          ? row.noBarcodeWeightKg
+          : combinedWeightKg < 0
+            ? combinedWeightKg
+            : 0
+
+      return {
+        ...row,
+        totalQuantity,
+        combinedWeightKg,
+        hasNegativeStock: negativeQuantity < 0 || negativeWeightKg < 0,
+        negativeQuantity,
+        negativeWeightKg,
+      } satisfies StockBalanceRow
+    })
+    .sort((a, b) =>
+      `${a.locationName}${a.itemName}`.localeCompare(`${b.locationName}${b.itemName}`)
+    )
+}
+
+function buildNegativeStockAlerts(
+  balances: StockBalanceRow[]
+): NegativeStockAlert[] {
+  return balances
+    .filter((balance) => balance.hasNegativeStock)
+    .map((balance) => {
+      const reasons = [
+        balance.negativeQuantity < 0 ? "quantity below zero" : null,
+        balance.negativeWeightKg < 0 ? "weight below zero" : null,
+      ].filter(Boolean)
+
+      return {
+        id: `negative-${balance.id}`,
+        itemName: balance.itemName,
+        locationName: balance.locationName,
+        quantity: balance.negativeQuantity,
+        weightKg: balance.negativeWeightKg,
+        reason: reasons.join(" and "),
+      }
+    })
+}
+
+function buildStockAgeAlerts(
+  units: StockUnit[],
+  items: Item[],
+  locations: StockLocation[]
+): StockAgeAlert[] {
+  const now = Date.now()
+
+  return units
+    .filter((unit) => stockableStatuses.includes(unit.status))
+    .map((unit) => {
+      const receivedTime = new Date(unit.receivedAt).getTime()
+
+      if (!Number.isFinite(receivedTime)) {
+        return null
+      }
+
+      const ageDays = Math.floor((now - receivedTime) / 86_400_000)
+
+      if (ageDays < sixMonthStockAgeDays) {
+        return null
+      }
+
+      const item = items.find((candidate) => candidate.id === unit.itemId)
+
+      return {
+        id: `age-${unit.id}`,
+        barcode: unit.barcode,
+        itemName: formatItemName(item),
+        locationName: findName(locations, unit.locationId),
+        receivedAt: unit.receivedAt,
+        ageDays,
+        alertLevel:
+          ageDays >= twelveMonthStockAgeDays
+            ? "OVER_12_MONTHS"
+            : "OVER_6_MONTHS",
+      } satisfies StockAgeAlert
+    })
+    .filter((alert): alert is StockAgeAlert => alert !== null)
+    .sort((a, b) => b.ageDays - a.ageDays)
 }
 
 function buildReports(balances: StockBalanceRow[]): StockReportRow[] {
@@ -416,6 +514,8 @@ function buildDashboard(
     (sum, line) => sum + Math.abs(line.varianceWeightKg),
     0
   )
+  const negativeStockAlerts = buildNegativeStockAlerts(balances)
+  const stockAgeAlerts = buildStockAgeAlerts(units, items, locations)
 
   const categoryMix: ChartPoint[] = stockCategories.map((category) => ({
     name: category,
@@ -509,10 +609,28 @@ function buildDashboard(
         value: `${roundWeight(openVariance).toLocaleString()} kg`,
         detail: "Latest stock take variance",
       },
+      {
+        label: "Negative stock alerts",
+        value: String(negativeStockAlerts.length),
+        detail:
+          negativeStockAlerts.length > 0
+            ? "Temporary negative balances need review"
+            : "No negative stock detected",
+      },
+      {
+        label: "Stock age alerts",
+        value: String(stockAgeAlerts.length),
+        detail:
+          stockAgeAlerts.length > 0
+            ? "Stock older than 6 or 12 months"
+            : "No aged stock detected",
+      },
     ],
     categoryMix,
     locationStock,
     movementTrend,
+    negativeStockAlerts,
+    stockAgeAlerts,
   }
 }
 

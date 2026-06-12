@@ -18,6 +18,8 @@ import { RetailExpenseStatusForm } from "@/components/retail/retail-forms"
 import { DataTable, type DataTableColumn } from "@/components/stock/data-table"
 import { RecentActivityList } from "@/components/ui/recent-activity-list"
 import { ReportToolbar } from "@/components/ui/report-toolbar"
+import { moduleAccessBlock } from "@/lib/auth/module-guard"
+import type { UserRole } from "@/lib/auth/types"
 import { getFinancePageData } from "@/lib/finance/data"
 import type { DirectorReportSnapshot, FinanceInvoice } from "@/lib/finance/types"
 import { getAttendancePageData } from "@/lib/attendance/data"
@@ -31,6 +33,8 @@ import { getStockPageData } from "@/lib/stock/data"
 export type DirectorRoute = "dashboard" | "approvals" | "reports"
 
 type TableRow = Record<string, string | number | boolean>
+
+const directorRoles: UserRole[] = ["director", "admin"]
 
 type ReportPeriod = {
   start: string
@@ -385,6 +389,16 @@ function reportRows(reports: DirectorReportSnapshot[]): TableRow[] {
 }
 
 export async function DirectorPage({ route }: { route: DirectorRoute }) {
+  const blocked = await moduleAccessBlock(
+    "director_reports",
+    "Director Reports",
+    directorRoles
+  )
+
+  if (blocked) {
+    return blocked
+  }
+
   const [finance, oa, retail, attendance, delivery, stock] = await Promise.all([
     getFinancePageData(),
     getOaPageData(),

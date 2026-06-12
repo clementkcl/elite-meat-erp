@@ -33,7 +33,7 @@ export async function signInAction(
     return { error: error.message }
   }
 
-  redirect("/stock/dashboard")
+  redirect("/dashboard")
 }
 
 export async function signOutAction() {

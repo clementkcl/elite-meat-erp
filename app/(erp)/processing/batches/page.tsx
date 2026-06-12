@@ -1,5 +1,5 @@
-import { RetailPage } from "@/components/retail/retail-page"
+import { ProcessingPage } from "@/components/processing/processing-page"
 
 export default function ProcessingBatchesPage() {
-  return <RetailPage route="processing" />
+  return <ProcessingPage view="batches" />
 }

@@ -1,5 +1,6 @@
 export const moduleKeys = [
   "stock",
+  "orders",
   "retail",
   "processing",
   "delivery",
@@ -31,10 +32,6 @@ export function canAccessModule(
   }
 
   if (profile.roles.includes("admin") || profile.roles.includes("director")) {
-    return true
-  }
-
-  if (!profile.outletId) {
     return true
   }
 

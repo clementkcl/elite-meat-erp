@@ -27,6 +27,10 @@ import {
 } from "@/components/stock/workflow-forms"
 import { getStockPageData } from "@/lib/stock/data"
 import { stockMovementTypes, type MovementFilters } from "@/lib/stock/types"
+import { getOrdersPageData } from "@/lib/orders/data"
+import { moduleAccessBlock } from "@/lib/auth/module-guard"
+import { hasAnyRole, requireCurrentProfile } from "@/lib/auth/session"
+import type { UserRole } from "@/lib/auth/types"
 
 export type StockRoute =
   | "dashboard"
@@ -45,6 +49,30 @@ export type StockRoute =
 
 type TableRow = Record<string, string | number | boolean>
 
+const stockRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "delivery_team_general_worker",
+  "delivery_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "admin",
+  "director",
+]
+
+const stockOperatorRoles: UserRole[] = stockRoles.filter(
+  (role) => role !== "director"
+)
+
+const stockRouteRoles: Partial<Record<StockRoute, UserRole[]>> = {
+  inbound: stockOperatorRoles,
+  outbound: stockOperatorRoles,
+  transfer: stockOperatorRoles,
+  "receive-transfer": stockOperatorRoles,
+  return: stockOperatorRoles,
+  "no-barcode-inbound": stockOperatorRoles,
+}
+
 const titles: Record<StockRoute, { title: string; description: string }> = {
   dashboard: {
     title: "Stock Dashboard",
@@ -59,8 +87,8 @@ const titles: Record<StockRoute, { title: string; description: string }> = {
     description: "Receive barcode-tracked stock units into a selected location.",
   },
   outbound: {
-    title: "Outbound Sales",
-    description: "Scan barcode stock out for retail or sales movement.",
+    title: "Order Outbound",
+    description: "Attach scanned barcode stock units to a customer order and confirm outbound type.",
   },
   transfer: {
     title: "Stock Transfer",
@@ -117,6 +145,9 @@ const balanceColumns: DataTableColumn<TableRow>[] = [
   { key: "totalWeightKg", header: "Barcode kg", align: "right" },
   { key: "noBarcodeQuantity", header: "No-barcode qty", align: "right" },
   { key: "noBarcodeWeightKg", header: "No-barcode kg", align: "right" },
+  { key: "totalQuantity", header: "Total qty", align: "right" },
+  { key: "combinedWeightKg", header: "Total kg", align: "right" },
+  { key: "stockStatus", header: "Alert" },
 ]
 
 const movementColumns: DataTableColumn<TableRow>[] = [
@@ -194,6 +225,131 @@ function KpiCards({ kpis }: { kpis: { label: string; value: string; detail: stri
   )
 }
 
+function NegativeStockAlertPanel({
+  alerts,
+}: {
+  alerts: Awaited<
+    ReturnType<typeof getStockPageData>
+  >["dashboard"]["negativeStockAlerts"]
+}) {
+  if (alerts.length === 0) {
+    return null
+  }
+
+  const previewAlerts = alerts.slice(0, 4)
+  const hiddenCount = alerts.length - previewAlerts.length
+
+  return (
+    <Card className="border-red-200 bg-red-50/60 dark:border-red-900 dark:bg-red-950/30">
+      <CardHeader className="pb-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="text-base text-red-900 dark:text-red-100">
+              Negative stock alert
+            </CardTitle>
+            <CardDescription className="text-red-800/80 dark:text-red-200/80">
+              Temporary negative stock is allowed, but these balances need review.
+            </CardDescription>
+          </div>
+          <Badge variant="destructive">{alerts.length} open</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-2 sm:grid-cols-2">
+        {previewAlerts.map((alert) => (
+          <div
+            key={alert.id}
+            className="rounded-md border border-red-200 bg-background p-3 text-sm dark:border-red-900"
+          >
+            <div className="font-medium">{alert.itemName}</div>
+            <div className="mt-1 text-muted-foreground">{alert.locationName}</div>
+            <div className="mt-2 tabular-nums text-red-700 dark:text-red-300">
+              Qty {alert.quantity.toLocaleString()} /{" "}
+              {alert.weightKg.toLocaleString(undefined, {
+                maximumFractionDigits: 3,
+              })}{" "}
+              kg
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {alert.reason}
+            </div>
+          </div>
+        ))}
+        {hiddenCount > 0 ? (
+          <div className="rounded-md border border-dashed border-red-200 bg-background p-3 text-sm text-muted-foreground dark:border-red-900">
+            {hiddenCount} more negative stock balance
+            {hiddenCount === 1 ? "" : "s"} in the balance report.
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
+function StockAgeAlertPanel({
+  alerts,
+}: {
+  alerts: Awaited<ReturnType<typeof getStockPageData>>["dashboard"]["stockAgeAlerts"]
+}) {
+  if (alerts.length === 0) {
+    return null
+  }
+
+  const previewAlerts = alerts.slice(0, 4)
+  const hiddenCount = alerts.length - previewAlerts.length
+
+  return (
+    <Card className="border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/30">
+      <CardHeader className="pb-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="text-base text-amber-950 dark:text-amber-100">
+              Stock age alert
+            </CardTitle>
+            <CardDescription className="text-amber-900/80 dark:text-amber-200/80">
+              Review stock older than 6 months. Stock over 12 months is highest priority.
+            </CardDescription>
+          </div>
+          <Badge variant="warning">{alerts.length} open</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-2 sm:grid-cols-2">
+        {previewAlerts.map((alert) => (
+          <div
+            key={alert.id}
+            className="rounded-md border border-amber-200 bg-background p-3 text-sm dark:border-amber-900"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{alert.itemName}</span>
+              <Badge
+                variant={
+                  alert.alertLevel === "OVER_12_MONTHS"
+                    ? "destructive"
+                    : "warning"
+                }
+              >
+                {alert.alertLevel.replaceAll("_", " ")}
+              </Badge>
+            </div>
+            <div className="mt-1 text-muted-foreground">{alert.locationName}</div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              {alert.barcode} received {dateText(alert.receivedAt)}
+            </div>
+            <div className="mt-1 tabular-nums text-amber-800 dark:text-amber-200">
+              {alert.ageDays.toLocaleString()} days old
+            </div>
+          </div>
+        ))}
+        {hiddenCount > 0 ? (
+          <div className="rounded-md border border-dashed border-amber-200 bg-background p-3 text-sm text-muted-foreground dark:border-amber-900">
+            {hiddenCount} more aged stock unit{hiddenCount === 1 ? "" : "s"} in
+            scoped stock.
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
 function itemRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[] {
   return data.items.map((item) => ({
     itemCode: item.itemCode,
@@ -214,6 +370,9 @@ function balanceRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableR
     totalWeightKg: balance.totalWeightKg,
     noBarcodeQuantity: balance.noBarcodeQuantity,
     noBarcodeWeightKg: balance.noBarcodeWeightKg,
+    totalQuantity: balance.totalQuantity,
+    combinedWeightKg: balance.combinedWeightKg,
+    stockStatus: balance.hasNegativeStock ? "NEGATIVE_STOCK" : "OK",
   }))
 }
 
@@ -259,7 +418,11 @@ function buildCsv(rows: TableRow[]) {
   ].join("\n")
 }
 
-function buildStockWhatsappSummary(rows: TableRow[]) {
+function buildStockWhatsappSummary(
+  rows: TableRow[],
+  negativeStockAlertCount: number,
+  stockAgeAlertCount: number
+) {
   const totalCount = rows.reduce((sum, row) => sum + Number(row.count ?? 0), 0)
   const totalWeight = rows.reduce((sum, row) => sum + Number(row.weightKg ?? 0), 0)
   const locations = new Set(rows.map((row) => String(row.locationName))).size
@@ -272,6 +435,8 @@ function buildStockWhatsappSummary(rows: TableRow[]) {
     `Total weight: ${totalWeight.toLocaleString(undefined, {
       maximumFractionDigits: 3,
     })} kg`,
+    `Negative stock alerts: ${negativeStockAlertCount}`,
+    `Stock age alerts: ${stockAgeAlertCount}`,
   ].join("\n")
 }
 
@@ -398,23 +563,56 @@ export async function StockPage({
   route: StockRoute
   filters?: MovementFilters
 }) {
-  const data = await getStockPageData(filters)
+  const blocked = await moduleAccessBlock(
+    "stock",
+    "Stock",
+    stockRouteRoles[route] ?? stockRoles
+  )
+
+  if (blocked) {
+    return blocked
+  }
+
+  const profile = await requireCurrentProfile()
+  const canOperateStock = hasAnyRole(profile, stockOperatorRoles)
+  const canApproveStock = hasAnyRole(profile, ["admin", "director"])
+
+  const [data, ordersResult] = await Promise.all([
+    getStockPageData(filters),
+    route === "outbound"
+      ? getOrdersPageData()
+          .then((ordersData) => ({ ordersData, error: null }))
+          .catch((error: unknown) => ({
+            ordersData: null,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Orders data could not load.",
+          }))
+      : Promise.resolve(null),
+  ])
   const stockReportRows = reportRows(data)
   const stockReportCsv = buildCsv(stockReportRows)
   const stockReportCsvHref = `data:text/csv;charset=utf-8,${encodeURIComponent(
     stockReportCsv
   )}`
-  const stockWhatsappSummary = buildStockWhatsappSummary(stockReportRows)
+  const stockWhatsappSummary = buildStockWhatsappSummary(
+    stockReportRows,
+    data.dashboard.negativeStockAlerts.length,
+    data.dashboard.stockAgeAlerts.length
+  )
 
   return (
     <div className="space-y-5">
       <PageHeader route={route} demoMode={data.demoMode} />
+      <NegativeStockAlertPanel alerts={data.dashboard.negativeStockAlerts} />
+      <StockAgeAlertPanel alerts={data.dashboard.stockAgeAlerts} />
 
       {route === "dashboard" ? <DashboardView data={data} /> : null}
 
       {route === "items" ? (
         <>
-          <ItemMasterForm />
+          <ItemMasterForm items={data.items} />
           <Card>
             <CardHeader>
               <CardTitle>Items</CardTitle>
@@ -437,7 +635,29 @@ export async function StockPage({
         />
       ) : null}
 
-      {route === "outbound" ? <OutboundSalesForm /> : null}
+      {route === "outbound" ? (
+        ordersResult?.ordersData ? (
+          <OutboundSalesForm
+            orders={ordersResult.ordersData.orders}
+            locations={data.locations}
+            units={data.units}
+            items={data.items}
+          />
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Order outbound unavailable</CardTitle>
+              <CardDescription>
+                Check that the Orders migrations were applied before using
+                order-based outbound scanning.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm text-destructive">
+              {ordersResult?.error ?? "Orders data could not load."}
+            </CardContent>
+          </Card>
+        )
+      ) : null}
 
       {route === "transfer" ? (
         <TransferForm locations={data.locations} />
@@ -497,6 +717,8 @@ export async function StockPage({
           balances={data.balances}
           sessions={data.stockTakeSessions}
           lines={data.stockTakeLines}
+          canOperate={canOperateStock}
+          canApprove={canApproveStock}
         />
       ) : null}
 

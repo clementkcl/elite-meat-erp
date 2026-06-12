@@ -9,6 +9,7 @@ import {
   type CurrentProfile,
   type UserRole,
 } from "@/lib/auth/session"
+import { canAccessModule } from "@/lib/auth/access"
 import { asRecord, readString } from "@/lib/records"
 import {
   createSupabaseServerClient,
@@ -152,6 +153,10 @@ async function getActionContext(roles: UserRole[]) {
 
   if (!hasAnyRole(profile, roles)) {
     return { error: "Your role does not allow this OA action." }
+  }
+
+  if (!canAccessModule(profile, "oa_actions")) {
+    return { error: "Your outlet does not have OA Actions access." }
   }
 
   const supabase = await createSupabaseServerClient()

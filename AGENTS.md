@@ -4,87 +4,89 @@
 This version has breaking changes -- APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-# Elite Meat ERP Rules
+# Elite Meat ERP Agent Guide
 
-## Business Scope
+## Project Purpose
 
-- Current modules are Stock, Delivery, Attendance, OA Actions, Retail, Processing, Accounting/Finance, and Director.
-- Do not add unrelated modules during hardening work. Improve existing workflows, role isolation, forms, reporting, and testing readiness.
-- Director is primarily view/approve/report. Routine operational entry belongs to team, manager, account, or admin roles.
+Elite Meat ERP is a web-based ERP for frozen pork trading, meat processing, inventory, cleaning task tracking, delivery, import/container tracking, barcode scanning, and operational reports.
 
-## Roles
+The system is intended for internal business workflows across outlets, departments, stock locations, processing teams, delivery teams, accounting, admin, and director-level reporting.
 
-- `retail_team_general_worker`
-- `retail_manager`
-- `delivery_team_general_worker`
-- `delivery_manager`
-- `processing_team_general_worker`
-- `processing_manager`
-- `account`
-- `admin`
-- `director`
+## Coding Rules
 
-## Team And Data Isolation
+- Use TypeScript.
+- Keep business logic in `lib/`.
+- Keep reusable UI components in `components/`.
+- Keep mock data in `data/mock/`.
+- Do not duplicate calculation logic inside pages.
+- Do not remove existing working features.
+- Design mobile-first. Phone-width workflows must remain usable.
+- Do not put Supabase service-role keys or other secrets in frontend code.
+- Do not create destructive migrations unless explicitly requested.
+- Keep route/page files thin; pages should compose data loaders, actions, and reusable components.
+- Prefer existing project patterns before adding new abstractions.
 
-- Outlets are Jalan Channel, Sungai Merah, Wonderful, and Sungai Maaw.
-- Departments are Retail, Processing, Delivery, Stock, Accounting, Admin, and Management.
-- Outlet module access is explicit. For example, Jalan Channel has Retail, Processing, and Stock; Wonderful has Processing and Stock.
-- Admin assigns outlet, department, team, and stock-location access. Normal workflows should auto-scope from that assignment instead of asking staff to choose an outlet every time.
-- Non-admin/director users must only see their own outlet, delivery team, processing team, department, and assigned stock location.
-- Admin/director can see all records.
-- General workers must only see and operate stock for their own `profiles.stock_location_id`.
-- Retail, delivery, and processing team data must not bleed across teams.
-- Keep server-side checks and Supabase RLS aligned. Frontend filtering is not enough.
+## Business Rules
 
-## Protected Workflows
-
-- Retail team can only edit same-day sales and cash records.
-- Retail daily closing and outlet expenses must be checked by a different manager/admin/director than the submitter.
-- Retail expenses track type, amount, receipt image path, submitted by, paid by, and date; account/admin marks approved expenses paid.
-- Stock inbound sources are supplier/import, processing output, return, and transfer.
-- Inbound scanning should let staff select item, brand, origin, location, and barcode weight rule once, then keep scanning the same item.
-- Barcode weight-position rules should be saved for reuse by item/brand/origin/location.
+- Orders reserve stock only when picking/preparation starts, not when the order is created.
+- After stock is reserved, staff cannot freely edit the order; cancel and recreate if changes are needed.
+- Temporary negative stock is allowed but must show a clear alert.
+- Damaged/spoiled stock requires director approval before deduction.
+- Processing supports multiple raw items to multiple finished items.
+- Yield is calculated as: `finished weight / raw weight * 100`.
+- Loss is calculated as: `raw weight - finished weight`.
+- Barcode weight-position rules are saved by item + brand.
+- Delivery list shows today only.
+- Proof of delivery photo is required before an order can be marked `Delivered` or `Failed`.
+- Customer master includes name, phone, address, credit term, category, latitude, and longitude.
+- Pricing differs by customer category.
+- Credit customers need aging tracking.
+- Cleaning completion rate is based on required tasks by frequency.
 - Stock transfer changes the actual stock location only after receive-transfer scan.
-- Duplicate inbound barcode must be blocked.
-- Return stock must become `IN_STOCK`.
-- Stock take adjustment applies only after admin/director approval.
-- Processing consumes raw loose stock from the assigned stock location.
-- Finished processing output does not auto-enter stock; it enters stock only after packing and barcode inbound scan.
-- Processing yield/loss alerts are based on item-level thresholds.
-- Delivery statuses are Pending, Out for Delivery, Delivered, Failed, and Cancelled.
-- Delivery payment types are Cash, Online Transfer, and Credit Term.
-- Delivery order source is manual, retail sale, or WhatsApp; proof of delivery must be a photo image.
-- Attendance uses multiple work locations, department start time, 5-minute late grace, 50m GPS radius, clock in/out, no-clock-out handling, and approved leave auto-marked as `ON_LEAVE`.
-- Advance flow: staff -> admin -> director -> account pay.
-- Claim flow: staff -> department manager -> admin -> director -> account pay.
-- Leave is approved by department manager.
-- Payslip: account/admin uploads, staff sees own, director sees all.
-- Cleaning tasks can be completed by users in the assigned outlet/department; managers create/edit scoped tasks; no photo or verification is required.
-- Accounting uploads AR/AP invoice PDF/image records with invoice number, customer/supplier, invoice date, amount, item list, and payment status.
-- Admin reviews invoice data before approval; account/admin can mark approved invoices paid.
-- Finance dashboards should show debtor and creditor aging.
+- Duplicate inbound barcodes must be blocked.
+- Return stock becomes `IN_STOCK`.
+- Stock take adjustment needs department manager approval first, then director final approval.
+- Delivery proof requires photo, receiver name, and GPS location.
+- Uploading valid delivery proof marks the delivery delivered.
+- Failed delivery must flow into a reinbound/return stock workflow before stock is considered resolved.
+- Processing abnormal yield below 85% is alert-only, not approval-blocked.
+- Customer categories are Retail, Wholesale, and VIP for current business direction.
+- Staff price override requires a recorded reason.
+- Barcode decoding supports GS1 `3102`/`3103`, position rules, fixed-weight fallback, and manual confirmation when confidence is low.
+- Cleaning does not require photos; late cleaning is late, not completed on time.
 
-## UX Rules
+## Build And Check Commands
 
-- Keep UI basic but usable for internal testing.
-- Use reusable states and controls: `TeamScopeBadge`, `EmptyState`, `StatusBadge`, `ApprovalTimeline`, `ReportToolbar`, and `RecentActivityList` where they fit.
-- Operational pages should show scope, recent activity, empty states, error/success states, and obvious next actions.
-- Reports should support print/PDF-ready layout and WhatsApp-ready summary where relevant.
-
-## Database Safety
-
-- Do not create destructive migrations. No `drop table`, `drop column`, or `truncate` unless the user explicitly requests it.
-- Schema changes must be new migrations only.
-- Do not use Supabase service-role keys in frontend code.
-- Do not hard-code Supabase secrets.
-
-## Validation Commands
-
-Run these before handing off hardening work:
+Run these before handing off code changes:
 
 ```bash
 npm run lint
 npm run typecheck
 npm run build
-npm run smoke
 ```
+
+If a command fails, report the exact error and avoid unrelated fixes.
+
+## Agent Workflow
+
+Before coding:
+
+1. Read `AGENTS.md`.
+2. Read `HANDOFF.md`.
+3. Read `docs/BUSINESS_RULES.md`.
+4. Inspect the relevant module files before editing.
+
+While working:
+
+- Work on one module only.
+- Make the smallest safe change for the requested task.
+- Do not change app behavior outside the requested module.
+- Do not merge automatically.
+- Do not deploy production automatically.
+
+After changes:
+
+- Update `HANDOFF.md`.
+- Summarize changed files.
+- Summarize risks and remaining manual tests.
+- Run the build/check commands when the task involves code behavior.
