@@ -248,12 +248,12 @@ insert into public.items (
   processing_min_yield_percent,
   processing_max_loss_percent
 ) values
-  ('MEAT-BELLY-BONELESS', 'MEAT', 'BELLY', 'BONELESS', true, 85.00, 15.00),
-  ('MEAT-BELLY-BONE-IN', 'MEAT', 'BELLY', 'BONE IN', true, 80.00, 20.00),
-  ('MEAT-LOIN-BONELESS', 'MEAT', 'LOIN', 'BONELESS', true, 88.00, 12.00),
-  ('ORGANS-COOKED-STOMACH', 'ORGANS', 'COOKED', 'STOMACH', true, 70.00, 30.00),
-  ('ORGANS-TONGUE', 'ORGANS', 'TONGUE', 'TONGUE', true, 75.00, 25.00),
-  ('PROCESSED-MEATBALL', 'PROCESSED', 'MEATBALL', 'MEATBALL', false, 90.00, 10.00)
+  ('0001', 'MEAT', 'BELLY', 'BONELESS', true, 85.00, 15.00),
+  ('0002', 'MEAT', 'BELLY', 'BONE IN', true, 80.00, 20.00),
+  ('0003', 'MEAT', 'LOIN', 'BONELESS', true, 88.00, 12.00),
+  ('0004', 'ORGANS', 'COOKED', 'STOMACH', true, 70.00, 30.00),
+  ('0005', 'ORGANS', 'TONGUE', 'TONGUE', true, 75.00, 25.00),
+  ('0006', 'PROCESSED', 'MEATBALL', 'MEATBALL', false, 90.00, 10.00)
 on conflict (item_code) do update set
   category = excluded.category,
   section = excluded.section,
@@ -262,6 +262,19 @@ on conflict (item_code) do update set
   processing_min_yield_percent = excluded.processing_min_yield_percent,
   processing_max_loss_percent = excluded.processing_max_loss_percent,
   is_active = true;
+
+update public.items item
+set default_brand_id = brand.id
+from (
+  values
+    ('0001', 'TICAN'),
+    ('0002', 'TICAN'),
+    ('0003', 'SEABOARD'),
+    ('0004', 'ABC'),
+    ('0005', 'ABC')
+) as seed(item_code, brand_name)
+join public.brands brand on brand.name = seed.brand_name
+where item.item_code = seed.item_code;
 
 insert into public.barcode_weight_rules (
   item_id,
@@ -276,15 +289,14 @@ select
   item.id,
   brand.id,
   origin.id,
-  stock_location.id,
+  null::uuid,
   7,
   5,
   2
 from public.items item
 join public.brands brand on brand.name = 'TICAN'
 join public.origins origin on origin.name = 'DENMARK'
-join public.stock_locations stock_location on stock_location.name = 'JALAN CHANNEL'
-where item.item_code = 'MEAT-BELLY-BONELESS'
+where item.item_code = '0001'
 on conflict (item_id, brand_id, origin_id, location_id) do update set
   barcode_weight_start = excluded.barcode_weight_start,
   barcode_weight_length = excluded.barcode_weight_length,
@@ -309,7 +321,7 @@ from public.items item
 join public.brands brand on brand.name = 'TICAN'
 join public.origins origin on origin.name = 'DENMARK'
 join public.stock_locations stock_location on stock_location.name = 'JALAN CHANNEL'
-where item.item_code = 'MEAT-BELLY-BONE-IN'
+where item.item_code = '0002'
 on conflict (item_id, brand_id, origin_id, location_id) do update set
   quantity = greatest(public.no_barcode_stock.quantity, excluded.quantity),
   weight_kg = greatest(public.no_barcode_stock.weight_kg, excluded.weight_kg);
@@ -322,6 +334,7 @@ insert into public.stock_units (
   location_id,
   status,
   net_weight_kg,
+  inbound_source,
   batch_no,
   received_at
 )
@@ -331,15 +344,21 @@ select
   brand.id,
   origin.id,
   stock_location.id,
-  'IN_STOCK'::public.stock_unit_status,
+  seed.status::public.stock_unit_status,
   seed.net_weight_kg,
-  'SEED-ORDER-OUTBOUND',
+  seed.inbound_source,
+  seed.batch_no,
   '2026-06-10 08:30:00+08'::timestamptz
 from (values
-  ('EM-SEED-OUT-001', 'MEAT-BELLY-BONELESS', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 12.500),
-  ('EM-SEED-OUT-002', 'MEAT-BELLY-BONELESS', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 11.750),
-  ('EM-SEED-OUT-003', 'MEAT-LOIN-BONELESS', 'RIVASAM', 'SPAIN', 'SUNGAI MERAH', 9.250)
-) as seed(barcode, item_code, brand_name, origin_name, stock_location_name, net_weight_kg)
+  ('EM-SEED-OUT-001', '0001', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 'IN_STOCK', 12.500, 'supplier_import', 'SEED-ORDER-OUTBOUND'),
+  ('EM-SEED-OUT-002', '0001', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 'IN_STOCK', 11.750, 'supplier_import', 'SEED-ORDER-OUTBOUND'),
+  ('EM-SEED-OUT-003', '0003', 'RIVASAM', 'SPAIN', 'SUNGAI MERAH', 'IN_STOCK', 9.250, 'supplier_import', 'SEED-ORDER-OUTBOUND'),
+  ('EM-SEED-RETURN-INSPECTION-001', '0002', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 'INSPECTION', 10.000, 'customer_return', 'SEED-CUSTOMER-RETURN'),
+  ('EM-SEED-DAMAGE-001', '0001', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 'IN_STOCK', 8.500, 'supplier_import', 'SEED-DAMAGE'),
+  ('EM-SEED-DAMAGE-APPROVE-001', '0001', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 'IN_STOCK', 7.750, 'supplier_import', 'SEED-DAMAGE-APPROVE'),
+  ('EM-SEED-RETURN-SUPPLIER-001', '0001', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 'IN_STOCK', 6.250, 'supplier_import', 'SEED-RETURN-SUPPLIER'),
+  ('EM-SEED-STOCK-TAKE-001', '0004', 'ABC', 'CHINA', 'WONDERFUL', 'IN_STOCK', 5.000, 'supplier_import', 'SEED-STOCK-TAKE')
+) as seed(barcode, item_code, brand_name, origin_name, stock_location_name, status, net_weight_kg, inbound_source, batch_no)
 join public.items item on item.item_code = seed.item_code
 left join public.brands brand on brand.name = seed.brand_name
 left join public.origins origin on origin.name = seed.origin_name
@@ -378,13 +397,255 @@ left join lateral (
   order by created_at
   limit 1
 ) first_profile on true
-where stock_unit.barcode in ('EM-SEED-OUT-001', 'EM-SEED-OUT-002', 'EM-SEED-OUT-003')
+where stock_unit.barcode in (
+    'EM-SEED-OUT-001',
+    'EM-SEED-OUT-002',
+    'EM-SEED-OUT-003',
+    'EM-SEED-DAMAGE-001',
+    'EM-SEED-DAMAGE-APPROVE-001',
+    'EM-SEED-RETURN-SUPPLIER-001',
+    'EM-SEED-STOCK-TAKE-001'
+  )
   and not exists (
     select 1
     from public.stock_movements existing
     where existing.barcode = stock_unit.barcode
       and existing.reference_no = 'SEED-ORDER-OUTBOUND'
       and existing.movement_type = 'INBOUND'::public.stock_movement_type
+  );
+
+insert into public.stock_movements (
+  movement_type,
+  item_id,
+  stock_unit_id,
+  barcode,
+  to_location_id,
+  quantity,
+  weight_kg,
+  reference_no,
+  notes,
+  source_type,
+  created_by
+)
+select
+  'INBOUND'::public.stock_movement_type,
+  stock_unit.item_id,
+  stock_unit.id,
+  stock_unit.barcode,
+  stock_unit.location_id,
+  1,
+  stock_unit.net_weight_kg,
+  'SEED-CUSTOMER-RETURN',
+  'Seed customer return held for inspection',
+  'customer_return',
+  first_profile.id
+from public.stock_units stock_unit
+left join lateral (
+  select id
+  from public.profiles
+  order by created_at
+  limit 1
+) first_profile on true
+where stock_unit.barcode = 'EM-SEED-RETURN-INSPECTION-001'
+  and not exists (
+    select 1
+    from public.stock_movements existing
+    where existing.barcode = stock_unit.barcode
+      and existing.reference_no = 'SEED-CUSTOMER-RETURN'
+      and existing.movement_type = 'INBOUND'::public.stock_movement_type
+  );
+
+insert into public.stock_damage_requests (
+  request_no,
+  stock_unit_id,
+  barcode,
+  item_id,
+  brand_id,
+  origin_id,
+  location_id,
+  reason,
+  status,
+  photo_path,
+  notes,
+  requested_by,
+  manager_reviewed_by,
+  manager_reviewed_at,
+  manager_signature
+)
+select
+  seed.request_no,
+  stock_unit.id,
+  stock_unit.barcode,
+  stock_unit.item_id,
+  stock_unit.brand_id,
+  stock_unit.origin_id,
+  stock_unit.location_id,
+  seed.reason,
+  seed.status,
+  seed.photo_path,
+  seed.notes,
+  first_profile.id,
+  case when seed.status = 'MANAGER_REVIEWED' then first_profile.id else null end,
+  case when seed.status = 'MANAGER_REVIEWED' then '2026-06-10 10:00:00+08'::timestamptz else null end,
+  case when seed.status = 'MANAGER_REVIEWED' then 'Seed Manager' else null end
+from (values
+  (
+    'DMG-SEED-SUBMITTED-001',
+    'EM-SEED-DAMAGE-001',
+    'broken_packaging',
+    'SUBMITTED',
+    'seed/stock/damage-submitted.jpg',
+    'Seed damage request ready for manager review.'
+  ),
+  (
+    'DMG-SEED-REVIEWED-001',
+    'EM-SEED-DAMAGE-APPROVE-001',
+    'wrong_temperature',
+    'MANAGER_REVIEWED',
+    'seed/stock/damage-reviewed.jpg',
+    'Seed damage request ready for director approval.'
+  )
+) as seed(request_no, barcode, reason, status, photo_path, notes)
+join public.stock_units stock_unit on stock_unit.barcode = seed.barcode
+left join lateral (
+  select id
+  from public.profiles
+  order by created_at
+  limit 1
+) first_profile on true
+on conflict (request_no) do nothing;
+
+insert into public.stock_return_supplier_requests (
+  request_no,
+  stock_unit_id,
+  barcode,
+  item_id,
+  brand_id,
+  origin_id,
+  location_id,
+  supplier_name,
+  status,
+  notes,
+  requested_by
+)
+select
+  'RS-SEED-SUBMITTED-001',
+  stock_unit.id,
+  stock_unit.barcode,
+  stock_unit.item_id,
+  stock_unit.brand_id,
+  stock_unit.origin_id,
+  stock_unit.location_id,
+  'Seed Supplier',
+  'SUBMITTED',
+  'Seed supplier return request ready for manager approval.',
+  first_profile.id
+from public.stock_units stock_unit
+left join lateral (
+  select id
+  from public.profiles
+  order by created_at
+  limit 1
+) first_profile on true
+where stock_unit.barcode = 'EM-SEED-RETURN-SUPPLIER-001'
+on conflict (request_no) do nothing;
+
+insert into public.stock_take_sessions (
+  session_no,
+  location_id,
+  item_id,
+  brand_id,
+  status,
+  created_by,
+  submitted_at,
+  reviewed_at,
+  manager_reviewed_by,
+  manager_reviewed_at,
+  manager_signature
+)
+select
+  seed.session_no,
+  stock_location.id,
+  item.id,
+  brand.id,
+  seed.status::public.stock_take_status,
+  first_profile.id,
+  seed.submitted_at,
+  seed.reviewed_at,
+  case when seed.status = 'REVIEWED' then first_profile.id else null end,
+  case when seed.status = 'REVIEWED' then seed.reviewed_at else null end,
+  case when seed.status = 'REVIEWED' then 'Seed Manager' else null end
+from (values
+  (
+    'ST-SEED-DRAFT-001',
+    'WONDERFUL',
+    '0004',
+    'ABC',
+    'DRAFT',
+    null::timestamptz,
+    null::timestamptz
+  ),
+  (
+    'ST-SEED-SUBMITTED-001',
+    'WONDERFUL',
+    '0004',
+    'ABC',
+    'SUBMITTED',
+    '2026-06-10 09:30:00+08'::timestamptz,
+    null::timestamptz
+  ),
+  (
+    'ST-SEED-REVIEWED-001',
+    'WONDERFUL',
+    '0004',
+    'ABC',
+    'REVIEWED',
+    '2026-06-10 09:30:00+08'::timestamptz,
+    '2026-06-10 10:00:00+08'::timestamptz
+  )
+) as seed(session_no, location_name, item_code, brand_name, status, submitted_at, reviewed_at)
+join public.stock_locations stock_location on stock_location.name = seed.location_name
+join public.items item on item.item_code = seed.item_code
+join public.brands brand on brand.name = seed.brand_name
+left join lateral (
+  select id
+  from public.profiles
+  order by created_at
+  limit 1
+) first_profile on true
+on conflict (session_no) do nothing;
+
+insert into public.stock_take_lines (
+  session_id,
+  item_id,
+  brand_id,
+  origin_id,
+  barcode,
+  system_count,
+  actual_count,
+  system_weight_kg,
+  actual_weight_kg,
+  notes
+)
+select
+  session.id,
+  stock_unit.item_id,
+  stock_unit.brand_id,
+  stock_unit.origin_id,
+  stock_unit.barcode,
+  1,
+  case when session.session_no = 'ST-SEED-REVIEWED-001' then 0 else 1 end,
+  stock_unit.net_weight_kg,
+  case when session.session_no = 'ST-SEED-REVIEWED-001' then 0 else stock_unit.net_weight_kg end,
+  'Seed stock take barcode line.'
+from public.stock_take_sessions session
+join public.stock_units stock_unit on stock_unit.barcode = 'EM-SEED-STOCK-TAKE-001'
+where session.session_no in ('ST-SEED-SUBMITTED-001', 'ST-SEED-REVIEWED-001')
+  and not exists (
+    select 1
+    from public.stock_take_lines existing
+    where existing.session_id = session.id
+      and existing.barcode = stock_unit.barcode
   );
 
 insert into public.customer_orders (
@@ -511,8 +772,8 @@ select
   'PREPARED'::public.customer_order_item_status,
   seed.notes
 from (values
-  ('ORD-SEED-PICKUP-001', 'MEAT-BELLY-BONELESS', 2.000, 24.250, 2.000, 24.250, 'Seed prepared pickup order line.'),
-  ('ORD-SEED-DELIVERY-001', 'MEAT-LOIN-BONELESS', 1.000, 9.250, 1.000, 9.250, 'Seed prepared delivery order line.')
+  ('ORD-SEED-PICKUP-001', '0001', 2.000, 24.250, 2.000, 24.250, 'Seed prepared pickup order line.'),
+  ('ORD-SEED-DELIVERY-001', '0003', 1.000, 9.250, 1.000, 9.250, 'Seed prepared delivery order line.')
 ) as seed(
   order_no,
   item_code,
@@ -1069,9 +1330,9 @@ select
   seed.unit_price,
   '2026-06-01'::date
 from (values
-  ('MEAT-BELLY-BONELESS', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 42.00),
-  ('MEAT-LOIN-BONELESS', 'RIVASAM', 'SPAIN', 'JALAN CHANNEL', 46.00),
-  ('PROCESSED-MEATBALL', null, null, 'SUNGAI MERAH', 18.50)
+  ('0001', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 42.00),
+  ('0003', 'RIVASAM', 'SPAIN', 'JALAN CHANNEL', 46.00),
+  ('0006', null, null, 'SUNGAI MERAH', 18.50)
 ) as seed(item_code, brand_name, origin_name, outlet_name, unit_price)
 join public.items item on item.item_code = seed.item_code
 left join public.brands brand on brand.name = seed.brand_name
@@ -1101,9 +1362,9 @@ select
   seed.unit_price,
   '2026-06-01'::date
 from (values
-  ('WHOLESALE', 'MEAT-BELLY-BONELESS', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 38.00),
-  ('VIP', 'MEAT-LOIN-BONELESS', 'RIVASAM', 'SPAIN', 'SUNGAI MERAH', 44.00),
-  ('RETAIL', 'PROCESSED-MEATBALL', null, null, 'JALAN CHANNEL', 18.50)
+  ('WHOLESALE', '0001', 'TICAN', 'DENMARK', 'JALAN CHANNEL', 38.00),
+  ('VIP', '0003', 'RIVASAM', 'SPAIN', 'SUNGAI MERAH', 44.00),
+  ('RETAIL', '0006', null, null, 'JALAN CHANNEL', 18.50)
 ) as seed(category_code, item_code, brand_name, origin_name, outlet_name, unit_price)
 join public.customer_categories category on category.code = seed.category_code
 join public.items item on item.item_code = seed.item_code
@@ -1253,7 +1514,7 @@ select
   0.00,
   'Seed retail sale line'
 from public.retail_sales sale
-join public.items item on item.item_code = 'MEAT-BELLY-BONELESS'
+join public.items item on item.item_code = '0001'
 left join public.brands brand on brand.name = 'TICAN'
 left join public.origins origin on origin.name = 'DENMARK'
 left join public.stock_locations stock_location on stock_location.name = 'JALAN CHANNEL'
@@ -1341,8 +1602,8 @@ select
 from public.outlets outlet
 join public.departments department on department.name = 'Processing'
 join public.stock_locations stock_location on stock_location.name = 'JALAN CHANNEL'
-join public.items raw_item on raw_item.item_code = 'MEAT-BELLY-BONE-IN'
-join public.items finished_item on finished_item.item_code = 'MEAT-BELLY-BONELESS'
+join public.items raw_item on raw_item.item_code = '0002'
+join public.items finished_item on finished_item.item_code = '0001'
 left join public.brands raw_brand on raw_brand.name = 'TICAN'
 left join public.origins raw_origin on raw_origin.name = 'DENMARK'
 left join public.brands finished_brand on finished_brand.name = 'TICAN'

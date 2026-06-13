@@ -18,9 +18,29 @@ import {
 } from "@/lib/supabase/server"
 import type { StockActionState } from "@/lib/stock/action-state"
 import {
+  assertDamageCanBeManagerReviewed,
+  assertReturnSupplierCanBeRejected,
+  damageRejectionSignatureLabel,
+} from "@/lib/stock/approval-rules"
+import {
+  assertCustomerOrderReadyForOutbound,
+  duplicateOutboundBarcode,
+  parseOutboundBarcodes,
+} from "@/lib/stock/outbound-rules"
+import { normalizeItemCode } from "@/lib/stock/item-code"
+import {
+  requireSignature,
+  requireStockTakeScopeMatch,
+  sameNullableId,
+} from "@/lib/stock/stock-take-rules"
+import {
+  activeStockStatus,
+  movementTypeForOutboundType,
+} from "@/lib/stock/unit-status-rules"
+import {
   stockInboundSources,
+  stockDamageReasons,
   stockCategories,
-  type StockInboundSource,
   type StockMovementType,
 } from "@/lib/stock/types"
 
@@ -33,20 +53,43 @@ const stockOperatorRoles: UserRole[] = [
   "processing_manager",
   "admin",
 ]
+const stockItemEditorRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "delivery_team_general_worker",
+  "delivery_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "account",
+  "admin",
+  "director",
+]
 
-const stockApproverRoles: UserRole[] = ["admin", "director"]
+const stockManagerRoles: UserRole[] = [
+  "retail_manager",
+  "delivery_manager",
+  "processing_manager",
+  "admin",
+]
+const stockDirectorApprovalRoles: UserRole[] = ["director", "admin"]
 
 const optionalUuid = z
   .string()
   .trim()
-  .transform((value) => (value.length > 0 ? value : null))
+  .transform((value) =>
+    value.length > 0 && value !== "__other" ? value : null
+  )
 
 const itemSchema = z.object({
-  itemCode: z.string().trim().min(2),
+  itemCode: z.string().trim().regex(/^\d+$/, "Item code must be numeric only."),
   category: z.enum(stockCategories),
-  section: z.string().trim().min(2),
+  defaultBrandId: optionalUuid,
+  section: z.string().trim().default("GENERAL"),
   name: z.string().trim().min(2),
+  chineseName: z.string().trim().optional(),
+  ibanName: z.string().trim().optional(),
   barcodeRequired: z.coerce.boolean().default(true),
+  defaultLowStockLevel: z.coerce.number().min(0).default(0),
 })
 
 const updateItemSchema = itemSchema.extend({
@@ -62,7 +105,9 @@ const barcodeInboundSchema = z.object({
   barcode: z.string().trim().min(3),
   itemId: z.string().trim().min(1),
   brandId: optionalUuid,
+  brandName: z.string().trim().optional(),
   originId: optionalUuid,
+  originName: z.string().trim().optional(),
   locationId: z.string().trim().min(1),
   netWeightKg: z.coerce.number().positive(),
   inboundSource: z.enum(stockInboundSources).default("supplier_import"),
@@ -75,10 +120,24 @@ const barcodeInboundSchema = z.object({
   notes: z.string().trim().optional(),
 })
 
-const orderOutboundTypes = ["SALES", "TRANSFER", "PROCESSING", "SPOILED"] as const
+const undoInboundScanSchema = z.object({
+  stockUnitId: z.string().trim().min(1),
+  batchNo: z.string().trim().min(1),
+  reason: z.string().trim().default("Current inbound session undo"),
+})
+
+const orderOutboundTypes = ["SALES", "TRANSFER", "PROCESSING"] as const
 
 const orderOutboundSchema = z.object({
   orderId: z.string().trim().min(1),
+  outboundType: z.enum(orderOutboundTypes),
+  toLocationId: optionalUuid,
+  barcodesJson: z.string().trim().min(2),
+  referenceNo: z.string().trim().optional(),
+  notes: z.string().trim().optional(),
+})
+
+const directOutboundSchema = z.object({
   outboundType: z.enum(orderOutboundTypes),
   toLocationId: optionalUuid,
   barcodesJson: z.string().trim().min(2),
@@ -107,33 +166,21 @@ const returnSchema = z.object({
   notes: z.string().trim().optional(),
 })
 
-const noBarcodeInboundSchema = z.object({
-  itemId: z.string().trim().min(1),
-  brandId: optionalUuid,
-  originId: optionalUuid,
-  locationId: z.string().trim().min(1),
-  quantity: z.coerce.number().positive(),
-  weightKg: z.coerce.number().positive(),
-  referenceNo: z.string().trim().optional(),
+const releaseInspectionSchema = z.object({
+  barcode: z.string().trim().min(3),
   notes: z.string().trim().optional(),
 })
 
 const createStockTakeSessionSchema = z.object({
   locationId: z.string().trim().min(1),
-})
-
-const stockTakeLineSchema = z.object({
-  sessionId: z.string().trim().min(1),
   itemId: z.string().trim().min(1),
-  systemCount: z.coerce.number().min(0),
-  actualCount: z.coerce.number().min(0),
-  systemWeightKg: z.coerce.number().min(0),
-  actualWeightKg: z.coerce.number().min(0),
-  notes: z.string().trim().optional(),
+  brandId: optionalUuid,
 })
 
 const stockTakeSessionIdSchema = z.object({
   sessionId: z.string().trim().min(1),
+  managerSignature: z.string().trim().optional(),
+  directorSignature: z.string().trim().optional(),
 })
 
 const stockTakeBarcodeSchema = z.object({
@@ -141,19 +188,44 @@ const stockTakeBarcodeSchema = z.object({
   barcode: z.string().trim().min(3),
 })
 
+const damageRequestSchema = z.object({
+  barcode: z.string().trim().min(3),
+  reason: z.enum(stockDamageReasons),
+  photoPath: z.string().trim().min(1, "Damage photo is required."),
+  notes: z.string().trim().optional(),
+})
+
+const damageRequestIdSchema = z.object({
+  requestId: z.string().trim().min(1),
+  managerSignature: z.string().trim().optional(),
+  directorSignature: z.string().trim().optional(),
+})
+
+const returnSupplierRequestSchema = z.object({
+  barcode: z.string().trim().min(3),
+  supplierName: z.string().trim().min(1, "Supplier name is required."),
+  notes: z.string().trim().optional(),
+})
+
+const returnSupplierRequestIdSchema = z.object({
+  requestId: z.string().trim().min(1),
+  managerSignature: z.string().trim().optional(),
+})
+
 type StockActionContext = {
   profile: CurrentProfile
   supabase: SupabaseServerClient
 }
 
-type OrderOutboundType = (typeof orderOutboundTypes)[number]
-
 function formObject(formData: FormData) {
   return Object.fromEntries(formData.entries())
 }
 
-function success(message: string): StockActionState {
-  return { status: "success", message }
+function success(
+  message: string,
+  extra: Partial<Omit<StockActionState, "status" | "message">> = {}
+): StockActionState {
+  return { status: "success", message, ...extra }
 }
 
 function failure(message: string): StockActionState {
@@ -164,8 +236,9 @@ function canUseAllStockLocations(profile: CurrentProfile) {
   return hasAnyRole(profile, ["admin", "director"])
 }
 
-function normalizeItemCode(value: string) {
-  return value.trim().toUpperCase().replace(/\s+/g, "-")
+function normalizeOptionalName(value: string | undefined) {
+  const normalized = value?.trim()
+  return normalized ? normalized.toUpperCase() : null
 }
 
 function assertStockLocationAccess(
@@ -251,81 +324,74 @@ async function insertAuditLog(
   })
 }
 
-async function insertMovement(
+async function resolveNamedRecordId(
   supabase: SupabaseServerClient,
-  input: {
-    movementType: StockMovementType
-    itemId: string
-    stockUnitId?: string | null
-    barcode?: string | null
-    fromLocationId?: string | null
-    toLocationId?: string | null
-    quantity: number
-    weightKg: number
-    referenceNo?: string | null
-    notes?: string | null
-    sourceType?: StockInboundSource | string | null
-    createdBy: string
-  }
+  table: "brands" | "origins",
+  selectedId: string | null,
+  customName: string | undefined,
+  label: string
 ) {
+  if (selectedId) {
+    return selectedId
+  }
+
+  const name = normalizeOptionalName(customName)
+
+  if (!name) {
+    return null
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from(table)
+    .select("id")
+    .eq("name", name)
+    .maybeSingle()
+
+  if (existingError) {
+    throw new Error(existingError.message)
+  }
+
+  const existingId = readString(asRecord(existing).id)
+
+  if (existingId) {
+    return existingId
+  }
+
   const { data, error } = await supabase
-    .from("stock_movements")
-    .insert({
-      movement_type: input.movementType,
-      item_id: input.itemId,
-      stock_unit_id: input.stockUnitId ?? null,
-      barcode: input.barcode ?? null,
-      from_location_id: input.fromLocationId ?? null,
-      to_location_id: input.toLocationId ?? null,
-      quantity: input.quantity,
-      weight_kg: input.weightKg,
-      reference_no: input.referenceNo ?? null,
-      notes: input.notes ?? null,
-      source_type: input.sourceType ?? null,
-      created_by: input.createdBy,
-    })
+    .from(table)
+    .insert({ name })
     .select("id")
     .single()
 
   if (error) {
-    throw new Error(error.message)
+    throw new Error(`Could not create ${label}: ${error.message}`)
   }
 
-  return String(asRecord(data).id ?? "")
+  return readString(asRecord(data).id)
 }
 
-async function upsertBarcodeWeightRule(
+async function assertActiveItem(
   supabase: SupabaseServerClient,
-  profile: CurrentProfile,
-  input: {
-    itemId: string
-    brandId: string | null
-    originId: string | null
-    locationId: string
-    barcodeWeightStart: number
-    barcodeWeightLength: number
-    barcodeWeightDecimals: number
-  }
+  itemId: string
 ) {
-  const { error } = await supabase
-    .from("barcode_weight_rules")
-    .upsert(
-      {
-        item_id: input.itemId,
-        brand_id: input.brandId,
-        origin_id: input.originId,
-        location_id: input.locationId,
-        barcode_weight_start: input.barcodeWeightStart,
-        barcode_weight_length: input.barcodeWeightLength,
-        barcode_weight_decimals: input.barcodeWeightDecimals,
-        created_by: profile.id,
-        updated_by: profile.id,
-      },
-      { onConflict: "item_id,brand_id,origin_id,location_id" }
-    )
+  const { data, error } = await supabase
+    .from("items")
+    .select("id,is_active")
+    .eq("id", itemId)
+    .maybeSingle()
 
   if (error) {
     throw new Error(error.message)
+  }
+
+  const item = asRecord(data)
+
+  if (!item.id) {
+    throw new Error("Product was not found.")
+  }
+
+  if (item.is_active === false) {
+    throw new Error("Inactive products cannot receive new inbound stock.")
   }
 }
 
@@ -387,6 +453,28 @@ async function getUnitByBarcode(
   return asRecord(data)
 }
 
+async function requireStockTakeLineCount(
+  supabase: SupabaseServerClient,
+  sessionId: string
+) {
+  const { count, error } = await supabase
+    .from("stock_take_lines")
+    .select("id", { count: "exact", head: true })
+    .eq("session_id", sessionId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  if (!count) {
+    throw new Error(
+      "Scan at least one barcode before submitting stock take for review."
+    )
+  }
+
+  return count
+}
+
 async function getCustomerOrder(
   supabase: SupabaseServerClient,
   orderId: string
@@ -416,16 +504,6 @@ async function getCustomerOrder(
   return order
 }
 
-function assertCustomerOrderReadyForOutbound(order: Record<string, unknown>) {
-  const status = readString(order.status)
-
-  if (status !== "READY_FOR_PICKUP" && status !== "READY_FOR_DELIVERY") {
-    throw new Error(
-      "Customer order must be marked ready before confirming outbound scans."
-    )
-  }
-}
-
 async function getStockTakeSession(
   supabase: SupabaseServerClient,
   sessionId: string
@@ -449,66 +527,6 @@ function unitStatus(unit: Record<string, unknown>) {
 
 function stockTakeStatus(session: Record<string, unknown>) {
   return String(session.status ?? "")
-}
-
-function activeStockStatus(status: string) {
-  return status === "IN_STOCK" || status === "TRANSFERRED" || status === "RETURNED"
-}
-
-function movementTypeForOutboundType(
-  outboundType: OrderOutboundType
-): StockMovementType {
-  if (outboundType === "SALES") {
-    return "OUTBOUND_SALES"
-  }
-
-  if (outboundType === "TRANSFER") {
-    return "OUTBOUND_TRANSFER"
-  }
-
-  if (outboundType === "PROCESSING") {
-    return "OUTBOUND_PROCESSING"
-  }
-
-  return "OUTBOUND_SPOILED"
-}
-
-function parseOutboundBarcodes(value: string) {
-  let parsed: unknown
-
-  try {
-    parsed = JSON.parse(value)
-  } catch {
-    throw new Error("Scanned barcode list is not valid.")
-  }
-
-  if (!Array.isArray(parsed)) {
-    throw new Error("Scanned barcode list is not valid.")
-  }
-
-  const barcodes = parsed
-    .map((barcode) => String(barcode ?? "").trim())
-    .filter(Boolean)
-
-  if (barcodes.length === 0) {
-    throw new Error("Scan at least one barcode before confirming outbound.")
-  }
-
-  return barcodes
-}
-
-function duplicateOutboundBarcode(barcodes: string[]) {
-  const seen = new Set<string>()
-
-  for (const barcode of barcodes) {
-    if (seen.has(barcode)) {
-      return barcode
-    }
-
-    seen.add(barcode)
-  }
-
-  return null
 }
 
 async function rejectBarcodeScan(
@@ -589,13 +607,55 @@ async function requireStockTakeSessionStatus(
   return session
 }
 
+async function assertStockNotLockedByTake(
+  context: StockActionContext,
+  input: {
+    itemId: string
+    brandId: string | null
+    locationId: string
+    action: string
+  }
+) {
+  const { data, error } = await context.supabase
+    .from("stock_take_sessions")
+    .select("session_no,item_id,brand_id,status")
+    .eq("location_id", input.locationId)
+    .in("status", ["DRAFT", "SUBMITTED", "REVIEWED"])
+    .limit(100)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const lockedSession = Array.isArray(data)
+    ? data
+        .map(asRecord)
+        .find(
+          (session) =>
+            String(session.item_id ?? "") === input.itemId &&
+            sameNullableId(session.brand_id, input.brandId)
+        )
+    : null
+
+  if (lockedSession) {
+    throw new Error(
+      `Cannot ${input.action}. Stock take ${readString(
+        lockedSession.session_no,
+        "session"
+      )} is open for this item and brand at this location.`
+    )
+  }
+}
+
 function revalidateStockPaths() {
   [
     "/stock/dashboard",
     "/stock/items",
+    "/stock/inbound",
     "/stock/outbound",
     "/stock/balance",
     "/stock/movements",
+    "/stock/return",
     "/stock/stock-take",
     "/stock/reports",
     "/stock/settings",
@@ -623,7 +683,7 @@ async function runStockAction(
   callback: (
     context: StockActionContext,
     formData: FormData
-  ) => Promise<string>
+  ) => Promise<string | StockActionState>
 ) {
   const context = await getActionContext(roles)
 
@@ -636,12 +696,12 @@ async function runStockAction(
   }
 
   try {
-    const message = await callback(
+    const result = await callback(
       { profile: context.profile, supabase: context.supabase },
       formData
     )
     revalidateStockPaths()
-    return success(message)
+    return typeof result === "string" ? success(result) : result
   } catch (error) {
     return failure(error instanceof Error ? error.message : "Action failed.")
   }
@@ -657,7 +717,7 @@ export async function createItemAction(
     return parsed
   }
 
-  return runStockAction(formData, ["admin", "director"], async (context) => {
+  return runStockAction(formData, stockItemEditorRoles, async (context) => {
     const itemCode = normalizeItemCode(parsed.itemCode)
     await assertUniqueItemCode(context.supabase, itemCode)
 
@@ -666,9 +726,13 @@ export async function createItemAction(
       .insert({
         item_code: itemCode,
         category: parsed.category,
-        section: parsed.section,
+        default_brand_id: parsed.defaultBrandId,
+        section: parsed.section || "GENERAL",
         name: parsed.name,
+        chinese_name: normalizeOptionalName(parsed.chineseName),
+        iban_name: normalizeOptionalName(parsed.ibanName),
         barcode_required: parsed.barcodeRequired,
+        default_low_stock_level: parsed.defaultLowStockLevel,
       })
       .select("id")
       .single()
@@ -687,7 +751,7 @@ export async function createItemAction(
         { ...parsed, itemCode }
       )
 
-    return "Item created."
+    return success("Item created.", { itemId })
   })
 }
 
@@ -701,7 +765,7 @@ export async function updateItemAction(
     return parsed
   }
 
-  return runStockAction(formData, ["admin", "director"], async (context) => {
+  return runStockAction(formData, stockItemEditorRoles, async (context) => {
     const itemCode = normalizeItemCode(parsed.itemCode)
     await assertUniqueItemCode(context.supabase, itemCode, parsed.itemId)
 
@@ -710,15 +774,25 @@ export async function updateItemAction(
       .update({
         item_code: itemCode,
         category: parsed.category,
-        section: parsed.section,
+        default_brand_id: parsed.defaultBrandId,
+        section: parsed.section || "GENERAL",
         name: parsed.name,
+        chinese_name: normalizeOptionalName(parsed.chineseName),
+        iban_name: normalizeOptionalName(parsed.ibanName),
         barcode_required: parsed.barcodeRequired,
         is_active: parsed.isActive,
+        default_low_stock_level: parsed.defaultLowStockLevel,
       })
       .eq("id", parsed.itemId)
+      .select("id")
+      .single()
 
     if (error) {
-      throw new Error(error.message)
+      throw new Error(
+        error.code === "PGRST116"
+          ? "Item was not found or your role cannot update it."
+          : error.message
+      )
     }
 
     await insertAuditLog(
@@ -848,6 +922,37 @@ export async function barcodeInboundAction(
 
   return runStockAction(formData, stockOperatorRoles, async (context) => {
     assertStockLocationAccess(context.profile, parsed.locationId, "inbound")
+    await assertActiveItem(context.supabase, parsed.itemId)
+
+    const brandId = await resolveNamedRecordId(
+      context.supabase,
+      "brands",
+      parsed.brandId,
+      parsed.brandName,
+      "brand"
+    )
+    const originId = await resolveNamedRecordId(
+      context.supabase,
+      "origins",
+      parsed.originId,
+      parsed.originName,
+      "origin"
+    )
+
+    if (!brandId) {
+      throw new Error("Choose a brand before receiving inbound stock.")
+    }
+
+    if (!originId) {
+      throw new Error("Choose an origin before receiving inbound stock.")
+    }
+
+    await assertStockNotLockedByTake(context, {
+      itemId: parsed.itemId,
+      brandId,
+      locationId: parsed.locationId,
+      action: "receive inbound stock",
+    })
 
     const existingUnit = await getUnitByBarcode(context.supabase, parsed.barcode)
 
@@ -859,21 +964,22 @@ export async function barcodeInboundAction(
       })
     }
 
-    const { data, error } = await context.supabase
-      .from("stock_units")
-      .insert({
-        barcode: parsed.barcode,
-        item_id: parsed.itemId,
-        brand_id: parsed.brandId,
-        origin_id: parsed.originId,
-        location_id: parsed.locationId,
-        status: "IN_STOCK",
-        net_weight_kg: parsed.netWeightKg,
-        inbound_source: parsed.inboundSource,
-        batch_no: parsed.batchNo ?? null,
-      })
-      .select("id")
-      .single()
+    const { data, error } = await context.supabase.rpc("inbound_stock_unit", {
+      p_barcode: parsed.barcode,
+      p_item_id: parsed.itemId,
+      p_brand_id: brandId,
+      p_origin_id: originId,
+      p_location_id: parsed.locationId,
+      p_net_weight_kg: parsed.netWeightKg,
+      p_inbound_source: parsed.inboundSource,
+      p_batch_no: parsed.batchNo ?? null,
+      p_reference_no: parsed.referenceNo ?? null,
+      p_notes: parsed.notes ?? null,
+      p_save_weight_rule: parsed.saveWeightRule,
+      p_barcode_weight_start: parsed.barcodeWeightStart,
+      p_barcode_weight_length: parsed.barcodeWeightLength,
+      p_barcode_weight_decimals: parsed.barcodeWeightDecimals,
+    })
 
     if (error) {
       await logBarcodeScan(context.supabase, {
@@ -886,50 +992,39 @@ export async function barcodeInboundAction(
       throw new Error(error.message)
     }
 
-    const stockUnitId = String(asRecord(data).id ?? "")
-    const movementId = await insertMovement(context.supabase, {
-      movementType: "INBOUND",
-      itemId: parsed.itemId,
-      stockUnitId,
-      barcode: parsed.barcode,
-      toLocationId: parsed.locationId,
-      quantity: 1,
-      weightKg: parsed.netWeightKg,
-      referenceNo: parsed.referenceNo ?? null,
-      notes: parsed.notes ?? null,
-      sourceType: parsed.inboundSource,
-      createdBy: context.profile.id,
+    return success("Barcode inbound saved.", {
+      stockUnitId: readString(data),
     })
+  })
+}
 
-    if (parsed.saveWeightRule) {
-      await upsertBarcodeWeightRule(context.supabase, context.profile, {
-        itemId: parsed.itemId,
-        brandId: parsed.brandId,
-        originId: parsed.originId,
-        locationId: parsed.locationId,
-        barcodeWeightStart: parsed.barcodeWeightStart,
-        barcodeWeightLength: parsed.barcodeWeightLength,
-        barcodeWeightDecimals: parsed.barcodeWeightDecimals,
-      })
-    }
+export async function undoInboundScanAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(undoInboundScanSchema, formData)
 
-    await logBarcodeScan(context.supabase, {
-      barcode: parsed.barcode,
-      action: "INBOUND",
-      success: true,
-      message: "Inbound accepted",
-      scannedBy: context.profile.id,
-    })
-    await insertAuditLog(
-      context.supabase,
-      context.profile,
-      "BARCODE_INBOUND",
-      "stock_movements",
-      movementId,
-      parsed
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(formData, stockOperatorRoles, async (context) => {
+    const { data, error } = await context.supabase.rpc(
+      "void_inbound_stock_unit",
+      {
+        p_stock_unit_id: parsed.stockUnitId,
+        p_batch_no: parsed.batchNo,
+        p_reason: parsed.reason,
+      }
     )
 
-    return "Barcode inbound saved."
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return success("Inbound scan undone. Audit trail kept.", {
+      voidedStockUnitId: readString(data, parsed.stockUnitId),
+    })
   })
 }
 
@@ -1007,6 +1102,13 @@ export async function confirmOrderOutboundAction(
         })
       }
 
+      await assertStockNotLockedByTake(context, {
+        itemId: readString(unit.item_id),
+        brandId: unit.brand_id ? String(unit.brand_id) : null,
+        locationId: unitLocationId,
+        action: "confirm outbound",
+      })
+
       units.push(unit)
     }
 
@@ -1039,6 +1141,118 @@ export async function confirmOrderOutboundAction(
     }
 
     return `${parsed.outboundType} outbound batch ${batchNo} confirmed.`
+  })
+}
+
+export async function confirmDirectOutboundAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(directOutboundSchema, formData)
+
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(formData, stockOperatorRoles, async (context) => {
+    const barcodes = parseOutboundBarcodes(parsed.barcodesJson)
+    const movementType = movementTypeForOutboundType(parsed.outboundType)
+    const duplicateBarcode = duplicateOutboundBarcode(barcodes)
+
+    if (duplicateBarcode) {
+      await rejectBarcodeScan(context, {
+        barcode: duplicateBarcode,
+        action: movementType,
+        message: "Duplicate barcode in this outbound batch.",
+      })
+    }
+
+    if (parsed.outboundType === "TRANSFER" && !parsed.toLocationId) {
+      throw new Error("Choose a transfer destination before confirming transfer.")
+    }
+
+    if (parsed.outboundType !== "TRANSFER" && parsed.toLocationId) {
+      throw new Error("Destination location is only used for transfers.")
+    }
+
+    if (parsed.outboundType === "TRANSFER" && parsed.toLocationId) {
+      await assertActiveStockLocation(
+        context.supabase,
+        parsed.toLocationId,
+        "Transfer destination"
+      )
+    }
+
+    const units: Record<string, unknown>[] = []
+    let fromLocationId = ""
+
+    for (const barcode of barcodes) {
+      const unit = await requireActiveBarcodeUnit(context, barcode, movementType)
+      const unitLocationId = readString(unit.location_id)
+
+      assertStockLocationAccess(context.profile, unitLocationId, "outbound")
+
+      if (!fromLocationId) {
+        fromLocationId = unitLocationId
+      }
+
+      if (fromLocationId !== unitLocationId) {
+        await rejectBarcodeScan(context, {
+          barcode,
+          action: movementType,
+          message: "All barcodes in one outbound batch must come from the same location.",
+        })
+      }
+
+      if (
+        parsed.outboundType === "TRANSFER" &&
+        parsed.toLocationId === unitLocationId
+      ) {
+        await rejectBarcodeScan(context, {
+          barcode,
+          action: movementType,
+          message: "Transfer destination must be different from the current location.",
+        })
+      }
+
+      await assertStockNotLockedByTake(context, {
+        itemId: readString(unit.item_id),
+        brandId: unit.brand_id ? String(unit.brand_id) : null,
+        locationId: unitLocationId,
+        action: "confirm outbound",
+      })
+
+      units.push(unit)
+    }
+
+    const batchNo = `DOUT-${new Date()
+      .toISOString()
+      .slice(0, 10)
+      .replaceAll("-", "")}-${Date.now()}-${randomUUID()
+      .slice(0, 8)
+      .toUpperCase()}`
+
+    const { error: batchError } = await context.supabase.rpc(
+      "confirm_direct_outbound_batch",
+      {
+        p_outbound_type: parsed.outboundType,
+        p_to_location_id:
+          parsed.outboundType === "TRANSFER" ? parsed.toLocationId : null,
+        p_lines: units.map((unit) => ({
+          stockUnitId: readString(unit.id),
+          barcode: readString(unit.barcode),
+        })),
+        p_batch_no: batchNo,
+        p_reference_no: parsed.referenceNo || batchNo,
+        p_notes: parsed.notes ?? null,
+      }
+    )
+
+    if (batchError) {
+      throw new Error(batchError.message)
+    }
+
+    return `${parsed.outboundType} direct outbound batch ${batchNo} confirmed.`
   })
 }
 
@@ -1077,47 +1291,23 @@ export async function transferAction(
       })
     }
 
-    const { error } = await context.supabase
-      .from("stock_units")
-      .update({
-        status: "TRANSFER_PENDING",
-        transfer_to_location_id: parsed.toLocationId,
-      })
-      .eq("id", unit.id)
+    await assertStockNotLockedByTake(context, {
+      itemId: readString(unit.item_id),
+      brandId: unit.brand_id ? String(unit.brand_id) : null,
+      locationId: readString(unit.location_id),
+      action: "transfer stock",
+    })
+
+    const { error } = await context.supabase.rpc("transfer_stock_unit", {
+      p_barcode: parsed.barcode,
+      p_to_location_id: parsed.toLocationId,
+      p_reference_no: parsed.referenceNo ?? null,
+      p_notes: parsed.notes ?? null,
+    })
 
     if (error) {
       throw new Error(error.message)
     }
-
-    const movementId = await insertMovement(context.supabase, {
-      movementType: "OUTBOUND_TRANSFER",
-      itemId: String(unit.item_id ?? ""),
-      stockUnitId: String(unit.id),
-      barcode: parsed.barcode,
-      fromLocationId: String(unit.location_id ?? ""),
-      toLocationId: parsed.toLocationId,
-      quantity: 1,
-      weightKg: readNumber(unit.net_weight_kg),
-      referenceNo: parsed.referenceNo ?? null,
-      notes: parsed.notes ?? null,
-      createdBy: context.profile.id,
-    })
-
-    await logBarcodeScan(context.supabase, {
-      barcode: parsed.barcode,
-      action: "OUTBOUND_TRANSFER",
-      success: true,
-      message: "Transfer scan accepted",
-      scannedBy: context.profile.id,
-    })
-    await insertAuditLog(
-      context.supabase,
-      context.profile,
-      "TRANSFER_CREATED",
-      "stock_movements",
-      movementId,
-      parsed
-    )
 
     return "Transfer marked pending."
   })
@@ -1163,48 +1353,23 @@ export async function receiveTransferAction(
       })
     }
 
-    const { error } = await context.supabase
-      .from("stock_units")
-      .update({
-        status: "TRANSFERRED",
-        location_id: parsed.receiveLocationId,
-        transfer_to_location_id: null,
-      })
-      .eq("id", unit.id)
+    await assertStockNotLockedByTake(context, {
+      itemId: readString(unit.item_id),
+      brandId: unit.brand_id ? String(unit.brand_id) : null,
+      locationId: parsed.receiveLocationId,
+      action: "receive transfer",
+    })
+
+    const { error } = await context.supabase.rpc("receive_stock_transfer", {
+      p_barcode: parsed.barcode,
+      p_receive_location_id: parsed.receiveLocationId,
+      p_reference_no: parsed.referenceNo ?? null,
+      p_notes: parsed.notes ?? null,
+    })
 
     if (error) {
       throw new Error(error.message)
     }
-
-    const movementId = await insertMovement(context.supabase, {
-      movementType: "TRANSFER_RECEIVED",
-      itemId: String(unit.item_id ?? ""),
-      stockUnitId: String(unit.id),
-      barcode: parsed.barcode,
-      fromLocationId: String(unit.location_id ?? ""),
-      toLocationId: parsed.receiveLocationId,
-      quantity: 1,
-      weightKg: readNumber(unit.net_weight_kg),
-      referenceNo: parsed.referenceNo ?? null,
-      notes: parsed.notes ?? null,
-      createdBy: context.profile.id,
-    })
-
-    await logBarcodeScan(context.supabase, {
-      barcode: parsed.barcode,
-      action: "TRANSFER_RECEIVED",
-      success: true,
-      message: "Transfer receive scan accepted",
-      scannedBy: context.profile.id,
-    })
-    await insertAuditLog(
-      context.supabase,
-      context.profile,
-      "TRANSFER_RECEIVED",
-      "stock_movements",
-      movementId,
-      parsed
-    )
 
     return "Transfer received."
   })
@@ -1246,161 +1411,593 @@ export async function returnStockAction(
       })
     }
 
-    const { error } = await context.supabase
-      .from("stock_units")
-      .update({
-        status: "IN_STOCK",
-        location_id: parsed.locationId,
-        transfer_to_location_id: null,
+    if (status === "HOLD" || status === "INSPECTION") {
+      await rejectBarcodeScan(context, {
+        barcode: parsed.barcode,
+        action: "RETURN",
+        message:
+          "Barcode is waiting for inspection release and cannot use normal stock return.",
       })
-      .eq("id", unit.id)
+    }
+
+    await assertStockNotLockedByTake(context, {
+      itemId: readString(unit.item_id),
+      brandId: unit.brand_id ? String(unit.brand_id) : null,
+      locationId: parsed.locationId,
+      action: "return stock",
+    })
+
+    const { error } = await context.supabase.rpc("return_stock_unit", {
+      p_barcode: parsed.barcode,
+      p_location_id: parsed.locationId,
+      p_reference_no: parsed.referenceNo ?? null,
+      p_notes: parsed.notes ?? null,
+    })
 
     if (error) {
       throw new Error(error.message)
     }
 
-    const movementId = await insertMovement(context.supabase, {
-      movementType: "RETURN",
-      itemId: String(unit.item_id ?? ""),
-      stockUnitId: String(unit.id),
-      barcode: parsed.barcode,
-      toLocationId: parsed.locationId,
-      quantity: 1,
-      weightKg: readNumber(unit.net_weight_kg),
-      referenceNo: parsed.referenceNo ?? null,
-      notes: parsed.notes ?? null,
-      createdBy: context.profile.id,
-    })
-
-    await logBarcodeScan(context.supabase, {
-      barcode: parsed.barcode,
-      action: "RETURN",
-      success: true,
-      message: "Return scan accepted",
-      scannedBy: context.profile.id,
-    })
-    await insertAuditLog(
-      context.supabase,
-      context.profile,
-      "STOCK_RETURN",
-      "stock_movements",
-      movementId,
-      parsed
-    )
-
     return "Return saved and stock is available."
   })
 }
 
-export async function noBarcodeInboundAction(
+export async function releaseInspectionStockAction(
   _state: StockActionState,
   formData: FormData
 ): Promise<StockActionState> {
-  const parsed = parseAction(noBarcodeInboundSchema, formData)
+  const parsed = parseAction(releaseInspectionSchema, formData)
+
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(formData, stockManagerRoles, async (context) => {
+    const unit = await requireBarcodeUnit(
+      context,
+      parsed.barcode,
+      "MANUAL_ADJUSTMENT"
+    )
+    const status = unitStatus(unit)
+    const locationId = readString(unit.location_id)
+
+    assertStockLocationAccess(
+      context.profile,
+      locationId,
+      "release inspection stock"
+    )
+
+    if (status !== "INSPECTION" && status !== "HOLD") {
+      await rejectBarcodeScan(context, {
+        barcode: parsed.barcode,
+        action: "MANUAL_ADJUSTMENT",
+        message: `Barcode is ${status || "not held"} and is not waiting for inspection release.`,
+      })
+    }
+
+    await assertStockNotLockedByTake(context, {
+      itemId: readString(unit.item_id),
+      brandId: unit.brand_id ? String(unit.brand_id) : null,
+      locationId,
+      action: "release inspection stock",
+    })
+
+    const { error } = await context.supabase.rpc(
+      "release_inspection_stock_unit",
+      {
+        p_barcode: parsed.barcode,
+        p_notes: parsed.notes ?? null,
+      }
+    )
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return "Inspection released. Stock is now available."
+  })
+}
+
+async function getDamageRequest(
+  supabase: SupabaseServerClient,
+  requestId: string
+) {
+  const { data, error } = await supabase
+    .from("stock_damage_requests")
+    .select("*")
+    .eq("id", requestId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const request = asRecord(data)
+
+  if (!request.id) {
+    throw new Error("Damage request was not found or is outside your scope.")
+  }
+
+  return request
+}
+
+export async function createDamageRequestAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(damageRequestSchema, formData)
 
   if ("status" in parsed) {
     return parsed
   }
 
   return runStockAction(formData, stockOperatorRoles, async (context) => {
-    assertStockLocationAccess(
-      context.profile,
-      parsed.locationId,
-      "receive no-barcode"
+    const unit = await requireActiveBarcodeUnit(
+      context,
+      parsed.barcode,
+      "OUTBOUND_SPOILED"
     )
+    const locationId = readString(unit.location_id)
+    const itemId = readString(unit.item_id)
+    const brandId = unit.brand_id ? String(unit.brand_id) : null
 
-    let existingQuery = context.supabase
-      .from("no_barcode_stock")
-      .select("*")
-      .eq("item_id", parsed.itemId)
-      .eq("location_id", parsed.locationId)
+    assertStockLocationAccess(context.profile, locationId, "request damage")
+    await assertStockNotLockedByTake(context, {
+      itemId,
+      brandId,
+      locationId,
+      action: "request damage/spoilage deduction",
+    })
 
-    existingQuery = parsed.brandId
-      ? existingQuery.eq("brand_id", parsed.brandId)
-      : existingQuery.is("brand_id", null)
-    existingQuery = parsed.originId
-      ? existingQuery.eq("origin_id", parsed.originId)
-      : existingQuery.is("origin_id", null)
-
-    const { data: existingData, error: existingError } = await existingQuery
+    const { data: existingData, error: existingError } = await context.supabase
+      .from("stock_damage_requests")
+      .select("id")
+      .eq("stock_unit_id", readString(unit.id))
+      .in("status", ["SUBMITTED", "MANAGER_REVIEWED"])
       .maybeSingle()
 
     if (existingError) {
       throw new Error(existingError.message)
     }
 
-    const existing = asRecord(existingData)
-
-    if (existing.id) {
-      const { error } = await context.supabase
-        .from("no_barcode_stock")
-        .update({
-          quantity: readNumber(existing.quantity) + parsed.quantity,
-          weight_kg: readNumber(existing.weight_kg) + parsed.weightKg,
-        })
-        .eq("id", existing.id)
-
-      if (error) {
-        throw new Error(error.message)
-      }
-    } else {
-      const { error } = await context.supabase
-        .from("no_barcode_stock")
-        .insert({
-          item_id: parsed.itemId,
-          brand_id: parsed.brandId,
-          origin_id: parsed.originId,
-          location_id: parsed.locationId,
-          quantity: parsed.quantity,
-          weight_kg: parsed.weightKg,
-        })
-
-      if (error) {
-        throw new Error(error.message)
-      }
+    if (asRecord(existingData).id) {
+      throw new Error("This barcode already has an open damage request.")
     }
 
-    const movementId = await insertMovement(context.supabase, {
-      movementType: "NO_BARCODE_INBOUND",
-      itemId: parsed.itemId,
-      toLocationId: parsed.locationId,
-      quantity: parsed.quantity,
-      weightKg: parsed.weightKg,
-      referenceNo: parsed.referenceNo ?? null,
-      notes: parsed.notes ?? null,
-      createdBy: context.profile.id,
-    })
-
-    const { error: noBarcodeMovementError } = await context.supabase
-      .from("no_barcode_movements")
+    const requestNo = `DMG-${new Date()
+      .toISOString()
+      .slice(0, 10)
+      .replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`
+    const { data, error } = await context.supabase
+      .from("stock_damage_requests")
       .insert({
-        movement_type: "NO_BARCODE_INBOUND",
-        item_id: parsed.itemId,
-        brand_id: parsed.brandId,
-        origin_id: parsed.originId,
-        location_id: parsed.locationId,
-        quantity_delta: parsed.quantity,
-        weight_delta_kg: parsed.weightKg,
-        reference_no: parsed.referenceNo ?? null,
+        request_no: requestNo,
+        stock_unit_id: readString(unit.id),
+        barcode: parsed.barcode,
+        item_id: itemId,
+        brand_id: brandId,
+        origin_id: unit.origin_id ? String(unit.origin_id) : null,
+        location_id: locationId,
+        reason: parsed.reason,
+        status: "SUBMITTED",
+        photo_path: parsed.photoPath,
         notes: parsed.notes ?? null,
-        created_by: context.profile.id,
+        requested_by: context.profile.id,
       })
+      .select("id")
+      .single()
 
-    if (noBarcodeMovementError) {
-      throw new Error(noBarcodeMovementError.message)
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    await logBarcodeScan(context.supabase, {
+      barcode: parsed.barcode,
+      action: "OUTBOUND_SPOILED",
+      success: true,
+      message: "Damage request submitted for manager review",
+      scannedBy: context.profile.id,
+    })
+    await insertAuditLog(
+      context.supabase,
+      context.profile,
+      "DAMAGE_REQUEST_SUBMITTED",
+      "stock_damage_requests",
+      readString(asRecord(data).id),
+      parsed
+    )
+
+    return `Damage request ${requestNo} submitted for manager review.`
+  })
+}
+
+export async function reviewDamageRequestAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(damageRequestIdSchema, formData)
+
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(formData, stockManagerRoles, async (context) => {
+    const signature = requireSignature(
+      parsed.managerSignature,
+      "Manager damage review"
+    )
+    const request = await getDamageRequest(context.supabase, parsed.requestId)
+
+    assertDamageCanBeManagerReviewed(readString(request.status))
+
+    assertStockLocationAccess(
+      context.profile,
+      readString(request.location_id),
+      "review damage"
+    )
+
+    const { error } = await context.supabase
+      .from("stock_damage_requests")
+      .update({
+        status: "MANAGER_REVIEWED",
+        manager_reviewed_by: context.profile.id,
+        manager_reviewed_at: new Date().toISOString(),
+        manager_signature: signature,
+      })
+      .eq("id", parsed.requestId)
+
+    if (error) {
+      throw new Error(error.message)
     }
 
     await insertAuditLog(
       context.supabase,
       context.profile,
-      "NO_BARCODE_INBOUND",
-      "stock_movements",
-      movementId,
+      "DAMAGE_REQUEST_MANAGER_REVIEWED",
+      "stock_damage_requests",
+      parsed.requestId,
       parsed
     )
 
-    return "No-barcode inbound saved."
+    return "Damage request reviewed for director approval."
   })
+}
+
+export async function approveDamageRequestAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(damageRequestIdSchema, formData)
+
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(formData, stockDirectorApprovalRoles, async (context) => {
+    const signature = requireSignature(
+      parsed.directorSignature,
+      "Director damage approval"
+    )
+    const request = await getDamageRequest(context.supabase, parsed.requestId)
+
+    if (readString(request.status) !== "MANAGER_REVIEWED") {
+      throw new Error("Only manager-reviewed damage requests can be approved.")
+    }
+
+    assertStockLocationAccess(
+      context.profile,
+      readString(request.location_id),
+      "approve damage"
+    )
+
+    const { error } = await context.supabase.rpc("approve_stock_damage_request", {
+      p_request_id: parsed.requestId,
+      p_director_signature: signature,
+    })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return "Damage request approved and stock deducted."
+  })
+}
+
+export async function rejectDamageRequestAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(damageRequestIdSchema, formData)
+
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(
+    formData,
+    [...stockManagerRoles, "director"],
+    async (context) => {
+      const request = await getDamageRequest(context.supabase, parsed.requestId)
+      const status = readString(request.status)
+
+      if (status === "SUBMITTED" && !hasAnyRole(context.profile, stockManagerRoles)) {
+        throw new Error("Only a manager or admin can reject submitted damage requests.")
+      }
+
+      if (
+        status === "MANAGER_REVIEWED" &&
+        !hasAnyRole(context.profile, stockDirectorApprovalRoles)
+      ) {
+        throw new Error("Only director or admin can reject reviewed damage requests.")
+      }
+
+      const signatureLabel = damageRejectionSignatureLabel(status)
+      const signature = requireSignature(
+        status === "MANAGER_REVIEWED"
+          ? parsed.directorSignature
+          : parsed.managerSignature,
+        signatureLabel
+      )
+
+      const { error } = await context.supabase
+        .from("stock_damage_requests")
+        .update({
+          status: "REJECTED",
+          ...(status === "MANAGER_REVIEWED"
+            ? {
+                director_approved_by: context.profile.id,
+                director_approved_at: new Date().toISOString(),
+                director_signature: signature,
+              }
+            : {
+                manager_reviewed_by: context.profile.id,
+                manager_reviewed_at: new Date().toISOString(),
+                manager_signature: signature,
+              }),
+        })
+        .eq("id", parsed.requestId)
+
+      if (error) {
+        throw new Error(error.message)
+      }
+
+      await insertAuditLog(
+        context.supabase,
+        context.profile,
+        "DAMAGE_REQUEST_REJECTED",
+        "stock_damage_requests",
+        parsed.requestId,
+        parsed
+      )
+
+      return "Damage request rejected."
+    }
+  )
+}
+
+async function getReturnSupplierRequest(
+  supabase: SupabaseServerClient,
+  requestId: string
+) {
+  const { data, error } = await supabase
+    .from("stock_return_supplier_requests")
+    .select("*")
+    .eq("id", requestId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const request = asRecord(data)
+
+  if (!request.id) {
+    throw new Error("Return supplier request was not found or is outside your scope.")
+  }
+
+  return request
+}
+
+export async function createReturnSupplierRequestAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(returnSupplierRequestSchema, formData)
+
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(formData, stockOperatorRoles, async (context) => {
+    const unit = await requireActiveBarcodeUnit(
+      context,
+      parsed.barcode,
+      "OUTBOUND_RETURN_SUPPLIER"
+    )
+    const locationId = readString(unit.location_id)
+    const itemId = readString(unit.item_id)
+    const brandId = unit.brand_id ? String(unit.brand_id) : null
+
+    assertStockLocationAccess(context.profile, locationId, "request return supplier")
+    await assertStockNotLockedByTake(context, {
+      itemId,
+      brandId,
+      locationId,
+      action: "request return supplier deduction",
+    })
+
+    const { data: existingData, error: existingError } = await context.supabase
+      .from("stock_return_supplier_requests")
+      .select("id")
+      .eq("stock_unit_id", readString(unit.id))
+      .eq("status", "SUBMITTED")
+      .maybeSingle()
+
+    if (existingError) {
+      throw new Error(existingError.message)
+    }
+
+    if (asRecord(existingData).id) {
+      throw new Error("This barcode already has an open return supplier request.")
+    }
+
+    const requestNo = `RS-${new Date()
+      .toISOString()
+      .slice(0, 10)
+      .replaceAll("-", "")}-${randomUUID().slice(0, 8).toUpperCase()}`
+    const { data, error } = await context.supabase
+      .from("stock_return_supplier_requests")
+      .insert({
+        request_no: requestNo,
+        stock_unit_id: readString(unit.id),
+        barcode: parsed.barcode,
+        item_id: itemId,
+        brand_id: brandId,
+        origin_id: unit.origin_id ? String(unit.origin_id) : null,
+        location_id: locationId,
+        supplier_name: parsed.supplierName,
+        status: "SUBMITTED",
+        notes: parsed.notes ?? null,
+        requested_by: context.profile.id,
+      })
+      .select("id")
+      .single()
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    await logBarcodeScan(context.supabase, {
+      barcode: parsed.barcode,
+      action: "OUTBOUND_RETURN_SUPPLIER",
+      success: true,
+      message: "Return supplier request submitted for manager review",
+      scannedBy: context.profile.id,
+    })
+    await insertAuditLog(
+      context.supabase,
+      context.profile,
+      "RETURN_SUPPLIER_REQUEST_SUBMITTED",
+      "stock_return_supplier_requests",
+      readString(asRecord(data).id),
+      parsed
+    )
+
+    return `Return supplier request ${requestNo} submitted for manager review.`
+  })
+}
+
+export async function approveReturnSupplierRequestAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(returnSupplierRequestIdSchema, formData)
+
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(formData, stockManagerRoles, async (context) => {
+    const signature = requireSignature(
+      parsed.managerSignature,
+      "Manager return supplier approval"
+    )
+    const request = await getReturnSupplierRequest(
+      context.supabase,
+      parsed.requestId
+    )
+
+    if (readString(request.status) !== "SUBMITTED") {
+      throw new Error("Only submitted return supplier requests can be approved.")
+    }
+
+    assertStockLocationAccess(
+      context.profile,
+      readString(request.location_id),
+      "approve return supplier"
+    )
+
+    const { error } = await context.supabase.rpc(
+      "approve_stock_return_supplier_request",
+      {
+        p_request_id: parsed.requestId,
+        p_manager_signature: signature,
+      }
+    )
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    return "Return supplier approved and stock deducted."
+  })
+}
+
+export async function rejectReturnSupplierRequestAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(returnSupplierRequestIdSchema, formData)
+
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(formData, stockManagerRoles, async (context) => {
+    const signature = requireSignature(
+      parsed.managerSignature,
+      "Manager return supplier rejection"
+    )
+    const request = await getReturnSupplierRequest(
+      context.supabase,
+      parsed.requestId
+    )
+
+    assertReturnSupplierCanBeRejected(readString(request.status))
+
+    assertStockLocationAccess(
+      context.profile,
+      readString(request.location_id),
+      "reject return supplier"
+    )
+
+    const { error } = await context.supabase
+      .from("stock_return_supplier_requests")
+      .update({
+        status: "REJECTED",
+        manager_reviewed_by: context.profile.id,
+        manager_reviewed_at: new Date().toISOString(),
+        manager_signature: signature,
+      })
+      .eq("id", parsed.requestId)
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    await insertAuditLog(
+      context.supabase,
+      context.profile,
+      "RETURN_SUPPLIER_REQUEST_REJECTED",
+      "stock_return_supplier_requests",
+      parsed.requestId,
+      parsed
+    )
+
+    return "Return supplier request rejected."
+  })
+}
+
+export async function noBarcodeInboundAction(
+  _state: StockActionState,
+  _formData: FormData
+): Promise<StockActionState> {
+  void _state
+  void _formData
+
+  return failure(
+    "No-barcode inbound is disabled for MVP. Generate and print a barcode label first, attach it to the item, then use Barcode Inbound."
+  )
 }
 
 export async function createStockTakeSessionAction(
@@ -1413,7 +2010,7 @@ export async function createStockTakeSessionAction(
     return parsed
   }
 
-  return runStockAction(formData, stockOperatorRoles, async (context) => {
+  return runStockAction(formData, stockManagerRoles, async (context) => {
     assertStockLocationAccess(
       context.profile,
       parsed.locationId,
@@ -1429,6 +2026,8 @@ export async function createStockTakeSessionAction(
       .insert({
         session_no: sessionNo,
         location_id: parsed.locationId,
+        item_id: parsed.itemId,
+        brand_id: parsed.brandId,
         status: "DRAFT",
         created_by: context.profile.id,
       })
@@ -1495,12 +2094,30 @@ export async function scanStockTakeBarcodeAction(
       parsed.barcode,
       "STOCK_TAKE_ADJUSTMENT"
     )
+    const unitItemId = String(unit.item_id ?? "")
+    const unitBrandId = unit.brand_id ? String(unit.brand_id) : null
 
     if (String(unit.location_id ?? "") !== String(session.location_id ?? "")) {
       await rejectBarcodeScan(context, {
         barcode: parsed.barcode,
         action: "STOCK_TAKE_ADJUSTMENT",
         message: "Barcode belongs to a different stock take location.",
+      })
+    }
+
+    try {
+      requireStockTakeScopeMatch(session, {
+        itemId: unitItemId,
+        brandId: unitBrandId,
+      })
+    } catch (error) {
+      await rejectBarcodeScan(context, {
+        barcode: parsed.barcode,
+        action: "STOCK_TAKE_ADJUSTMENT",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Barcode does not match this stock take scope.",
       })
     }
 
@@ -1529,8 +2146,8 @@ export async function scanStockTakeBarcodeAction(
       .from("stock_take_lines")
       .insert({
         session_id: parsed.sessionId,
-        item_id: String(unit.item_id ?? ""),
-        brand_id: unit.brand_id ? String(unit.brand_id) : null,
+        item_id: unitItemId,
+        brand_id: unitBrandId,
         origin_id: unit.origin_id ? String(unit.origin_id) : null,
         barcode: parsed.barcode,
         system_count: 1,
@@ -1570,51 +2187,13 @@ export async function addStockTakeLineAction(
   _state: StockActionState,
   formData: FormData
 ): Promise<StockActionState> {
-  const parsed = parseAction(stockTakeLineSchema, formData)
+  void formData
 
-  if ("status" in parsed) {
-    return parsed
+  return {
+    status: "error",
+    message:
+      "Stock take is barcode scanning only. Scan each barcode instead of adding manual count lines.",
   }
-
-  return runStockAction(formData, stockOperatorRoles, async (context) => {
-    const session = await requireStockTakeSessionStatus(context.supabase, parsed.sessionId, [
-      "DRAFT",
-    ])
-    assertStockLocationAccess(
-      context.profile,
-      String(session.location_id ?? ""),
-      "add stock take line"
-    )
-
-    const { data, error } = await context.supabase
-      .from("stock_take_lines")
-      .insert({
-        session_id: parsed.sessionId,
-        item_id: parsed.itemId,
-        system_count: parsed.systemCount,
-        actual_count: parsed.actualCount,
-        system_weight_kg: parsed.systemWeightKg,
-        actual_weight_kg: parsed.actualWeightKg,
-        notes: parsed.notes ?? null,
-      })
-      .select("id")
-      .single()
-
-    if (error) {
-      throw new Error(error.message)
-    }
-
-    await insertAuditLog(
-      context.supabase,
-      context.profile,
-      "STOCK_TAKE_LINE_ADDED",
-      "stock_take_lines",
-      String(asRecord(data).id ?? ""),
-      parsed
-    )
-
-    return "Stock take line added."
-  })
 }
 
 export async function submitStockTakeAction(
@@ -1631,6 +2210,7 @@ export async function submitStockTakeAction(
     await requireStockTakeSessionStatus(context.supabase, parsed.sessionId, [
       "DRAFT",
     ])
+    await requireStockTakeLineCount(context.supabase, parsed.sessionId)
 
     const { error } = await context.supabase
       .from("stock_take_sessions")
@@ -1667,16 +2247,24 @@ export async function reviewStockTakeAction(
     return parsed
   }
 
-  return runStockAction(formData, stockApproverRoles, async (context) => {
+  return runStockAction(formData, stockManagerRoles, async (context) => {
+    const signature = requireSignature(
+      parsed.managerSignature,
+      "Manager review"
+    )
     await requireStockTakeSessionStatus(context.supabase, parsed.sessionId, [
       "SUBMITTED",
     ])
+    await requireStockTakeLineCount(context.supabase, parsed.sessionId)
 
     const { error } = await context.supabase
       .from("stock_take_sessions")
       .update({
         status: "REVIEWED",
         reviewed_at: new Date().toISOString(),
+        manager_reviewed_by: context.profile.id,
+        manager_reviewed_at: new Date().toISOString(),
+        manager_signature: signature,
       })
       .eq("id", parsed.sessionId)
 
@@ -1707,63 +2295,20 @@ export async function approveStockTakeAction(
     return parsed
   }
 
-  return runStockAction(formData, stockApproverRoles, async (context) => {
-    await requireStockTakeSessionStatus(context.supabase, parsed.sessionId, [
-      "REVIEWED",
-    ])
-
-    const { data: linesData, error: linesError } = await context.supabase
-      .from("stock_take_lines")
-      .select("*")
-      .eq("session_id", parsed.sessionId)
-
-    if (linesError) {
-      throw new Error(linesError.message)
-    }
-
-    const lines = Array.isArray(linesData) ? linesData.map(asRecord) : []
-
-    for (const line of lines) {
-      const itemId = String(line.item_id ?? "")
-      const varianceCount = readNumber(line.variance_count)
-      const varianceWeightKg = readNumber(line.variance_weight_kg)
-
-      if (varianceCount === 0 && varianceWeightKg === 0) {
-        continue
-      }
-
-      await insertMovement(context.supabase, {
-        movementType: "STOCK_TAKE_ADJUSTMENT",
-        itemId,
-        quantity: varianceCount,
-        weightKg: varianceWeightKg,
-        referenceNo: parsed.sessionId,
-        notes: "Approved stock take variance",
-        createdBy: context.profile.id,
-      })
-    }
-
-    const { error } = await context.supabase
-      .from("stock_take_sessions")
-      .update({
-        status: "APPROVED",
-        approved_by: context.profile.id,
-        approved_at: new Date().toISOString(),
-      })
-      .eq("id", parsed.sessionId)
+  return runStockAction(formData, stockDirectorApprovalRoles, async (context) => {
+    const signature = requireSignature(
+      parsed.directorSignature,
+      "Director approval"
+    )
+    await requireStockTakeLineCount(context.supabase, parsed.sessionId)
+    const { error } = await context.supabase.rpc("approve_stock_take_session", {
+      p_session_id: parsed.sessionId,
+      p_director_signature: signature,
+    })
 
     if (error) {
       throw new Error(error.message)
     }
-
-    await insertAuditLog(
-      context.supabase,
-      context.profile,
-      "STOCK_TAKE_APPROVED",
-      "stock_take_sessions",
-      parsed.sessionId,
-      parsed
-    )
 
     return "Stock take approved and adjustments recorded."
   })
@@ -1779,17 +2324,48 @@ export async function rejectStockTakeAction(
     return parsed
   }
 
-  return runStockAction(formData, stockApproverRoles, async (context) => {
-    await requireStockTakeSessionStatus(context.supabase, parsed.sessionId, [
+  return runStockAction(
+    formData,
+    [...stockManagerRoles, "director"],
+    async (context) => {
+    const session = await requireStockTakeSessionStatus(context.supabase, parsed.sessionId, [
       "SUBMITTED",
       "REVIEWED",
     ])
+    const status = stockTakeStatus(session)
+
+    if (status === "SUBMITTED" && !hasAnyRole(context.profile, stockManagerRoles)) {
+      throw new Error("Only a department manager or admin can reject submitted stock take.")
+    }
+
+    if (
+      status === "REVIEWED" &&
+      !hasAnyRole(context.profile, stockDirectorApprovalRoles)
+    ) {
+      throw new Error("Only director or admin can reject reviewed stock take.")
+    }
+
+    const signature =
+      status === "REVIEWED"
+        ? requireSignature(parsed.directorSignature, "Director rejection")
+        : requireSignature(parsed.managerSignature, "Manager rejection")
 
     const { error } = await context.supabase
       .from("stock_take_sessions")
       .update({
         status: "REJECTED",
         reviewed_at: new Date().toISOString(),
+        ...(status === "REVIEWED"
+          ? {
+              director_approved_by: context.profile.id,
+              director_approved_at: new Date().toISOString(),
+              director_signature: signature,
+            }
+          : {
+              manager_reviewed_by: context.profile.id,
+              manager_reviewed_at: new Date().toISOString(),
+              manager_signature: signature,
+            }),
       })
       .eq("id", parsed.sessionId)
 

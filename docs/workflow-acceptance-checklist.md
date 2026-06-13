@@ -15,9 +15,9 @@ Use this as the acceptance gate before internal pilot use.
 
 - [ ] Staff can select item, brand, origin, location, inbound source, and weight-position rule once, then keep scanning the same item.
 - [ ] Camera scan can auto-fill barcode and parsed net weight from the saved barcode weight-position rule.
-- [ ] Saved barcode weight-position rule is reused for the same item/brand/origin/location.
+- [ ] Saved barcode weight-position rule is reused for the same item/brand/origin.
 - [ ] Inbound creates `stock_units`, `stock_movements`, and `barcode_scan_logs`.
-- [ ] Inbound records source as supplier/import, processing output, return, or transfer.
+- [ ] Inbound records source as supplier/import, processing output, customer return, transfer received, manual adjustment, or other.
 - [ ] Duplicate inbound barcode is blocked.
 - [ ] Outbound missing barcode is blocked.
 - [ ] Outbound sold/outbounded barcode is blocked.
@@ -25,14 +25,24 @@ Use this as the acceptance gate before internal pilot use.
 - [ ] Receive-transfer changes `location_id` only at destination scan.
 - [ ] Return changes barcode unit status to `IN_STOCK`.
 - [ ] Stock take scan rejects wrong-location barcode.
-- [ ] Stock take adjustment is applied only after admin/director approval.
+- [ ] Stock take adjustment is applied only after manager review and director final approval.
+- [ ] Missing expected stock-take barcodes become variance and are adjusted out only after director final approval.
 - [ ] General worker cannot see another stock location.
-- [ ] Director can view stock dashboards/reports and approve stock take, but cannot run routine stock inbound/outbound/transfer/receive/return/no-barcode workflows.
+- [ ] Director can view stock dashboards/reports and approve stock take, but cannot run routine stock inbound/outbound/transfer/receive/return workflows.
+- [ ] `/stock/no-barcode-inbound` redirects to Barcode Inbound and new loose no-barcode inbound is blocked server-side.
 - [ ] Order outbound requires a ready customer order before confirmation.
 - [ ] Order outbound shows scanned list, item count, known total weight, and unknown scan count.
 - [ ] Order outbound confirmation stays disabled until a barcode is scanned.
 - [ ] Order outbound transfer confirmation stays disabled until a destination location is selected.
 - [ ] Order outbound writes outbound batch, batch lines, stock movements, scan logs, and final stock-unit status.
+- [ ] Direct outbound allows `SALES`, `TRANSFER`, and `PROCESSING` without a customer order.
+- [ ] Direct outbound writes outbound batch, batch lines with `order_id = null`, stock movements, scan logs, and final stock-unit status.
+- [ ] Damage/spoilage requires photo, reason, manager review, and director approval before stock is deducted.
+- [ ] Return supplier requires request and manager approval before stock is deducted.
+- [ ] Customer return after sale goes to inspection before it can become sellable stock.
+- [ ] Failed delivery linked barcode stock returns to `IN_STOCK` and writes return movement/scan logs.
+- [ ] Stock reports include stock balance, stock take variance, damage/spoilage, and return supplier rows.
+- [ ] Stock reports support CSV export, print/PDF-ready view, and WhatsApp-ready summary text.
 - [ ] Seeded order outbound can be tested with `ORD-SEED-PICKUP-001`, `EM-SEED-OUT-001`, and `EM-SEED-OUT-002` after running `supabase/seed.sql`.
 
 ## Orders

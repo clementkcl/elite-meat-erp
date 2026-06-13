@@ -42,6 +42,18 @@ const stockRoles: UserRole[] = [
   "director",
 ]
 
+const stockItemMasterRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "delivery_team_general_worker",
+  "delivery_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "account",
+  "admin",
+  "director",
+]
+
 const stockOperatorShortcutRoles: UserRole[] = stockRoles.filter(
   (role) => role !== "director"
 )
@@ -91,6 +103,14 @@ const shortcuts: Shortcut[] = [
     moduleKey: "attendance",
     roles: attendanceRoles.filter((role) => role !== "director"),
     icon: CalendarCheck,
+  },
+  {
+    href: "/stock/items",
+    label: "Item Master",
+    description: "Create or edit numeric item codes and item names.",
+    moduleKey: "stock",
+    roles: stockItemMasterRoles,
+    icon: PackageCheck,
   },
   {
     href: "/stock/inbound",

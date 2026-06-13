@@ -30,28 +30,64 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 
 ### Stock / Inventory
 
-- Item master supports editable `item_code`, category, section, name, barcode requirement, and active status.
-- Item master create/edit is allowed for stock staff, stock manager, and admin.
+- Item master supports editable numeric-only `item_code`, category, default brand, section, name, Chinese name, Iban name, barcode requirement, active status, and default low stock level.
+- Item master product identity is category plus default brand plus product section/name. Brand is still captured on barcode stock units, barcode rules, prices, damage/return requests, and stock-take scope for actual stock traceability.
+- Item master create/edit is allowed for every ERP role when that user's outlet has Stock module access. Item master delete remains admin/director only.
+- Old non-numeric item codes are converted to the next numeric `0001`-style code by the stock inbound/label migration before the numeric-only item-code constraint is applied.
 - Stock inbound, outbound, and transfer are allowed for outlet staff with stock module access.
+- Create/edit item master is allowed for every ERP role with Stock module access. Item deletion is admin/director only.
 - Temporary negative stock is allowed and stock balance/dashboard/report surfaces show a clear alert when no-barcode quantity or weight goes below zero.
 - Staff manually chooses batch/barcode. Do not force FIFO/FEFO yet.
 - Duplicate item code and duplicate inbound barcode are blocked.
-- Barcode stock is tracked in `stock_units`.
-- Loose/non-barcode stock is tracked in `no_barcode_stock`.
+- Item master updates must fail clearly if the selected item no longer exists or the user's role cannot update it.
+- Barcode stock is the main stock model for MVP. Every stock unit should have a barcode.
+- If an item has no supplier/import barcode, staff generate and print an internal numeric barcode label first, attach it, then inbound/outbound the item normally.
+- Legacy loose/non-barcode tables still exist for compatibility and older records, but new MVP stock flow should use barcode labels instead of creating a separate no-barcode balance.
+- New no-barcode inbound is disabled in the Stock module; `/stock/no-barcode-inbound` redirects to Barcode Inbound.
 - Inbound writes stock units, stock movements, and barcode scan logs.
+- Barcode inbound writes the stock unit, movement row, scan log, audit log, and optional item+brand+origin weight rule atomically through a database RPC.
+- Continuous barcode inbound shows the current scan preset, saved scan count, saved total weight, and recent inbound scans/labels for the current worker session.
+- Barcode inbound starts with recent item+brand+origin templates so workers can reuse a saved setup and scan immediately.
+- Barcode inbound auto-generates a batch number when the page opens; workers do not need to press Start Batch.
+- Inbound location defaults to the user's assigned stock location, but remains editable subject to role/location restrictions.
+- Brand and origin are required for barcode inbound.
+- If a scanned barcode cannot decode weight confidently, workers must use generated barcode label printing rather than saving the supplier barcode with a manually typed weight.
+- Low-confidence fixed-weight fallback still asks staff to confirm or correct the weight before saving.
+- Current-session inbound undo voids the stock unit and writes an `INBOUND_VOID` movement, scan log, and audit log. It must not delete stock units or movements silently.
+- After a worker finishes an inbound session, normal workers should ask a manager/admin to correct mistakes.
 - Expiry date is not required.
 - Inbound date is recorded on barcode stock units and used to estimate stock age.
 - Stock dashboard/report surfaces show stock age alerts above 6 months and 12 months.
 - Transfers should not change stock location until receive-transfer scan.
 - Returns restore stock unit status to `IN_STOCK`.
-- Damaged/spoiled stock requires director approval before deduction.
-- Stock take can be created/submitted by stock operators.
+- Normal stock return updates the barcode unit, movement row, scan log, and audit log atomically through a database RPC.
+- Customer return after sale goes to `HOLD` or `INSPECTION` first before becoming sellable stock again.
+- Manager/admin inspection release is required before customer-return inspection stock becomes `IN_STOCK`.
+- Inspection release updates the barcode unit, movement row, scan log, and audit log atomically through a database RPC.
+- Failed delivery return automatically restores linked barcode stock to `IN_STOCK`.
+- No-barcode failed delivery return is not required for MVP because no-barcode stock should be converted to barcode stock before operational movement.
+- Damaged/spoiled stock requires staff request with photo, department manager review, then director approval before deduction.
+- Damage/spoilage reasons are expired, broken packaging, smell, wrong temperature, customer rejected, and other.
+- Return supplier stock requires staff request, department manager approval, then stock deduction.
+- Stock take sessions are created by department managers/admin for one location and one item+brand scope.
+- Staff can scan/count barcode stock for the scoped stock take session.
+- While a stock take is open, inbound/outbound/transfer/return actions are blocked only for the selected item+brand in that location.
+- Stock take counting is barcode scanning only.
 - Stock take adjustment needs department manager approval first, then director final approval.
+- Manager and director electronic signatures are required for stock take review/final approval.
 - Stock take adjustments happen only after both approval steps.
+- At director final approval, expected in-stock/returned barcode units in the selected item+brand+location are compared with scanned barcodes. Missing barcodes are recorded as stock-take variance and adjusted out only after approval.
+- Stock reports group stock by item, brand, location, and inbound age.
+- Stock reports include stock balance, stock take variance, damage/spoilage, and return-supplier summaries.
+- Damage/spoilage and return-supplier report rows should include linked barcode stock-unit weight when available.
+- Stock reports support CSV export, print/PDF-ready view, and WhatsApp-ready summary text.
+- Stock dashboard KPIs include total stock weight, barcode units, today inbound, today outbound, pending transfers, legacy no-barcode visibility, stock-take variance, negative-stock alerts, and stock-age alerts.
+- Stock dashboard shortcuts link stock operators/admins to inbound, outbound, transfer, receive-transfer, and return workflows. Director/view-only users should not see routine operation shortcuts.
 
 ### Barcode Rules
 
-- Barcode weight rules differ by item and brand.
+- Barcode weight rules differ by item, brand, and origin.
+- Brand and origin are selected from dropdown lists, with Other/custom entry allowed during inbound.
 - Weight is normally encoded in kilograms.
 - GS1 AI `3102` means kilograms with 2 decimals.
 - GS1 AI `3103` means kilograms with 3 decimals.
@@ -59,6 +95,11 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 - Position rules support 1, 2, or 3 decimals.
 - Some items use fixed weight; fixed-weight fallback requires manual confirmation.
 - If barcode weight cannot be decoded confidently, staff must see a clear error and manually confirm weight before saving.
+- Internal generated barcode labels are numeric only and are based on date, numeric item code, weight in grams, and a serial number. The barcode itself does not include `KG` text.
+- Internal generated barcode labels must skip existing stock-unit barcodes and labels generated during the current inbound session before printing.
+- Thermal label output is 50mm x 30mm with company name, product name, weight, and barcode. Browser print/export is used to save labels as PDF, one label per page.
+- Historical barcode labels can be reprinted from the stock-unit detail page.
+- Stock-unit detail history should include movements linked by stock unit id or barcode so older incomplete movement rows remain auditable.
 
 ### Orders
 
@@ -77,11 +118,21 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 
 ### Outbound
 
-- Outbound is order-based.
-- A ready customer order must be selected before outbound confirmation.
+- Outbound supports order-based and direct stock movement batches.
+- A ready customer order must be selected before order-based outbound confirmation.
+- Outbound types are `SALES`, `TRANSFER`, `PROCESSING`, `DAMAGE`/`SPOILED`, and `RETURN_SUPPLIER`.
+- Direct outbound is allowed for `SALES`, `TRANSFER`, and `PROCESSING` stock movement.
+- Damage/spoilage and supplier-return stock deduction must use their review/approval workflows instead of direct outbound.
+- Outbound scanning is batch-first: staff scan multiple barcodes continuously, then confirm the outbound batch.
 - Scans are batched into outbound batch and batch-line records.
-- Atomic RPC blocks duplicate lines, missing barcodes, invalid barcode state, wrong location, invalid transfer destination, and non-ready orders.
+- Order outbound may scan different/substituted items under the same order. The original ordered item remains on the order item line and the scanned/substituted item is recorded on the outbound batch line.
+- If scanned order-outbound quantity or weight differs from requested quantity or weight, show a warning but allow staff to continue.
+- Atomic RPCs block duplicate lines, missing barcodes, already-outbounded barcodes, wrong-status barcodes, wrong-location barcodes, invalid transfer destination, and non-ready orders for order-based outbound.
+- Outbound batch UI should pre-block transfer scans where the selected destination is the same as the barcode unit's current location.
 - Transfer outbound sets `TRANSFER_PENDING`; receive-transfer later changes location.
+- Transfer and receive-transfer update the barcode unit, movement row, scan log, and audit log atomically through database RPCs.
+- Transfers still pending after 3 days show an overdue receive alert.
+- Transfer cannot be cancelled after scanned out.
 
 ### Processing
 
@@ -156,8 +207,8 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 
 - Manual confirmation that every role/scope rule holds with real Supabase Auth users.
 - Multi-outlet/multi-location staff access model.
-- Manager then director stock-take adjustment approval chain.
-- Director approval workflow for damaged/spoiled stock deduction.
+- Real Supabase QA evidence for manager then director stock-take adjustment approval.
+- Real Supabase QA evidence for director-approved damaged/spoiled stock deduction.
 - Manual reservation release when customer cancels after picking starts.
 - Overdue credit warning display during order entry.
 - Real-world pricing application from customer price rules into all order/retail line calculations.
@@ -165,7 +216,7 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 - AutoCount-format aging buckets.
 - Full multiple-raw to multiple-finished processing model.
 - Finished-product barcode generation from processing output.
-- Failed-delivery return workflow for standalone deliveries and loose/no-barcode stock.
+- Failed-delivery return workflow for standalone deliveries and loose/no-barcode stock links.
 - Real WhatsApp integration.
 - Import document upload workflow and storage verification.
 - Full leave balance workflow automation.

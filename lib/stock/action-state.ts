@@ -1,6 +1,9 @@
 export type StockActionState = {
   status: "idle" | "success" | "error"
   message: string
+  itemId?: string
+  stockUnitId?: string
+  voidedStockUnitId?: string
 }
 
 export const initialStockActionState: StockActionState = {

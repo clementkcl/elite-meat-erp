@@ -45,6 +45,7 @@ const requiredRoutes = [
   "app/(erp)/stock/receive-transfer/page.tsx",
   "app/(erp)/stock/return/page.tsx",
   "app/(erp)/stock/stock-take/page.tsx",
+  "app/(erp)/stock/units/[id]/page.tsx",
   "app/(erp)/orders/page.tsx",
   "app/(erp)/orders/new/page.tsx",
   "app/(erp)/orders/[id]/page.tsx",
@@ -148,13 +149,22 @@ assert(
 )
 
 const workflowForms = read("components/stock/workflow-forms.tsx")
+const stockPageSource = read("components/stock/stock-page.tsx")
+const stockUnitDetail = read("components/stock/stock-unit-detail.tsx")
+const stockDataSource = read("lib/stock/data.ts")
+const itemCodeRules = read("lib/stock/item-code.ts")
 const barcodeFieldCount = workflowForms.match(/<BarcodeField/g)?.length ?? 0
 assert(
   barcodeFieldCount >= 6,
   `Expected scanner fields in six workflows, found ${barcodeFieldCount}`
 )
 for (const fragment of [
-  "function generatedItemCode",
+  "Chinese name",
+  "Iban name",
+  'placeholder="0007"',
+  "Product name",
+  "Default brand",
+  "Default low stock kg",
   "itemCodeEdited",
   "const canCreateItem",
   "const canUpdateItem",
@@ -162,32 +172,68 @@ for (const fragment of [
   "name=\"itemCode\"",
   "updateItemAction",
   "name=\"isActive\"",
-  "Enter section, name, and item code before creating the item.",
+  "Enter name and a numeric item code before creating the item.",
   "Select an item before updating item master details.",
   "defaultValue={selectedItem.itemCode}",
+  "defaultValue={selectedItem.defaultBrandId ?? \"\"}",
   "Confirm outbound batch",
   "barcodesJson",
   "const confirmDisabled",
   "setBarcodes([])",
   "disabled={confirmDisabled}",
-  "Select a ready order, scan at least one barcode",
+  "Select a ready order, scan at least one valid barcode",
+  "remove missing or blocked scans",
   "const activeItems = items.filter((item) => item.active)",
   "const activeBrands = brands.filter((brand) => brand.active)",
   "const activeOrigins = origins.filter((origin) => origin.active)",
   "const activeLocations = locations.filter((location) => location.active)",
   "function normalizeInboundPreset",
-  "initialInboundPreset(items, locations, brands, origins)",
+  "initialInboundPreset(items, locations, brands, origins, defaultLocationId)",
+  "allowOther",
+  "Other / custom brand",
+  "Other / custom origin",
+  "customer_return",
+  "transfer_received",
+  "manual_adjustment",
+  "Generate label barcode",
+  "Export labels PDF",
+  "50mm x 30mm",
+  "Duplicate barcode warning",
+  "vibrateAndBeep",
   "activeBrandIds.has(preset.brandId)",
   "activeOriginIds.has(preset.originId)",
   "totalWeightKg.toFixed(3)",
   "canOperate: boolean",
-  "canApprove: boolean",
+  "canManage: boolean",
+  "canDirectorApprove: boolean",
   "Counting and scan entry are",
   "reserved for stock operators.",
   "canOperate ?",
-  "canApprove ?",
+  "canManage ?",
+  "canDirectorApprove ?",
+  "Managers open a barcode count for one item and brand at one stock location.",
+  "Barcode-only count",
+  "Manual count entry is disabled for MVP.",
+  "Manager signature:",
+  "Director signature:",
+  "Damage / spoilage approval",
+  "Submit damage request",
+  "Return supplier approval",
+  "Submit return supplier",
+  "Manager approve",
+  "Manager review",
+  "Director approve",
+  "Photo path / upload reference",
 ]) {
   assert(workflowForms.includes(fragment), `Workflow forms missing: ${fragment}`)
+}
+for (const fragment of [
+  "function generatedItemCode",
+  "function nextItemCode",
+  "padStart(4, \"0\")",
+  "function isNumericItemCode",
+]) {
+  assert(itemCodeRules.includes(fragment), `Item code rules missing: ${fragment}`)
 }
 assert(
   workflowForms.includes('order.status === "READY_FOR_PICKUP"') &&
@@ -204,34 +250,165 @@ assert(
     barcodeWeight.includes("manual_confirmation_required"),
   "Barcode weight decoder must support GS1 3102/3103, fixed fallback, and manual confirmation"
 )
+const stockWorkflowRegression = read("scripts/stock-workflow-regression.mjs")
+for (const fragment of [
+  "5363704999000267800078252512525227068224013687",
+  "910293079163102001446",
+  "011843560100965431030176701527080810310066026",
+  "000844512473539709000",
+  "makeInternalBarcode",
+  "Generated barcode must be numeric only.",
+]) {
+  assert(
+    stockWorkflowRegression.includes(fragment),
+    `Stock workflow regression missing: ${fragment}`
+  )
+}
 assert(
-  workflowForms.includes("decodeBarcodeWeight") &&
+    workflowForms.includes("decodeBarcodeWeight") &&
     workflowForms.includes("fixedWeightKg") &&
-    workflowForms.includes("decoded.status === \"decoded\""),
-  "Barcode inbound form must use centralized decoder and avoid auto-save when manual confirmation is required"
+    workflowForms.includes("decoded.status === \"decoded\"") &&
+    workflowForms.includes("makeUniqueInternalBarcode") &&
+    read("lib/stock/barcode-label.ts").includes("weightGrams") &&
+    read("lib/stock/barcode-label.ts").includes("blockedBarcodes"),
+  "Barcode inbound form must use centralized decoder, avoid auto-save when manual confirmation is required, and generate unused labels"
+)
+const noBarcodeRoute = read("app/(erp)/stock/no-barcode-inbound/page.tsx")
+assert(
+  noBarcodeRoute.includes('redirect("/stock/inbound")'),
+  "No-barcode inbound route must redirect to Barcode Inbound for MVP label-first flow"
+)
+assert(
+  workflowForms.includes("No-barcode stock needs a label first") &&
+    workflowForms.includes("Open Barcode Inbound") &&
+    workflowForms.includes("New loose no-barcode balances are disabled") &&
+    !workflowForms.includes('submitLabel="Save no-barcode inbound"'),
+  "No-barcode UI must guide staff to generate/print a barcode label first"
+)
+assert(
+  stockPageSource.includes("Barcode stock units") &&
+    stockPageSource.includes("getRowHref={(row) => `/stock/units/${row.id}`}"),
+  "Stock balance page must link barcode stock units to the detail/reprint page"
+)
+assert(
+  stockPageSource.includes("Legacy qty") &&
+    stockPageSource.includes("Barcode stock with legacy loose balances kept visible") &&
+    stockDataSource.includes("Legacy no-barcode weight") &&
+    stockDataSource.includes("Visible for old records only"),
+  "Stock balance/dashboard must present no-barcode balances as legacy visibility, not an active MVP stock workflow"
+)
+assert(
+  stockPageSource.includes("Stock balance by item, brand, location, inbound age") &&
+    stockPageSource.includes("<ReportToolbar") &&
+    stockDataSource.includes('reportName: "Stock by location"') &&
+    stockDataSource.includes('reportName: "Stock by category"') &&
+    stockDataSource.includes('reportName: "Stock by inbound age"') &&
+    stockDataSource.includes("sixMonthStockAgeDays") &&
+    stockDataSource.includes("twelveMonthStockAgeDays") &&
+    stockDataSource.includes('reportName: "Stock take variance"') &&
+    stockDataSource.includes('reportName: "Damage/spoilage"') &&
+    stockDataSource.includes('reportName: "Return supplier"'),
+  "Stock reports must cover balance, inbound age, variance, damage/spoilage, return supplier, and export toolbar"
+)
+assert(
+  stockUnitDetail.includes("Print / Export PDF label") &&
+    stockUnitDetail.includes("@page") &&
+    stockUnitDetail.includes("size: 50mm 30mm") &&
+    stockUnitDetail.includes("window.print()") &&
+    stockUnitDetail.includes("stock-label-print-area"),
+  "Stock unit detail page must support 50mm x 30mm label reprint/export"
 )
 
 const stockActions = read("lib/stock/actions.ts")
+const stockActionRules = stockActions + read("lib/stock/outbound-rules.ts")
+const stockTakeActionRules = stockActions + read("lib/stock/stock-take-rules.ts")
 assert(
-  !stockActions.includes("export async function outboundSalesAction") &&
-    !stockActions.includes("const barcodeOutboundSchema"),
-  "Stock outbound must only use the order-based batch confirmation action"
+  stockActions.includes("export async function confirmOrderOutboundAction") &&
+    stockActions.includes("export async function confirmDirectOutboundAction") &&
+    stockActions.includes('"confirm_order_outbound_batch"') &&
+    stockActions.includes('"confirm_direct_outbound_batch"'),
+  "Stock outbound must support both order-based and direct atomic batch confirmation"
 )
 assert(
   stockActions.includes("assertStockLocationAccess"),
   "Stock actions must enforce stock-location access"
 )
 assert(
+  stockActions.includes("export async function noBarcodeInboundAction") &&
+    stockActions.includes("No-barcode inbound is disabled for MVP") &&
+    !stockActions.includes('.from("no_barcode_stock")'),
+  "No-barcode inbound action must block new loose no-barcode stock creation"
+)
+assert(
   stockActions.includes('canAccessModule(profile, "stock")'),
   "Stock actions must enforce stock module access"
 )
 assert(
-  stockActions.includes('status: "IN_STOCK"'),
-  "Return stock must restore IN_STOCK status"
+  read("supabase/migrations/202606100048_atomic_stock_return_rpc_v1.sql").includes(
+    "status = 'IN_STOCK'"
+  ) &&
+    read(
+      "supabase/migrations/202606100049_atomic_inspection_release_rpc_v1.sql"
+    ).includes("set status = 'IN_STOCK'"),
+  "Return and inspection release RPCs must restore IN_STOCK status"
+)
+assert(
+  stockActions.includes("export async function releaseInspectionStockAction") &&
+    stockActions.includes('"release_inspection_stock_unit"') &&
+    stockActions.includes("status !== \"INSPECTION\" && status !== \"HOLD\""),
+  "Customer return inspection stock must have a manager/admin release path back to IN_STOCK"
 )
 assert(
   stockActions.includes("Barcode already exists"),
   "Duplicate inbound barcode must be blocked"
+)
+assert(
+  stockActions.includes("Inactive products cannot receive new inbound stock.") &&
+    stockActions.includes("resolveNamedRecordId") &&
+    stockActions.includes('"inbound_stock_unit"') &&
+    read("supabase/migrations/202606100050_atomic_barcode_inbound_rpc_v1.sql").includes(
+      "location_id is null"
+    ) &&
+    read("supabase/migrations/202606100050_atomic_barcode_inbound_rpc_v1.sql").includes(
+      "insert into public.barcode_weight_rules"
+    ),
+  "Stock inbound must block inactive items, allow custom brand/origin, save global item/brand/origin barcode rules, and use atomic RPC"
+)
+assert(
+  stockActions.includes("assertStockNotLockedByTake") &&
+    stockActions.includes("Cannot ${input.action}") &&
+    stockTakeActionRules.includes("requireStockTakeScopeMatch") &&
+    stockTakeActionRules.includes("signature is required.") &&
+    stockTakeActionRules.includes("Manager review") &&
+    stockTakeActionRules.includes("Director approval") &&
+    stockActions.includes("stockManagerRoles") &&
+    stockActions.includes("stockDirectorApprovalRoles") &&
+    stockActions.includes('"approve_stock_take_session"') &&
+    stockActions.includes("p_director_signature: signature"),
+  "Stock take actions must enforce scoped lock, manager review, director approval, signatures, and atomic approval RPC"
+)
+assert(
+  stockActions.includes('const orderOutboundTypes = ["SALES", "TRANSFER", "PROCESSING"]') &&
+    !stockActions.includes('"SPOILED"] as const') &&
+    stockActions.includes("createDamageRequestAction") &&
+    stockActions.includes("reviewDamageRequestAction") &&
+    stockActions.includes("approveDamageRequestAction") &&
+    stockActions.includes("rejectDamageRequestAction") &&
+    stockActions.includes("Damage photo is required.") &&
+    stockActions.includes('"approve_stock_damage_request"') &&
+    stockActions.includes("p_director_signature: signature") &&
+    stockActions.includes("Damage request approved and stock deducted."),
+  "Damage/spoilage must use request/review/director approval and atomic RPC before stock deduction"
+)
+assert(
+  stockActions.includes("createReturnSupplierRequestAction") &&
+    stockActions.includes("approveReturnSupplierRequestAction") &&
+    stockActions.includes("rejectReturnSupplierRequestAction") &&
+    stockActions.includes("Supplier name is required.") &&
+    stockActions.includes('"approve_stock_return_supplier_request"') &&
+    stockActions.includes("p_manager_signature: signature") &&
+    stockActions.includes("Return supplier approved and stock deducted."),
+  "Return supplier must use request/manager approval and atomic RPC before stock deduction"
 )
 assert(
   !(
@@ -260,8 +437,10 @@ for (const fragment of [
   "was not found or is inactive.",
   "All barcodes in one outbound batch must come from the same location.",
   "Transfer destination must be different from the current location.",
+  "Cannot ${input.action}",
+  "Stock take session created.",
 ]) {
-  assert(stockActions.includes(fragment), `Stock action missing: ${fragment}`)
+  assert(stockActionRules.includes(fragment), `Stock action missing: ${fragment}`)
 }
 
 const ordersActions = read("lib/orders/actions.ts")
@@ -501,6 +680,36 @@ for (const fragment of [
   )
 }
 
+const directOutboundMigration = read(
+  "supabase/migrations/202606100041_direct_outbound_batches_v1.sql"
+)
+for (const fragment of [
+  "alter table public.stock_outbound_batches",
+  "alter column order_id drop not null",
+  "alter table public.stock_outbound_batch_lines",
+  "create or replace function public.can_access_stock_outbound_batch",
+  "drop policy if exists \"stock users can read scoped outbound batches\"",
+  "drop policy if exists \"stock users can insert scoped outbound batches\"",
+  "drop policy if exists \"stock users can update scoped outbound batches\"",
+  "drop policy if exists \"stock users can read scoped outbound batch lines\"",
+  "drop policy if exists \"stock users can insert scoped outbound batch lines\"",
+  "create or replace function public.confirm_direct_outbound_batch",
+  "p_outbound_type not in ('SALES', 'TRANSFER', 'PROCESSING')",
+  "session.status in ('DRAFT', 'SUBMITTED', 'REVIEWED')",
+  "insert into public.stock_outbound_batches",
+  "insert into public.stock_outbound_batch_lines",
+  "order_id,",
+  "null,",
+  "'DOUT-'",
+  "'DIRECT_OUTBOUND_CONFIRMED'",
+  "grant execute on function public.confirm_direct_outbound_batch",
+]) {
+  assert(
+    directOutboundMigration.includes(fragment),
+    `Direct outbound migration missing: ${fragment}`
+  )
+}
+
 const orderWorkflowGuardMigration = read(
   "supabase/migrations/202606100029_order_workflow_guards_v1.sql"
 )
@@ -560,6 +769,180 @@ assert(
     !stockDirectorViewMigration.includes("public.is_admin_or_director()"),
   "Stock director view migration must not grant director routine stock operation helpers"
 )
+
+const stockInboundLabelsRulesMigration = read(
+  "supabase/migrations/202606100037_stock_inbound_labels_rules_v1.sql"
+)
+for (const fragment of [
+  "drop constraint if exists items_item_code_numeric_only_check",
+  "item_code ~ '^[0-9]+$'",
+  "customer_return",
+  "transfer_received",
+  "manual_adjustment",
+  "alter column location_id drop not null",
+  "idx_barcode_weight_rules_item_brand_origin",
+  "drop policy if exists \"stock users can read scoped barcode weight rules\"",
+  "location_id is null and public.can_manage_stock()",
+  "with check (public.can_manage_stock())",
+  "using (public.can_administer_stock())",
+]) {
+  assert(
+    stockInboundLabelsRulesMigration.includes(fragment),
+    `Stock inbound labels/rules migration missing: ${fragment}`
+  )
+}
+
+const itemMasterAllRolesMigration = read(
+  "supabase/migrations/202606100044_item_master_all_roles_v1.sql"
+)
+for (const fragment of [
+  "create or replace function public.can_edit_item_master()",
+  "public.has_role('account')",
+  "drop policy if exists \"stock admins can insert items\"",
+  "drop policy if exists \"all erp users can insert item master\"",
+  "create policy \"all erp users can insert item master\"",
+  "with check (public.can_edit_item_master())",
+  "create policy \"all erp users can update item master\"",
+  "using (public.can_edit_item_master())",
+  "create policy \"stock admins can delete items\"",
+  "using (public.can_administer_stock())",
+]) {
+  assert(
+    itemMasterAllRolesMigration.includes(fragment),
+    `Item master all-roles migration missing: ${fragment}`
+  )
+}
+
+const itemMasterDefaultBrandMigration = read(
+  "supabase/migrations/202606100045_item_master_default_brand_v1.sql"
+)
+for (const fragment of [
+  "add column if not exists default_brand_id",
+  "references public.brands(id) on delete set null",
+  "drop constraint if exists items_category_section_name_key",
+  "idx_items_category_default_brand_section_name_unique",
+  "on public.items(category, default_brand_id, section, name)",
+  "nulls not distinct",
+  "idx_items_default_brand",
+]) {
+  assert(
+    itemMasterDefaultBrandMigration.includes(fragment),
+    `Item master default brand migration missing: ${fragment}`
+  )
+}
+
+const stockTakeScopedApprovalMigration = read(
+  "supabase/migrations/202606100038_stock_take_scoped_approval_v1.sql"
+)
+for (const fragment of [
+  "add column if not exists item_id",
+  "add column if not exists brand_id",
+  "manager_reviewed_by",
+  "manager_signature",
+  "director_approved_by",
+  "director_signature",
+  "create or replace function public.can_manage_stock_take()",
+  "create or replace function public.can_director_approve_stock_take()",
+  "drop policy if exists \"stock managers can review stock take sessions\"",
+  "create policy \"stock managers can review stock take sessions\"",
+  "create policy \"stock directors can approve reviewed stock take sessions\"",
+  "session.item_id = stock_take_lines.item_id",
+  "session.brand_id is not distinct from stock_take_lines.brand_id",
+]) {
+  assert(
+    stockTakeScopedApprovalMigration.includes(fragment),
+    `Stock take scoped approval migration missing: ${fragment}`
+  )
+}
+
+const stockDamageApprovalMigration = read(
+  "supabase/migrations/202606100039_stock_damage_approval_v1.sql"
+)
+for (const fragment of [
+  "create table if not exists public.stock_damage_requests",
+  "photo_path text not null",
+  "idx_stock_damage_requests_open_unit",
+  "status in ('SUBMITTED', 'MANAGER_REVIEWED')",
+  "create policy \"stock users can create scoped damage requests\"",
+  "create policy \"stock managers can review damage requests\"",
+  "create policy \"stock directors can approve damage requests\"",
+  "using (public.can_administer_stock())",
+]) {
+  assert(
+    stockDamageApprovalMigration.includes(fragment),
+    `Stock damage approval migration missing: ${fragment}`
+  )
+}
+
+const stockReturnSupplierApprovalMigration = read(
+  "supabase/migrations/202606100040_stock_return_supplier_approval_v1.sql"
+)
+for (const fragment of [
+  "alter type public.stock_movement_type add value if not exists 'OUTBOUND_RETURN_SUPPLIER'",
+  "create table if not exists public.stock_return_supplier_requests",
+  "supplier_name text not null",
+  "idx_stock_return_supplier_requests_open_unit",
+  "create policy \"stock users can create scoped return supplier requests\"",
+  "create policy \"stock managers can review return supplier requests\"",
+  "using (public.can_administer_stock())",
+]) {
+  assert(
+    stockReturnSupplierApprovalMigration.includes(fragment),
+    `Stock return supplier approval migration missing: ${fragment}`
+  )
+}
+
+const atomicStockApprovalMigration = read(
+  "supabase/migrations/202606100042_atomic_stock_approval_rpcs_v1.sql"
+)
+for (const fragment of [
+  "drop function if exists public.approve_stock_damage_request(uuid, text)",
+  "drop function if exists public.approve_stock_return_supplier_request(uuid, text)",
+  "create or replace function public.approve_stock_damage_request",
+  "create or replace function public.approve_stock_return_supplier_request",
+  "for update",
+  "public.can_director_approve_stock_take()",
+  "public.can_manage_stock_take()",
+  "status = 'DIRECTOR_APPROVED'",
+  "status = 'MANAGER_REVIEWED'",
+  "'OUTBOUND_SPOILED'",
+  "'OUTBOUND_RETURN_SUPPLIER'",
+  "'DAMAGE_REQUEST_DIRECTOR_APPROVED'",
+  "'RETURN_SUPPLIER_REQUEST_APPROVED'",
+  "'atomic', true",
+  "grant execute on function public.approve_stock_damage_request(uuid, text) to authenticated",
+  "grant execute on function public.approve_stock_return_supplier_request(uuid, text) to authenticated",
+]) {
+  assert(
+    atomicStockApprovalMigration.includes(fragment),
+    `Atomic stock approval migration missing: ${fragment}`
+  )
+}
+
+const atomicStockTakeApprovalMigration = read(
+  "supabase/migrations/202606100043_atomic_stock_take_approval_rpc_v1.sql"
+)
+for (const fragment of [
+  "drop function if exists public.approve_stock_take_session(uuid, text)",
+  "create or replace function public.approve_stock_take_session",
+  "returns integer",
+  "for update",
+  "public.can_director_approve_stock_take()",
+  "public.can_access_stock_location(session_record.location_id)",
+  "line_record.item_id <> session_record.item_id",
+  "line_record.brand_id is distinct from session_record.brand_id",
+  "'STOCK_TAKE_ADJUSTMENT'",
+  "status = 'APPROVED'",
+  "'STOCK_TAKE_APPROVED'",
+  "'adjustmentCount', adjustment_count",
+  "'atomic', true",
+  "grant execute on function public.approve_stock_take_session(uuid, text) to authenticated",
+]) {
+  assert(
+    atomicStockTakeApprovalMigration.includes(fragment),
+    `Atomic stock take approval migration missing: ${fragment}`
+  )
+}
 
 const settingsMigration = read(
   "supabase/migrations/202606100032_admin_settings_customer_pricing_v1.sql"
@@ -818,6 +1201,7 @@ assert(
 )
 
 const stockPage = read("components/stock/stock-page.tsx")
+const stockReportExport = read("lib/stock/report-export.ts")
 assert(
   stockPage.includes("Order outbound unavailable") &&
     stockPage.includes("Check that the Orders migrations were applied before using") &&
@@ -825,25 +1209,44 @@ assert(
   "Stock outbound must show a setup error when Orders data cannot load"
 )
 assert(
+  workflowForms.includes("orderItems: CustomerOrderItem[]") &&
+    workflowForms.includes("Order scan warning - check before confirming") &&
+    workflowForms.includes("Substitution scanned") &&
+    workflowForms.includes("scanned batch will be recorded separately from the original") &&
+    stockPage.includes("orderItems={ordersResult.ordersData.items}"),
+  "Order outbound must warn on requested-vs-scanned differences and visible substitutions while allowing MVP substitution"
+)
+assert(
   stockPage.includes("const stockOperatorRoles: UserRole[] = stockRoles.filter") &&
+    stockPage.includes("const stockItemMasterRoles: UserRole[]") &&
+    stockPage.includes("defaultBrandName") &&
+    stockPage.includes('"account"') &&
+    stockPage.includes("items: stockItemMasterRoles") &&
     stockPage.includes('role !== "director"') &&
     stockPage.includes("const stockRouteRoles: Partial<Record<StockRoute, UserRole[]>>") &&
     stockPage.includes("stockRouteRoles[route] ?? stockRoles") &&
     stockPage.includes("canOperateStock") &&
-    stockPage.includes("canApproveStock"),
+    stockPage.includes("canManageStockTake") &&
+    stockPage.includes("canDirectorApproveStockTake"),
   "Stock pages must block director from routine stock operation routes while preserving stock view routes"
 )
 assert(
   stockPage.includes("NegativeStockAlertPanel") &&
     stockPage.includes("NEGATIVE_STOCK") &&
-    stockPage.includes("Negative stock alerts:"),
+    stockReportExport.includes("Negative stock alerts:"),
   "Stock pages must surface temporary negative stock alerts in UI and report summaries"
 )
 assert(
   stockPage.includes("StockAgeAlertPanel") &&
-    stockPage.includes("Stock age alerts:") &&
+    stockReportExport.includes("Stock age alerts:") &&
     stockPage.includes("OVER_12_MONTHS"),
   "Stock pages must surface 6-month and 12-month stock age alerts in UI and report summaries"
+)
+assert(
+  stockPage.includes("TransferPendingAlertPanel") &&
+    stockPage.includes("Transfer receive overdue") &&
+    stockReportExport.includes("Overdue transfer alerts:"),
+  "Stock pages must surface transfers pending receive for more than 3 days"
 )
 const stockData = read("lib/stock/data.ts")
 assert(
@@ -858,6 +1261,13 @@ assert(
     stockData.includes("twelveMonthStockAgeDays") &&
     stockData.includes("stockAgeAlerts"),
   "Stock data must centralize stock age alert calculation"
+)
+assert(
+  stockData.includes("buildTransferPendingAlerts") &&
+    stockData.includes("overdueTransferDays = 3") &&
+    stockData.includes('movement.movementType === "OUTBOUND_TRANSFER"') &&
+    stockData.includes("transferPendingAlerts"),
+  "Stock data must centralize transfer-pending-over-3-days alert calculation"
 )
 
 const appShell = read("components/erp/app-shell.tsx")
@@ -883,6 +1293,9 @@ assert(
   homePage.includes("function viewingScopeText") &&
     homePage.includes("Viewing: {viewingScopeText(profile)}") &&
     homePage.includes("const stockRoles: UserRole[]") &&
+    homePage.includes("const stockItemMasterRoles: UserRole[]") &&
+    homePage.includes('href: "/stock/items"') &&
+    homePage.includes('label: "Item Master"') &&
     homePage.includes("roles: stockRoles") &&
     homePage.includes("const stockOperatorShortcutRoles: UserRole[]") &&
     homePage.includes("role !== \"director\"") &&
@@ -911,6 +1324,14 @@ for (const label of [
   )
 }
 assert(
+  appShell.includes("const stockItemMasterRoles: UserRole[]") &&
+    appShell.includes('href: "/stock/items"') &&
+    appShell.includes("roles: stockItemMasterRoles") &&
+    appShell.includes('prefix: "/stock/items"') &&
+    appShell.includes('moduleName: "Item Master"'),
+  "Sidebar and route guard must allow all stock-module users to reach item master without opening stock operations"
+)
+assert(
   appShell.includes("<Sheet open={open} onOpenChange={setOpen}>") &&
     !appShell.includes("<SheetTrigger") &&
     appShell.includes('type="button"') &&
@@ -935,7 +1356,8 @@ assert(
     appShell.includes('prefix: "/stock/transfer"') &&
     appShell.includes('prefix: "/stock/receive-transfer"') &&
     appShell.includes('prefix: "/stock/return"') &&
-    appShell.includes('prefix: "/stock/no-barcode-inbound"'),
+    !appShell.includes('href: "/stock/no-barcode-inbound"') &&
+    !appShell.includes('prefix: "/stock/no-barcode-inbound"'),
   "Sidebar and route guard must split routine stock operator routes from director stock viewing"
 )
 assert(
@@ -1006,8 +1428,90 @@ for (const fragment of [
   )
 }
 
+const atomicTransferMigration = read(
+  "supabase/migrations/202606100047_atomic_transfer_receive_rpcs_v1.sql"
+)
+for (const fragment of [
+  "drop function if exists public.transfer_stock_unit",
+  "create or replace function public.transfer_stock_unit",
+  "drop function if exists public.receive_stock_transfer",
+  "create or replace function public.receive_stock_transfer",
+  "for update",
+  "status = 'TRANSFER_PENDING'",
+  "status = 'TRANSFERRED'",
+  "location_id = p_receive_location_id",
+  "'atomic', true",
+  "grant execute on function public.transfer_stock_unit",
+  "grant execute on function public.receive_stock_transfer",
+]) {
+  assert(
+    atomicTransferMigration.includes(fragment),
+    `Atomic transfer migration missing: ${fragment}`
+  )
+}
+assert(
+  stockActions.includes('"transfer_stock_unit"') &&
+    stockActions.includes('"receive_stock_transfer"') &&
+    !stockActions.includes('action: "TRANSFER_CREATED"') &&
+    !stockActions.includes('message: "Transfer receive scan accepted",\n      scannedBy: context.profile.id'),
+  "Transfer and receive-transfer actions must use atomic RPCs for unit update, movement, scan log, and audit"
+)
+
+const atomicReturnMigration = read(
+  "supabase/migrations/202606100048_atomic_stock_return_rpc_v1.sql"
+)
+for (const fragment of [
+  "drop function if exists public.return_stock_unit",
+  "create or replace function public.return_stock_unit",
+  "for update",
+  "status = 'IN_STOCK'",
+  "location_id = p_location_id",
+  "transfer_to_location_id = null",
+  "Barcode is waiting for inspection release",
+  "'atomic', true",
+  "grant execute on function public.return_stock_unit",
+]) {
+  assert(
+    atomicReturnMigration.includes(fragment),
+    `Atomic return migration missing: ${fragment}`
+  )
+}
+assert(
+  stockActions.includes('"return_stock_unit"') &&
+    stockActions.includes("status === \"HOLD\" || status === \"INSPECTION\"") &&
+    stockActions.includes("Barcode is waiting for inspection release"),
+  "Return action must use atomic RPC and keep inspection release separate from normal return"
+)
+
+const atomicInspectionReleaseMigration = read(
+  "supabase/migrations/202606100049_atomic_inspection_release_rpc_v1.sql"
+)
+for (const fragment of [
+  "drop function if exists public.release_inspection_stock_unit",
+  "create or replace function public.release_inspection_stock_unit",
+  "for update",
+  "unit_record.status not in ('HOLD', 'INSPECTION')",
+  "set status = 'IN_STOCK'",
+  "'INSPECTION_RELEASE'",
+  "'STOCK_INSPECTION_RELEASED'",
+  "'atomic', true",
+  "grant execute on function public.release_inspection_stock_unit",
+]) {
+  assert(
+    atomicInspectionReleaseMigration.includes(fragment),
+    `Atomic inspection release migration missing: ${fragment}`
+  )
+}
+assert(
+  stockActions.includes('"release_inspection_stock_unit"') &&
+    !stockActions.includes('"STOCK_INSPECTION_RELEASED",\n      "stock_movements",\n      movementId'),
+  "Inspection release action must use atomic RPC for unit update, movement, scan log, and audit"
+)
+
 assert(exists("docs/role-team-access-matrix.md"), "Missing role/team matrix")
 assert(exists("docs/manual-qa-checklist.md"), "Missing QA checklist")
+assert(exists("docs/STOCK_QA_RUNBOOK.md"), "Missing stock QA runbook")
+assert(exists("docs/STOCK_QA_EVIDENCE.md"), "Missing stock QA evidence log")
 for (const doc of [
   "AGENTS.md",
   "docs/erp-testing-plan.md",
@@ -1037,6 +1541,63 @@ for (const fragment of [
   )
 }
 
+const stockQaRunbook = read("docs/STOCK_QA_RUNBOOK.md")
+for (const fragment of [
+  "## Acceptance Tests",
+  "Inbound scan works",
+  "Duplicate barcode blocked",
+  "Barcode weight rule saved/reused",
+  "Barcode label printing works",
+  "Order-based outbound works",
+  "Transfer/receive works",
+  "Damage/spoilage approval works",
+  "Stock take approval works",
+  "No-barcode-to-barcode flow works",
+  "Reports/export work",
+  "Role/outlet isolation works",
+  "Mobile scanner works",
+  "EM-SEED-RETURN-INSPECTION-001",
+  "## Phone QA",
+  "## Desktop QA",
+]) {
+  assert(
+    stockQaRunbook.includes(fragment),
+    `Stock QA runbook missing: ${fragment}`
+  )
+}
+
+const stockQaEvidence = read("docs/STOCK_QA_EVIDENCE.md")
+for (const fragment of [
+  "## Acceptance Test Evidence",
+  "Inbound scan works",
+  "Duplicate barcode blocked",
+  "Barcode weight rule saved/reused",
+  "Barcode label printing works",
+  "Order-based outbound works",
+  "Transfer/receive works",
+  "Damage/spoilage approval works",
+  "Stock take approval works",
+  "No-barcode-to-barcode flow works",
+  "Reports/export work",
+  "Role/outlet isolation works",
+  "Mobile scanner works",
+  "Automated tests exist",
+  "## Outbound Workflow Evidence",
+  "## Transfer Evidence",
+  "## Damage And Return Evidence",
+  "Customer return after sale goes to `INSPECTION` first, cannot be outbounded",
+  "## Stock Take Evidence",
+  "## RLS / Scope Evidence",
+  "## Phone Scanner Evidence",
+  "## Desktop Scanner Evidence",
+  "## Final Sign-Off",
+]) {
+  assert(
+    stockQaEvidence.includes(fragment),
+    `Stock QA evidence log missing: ${fragment}`
+  )
+}
+
 const workflowAcceptanceChecklist = read("docs/workflow-acceptance-checklist.md")
 for (const fragment of [
   "## Orders",
@@ -1048,7 +1609,8 @@ for (const fragment of [
   "Seeded order outbound can be tested with `ORD-SEED-PICKUP-001`",
   "/delivery/orders` can update Orders-module deliveries",
   "At 390px width, the hamburger opens the mobile drawer.",
-  "Director can view stock dashboards/reports and approve stock take, but cannot run routine stock inbound/outbound/transfer/receive/return/no-barcode workflows.",
+  "Director can view stock dashboards/reports and approve stock take, but cannot run routine stock inbound/outbound/transfer/receive/return workflows.",
+  "/stock/no-barcode-inbound` redirects to Barcode Inbound and new loose no-barcode inbound is blocked server-side.",
   "Director can view orders but cannot create, prepare, mark ready, or update delivery status/proof as a routine operator.",
 ]) {
   assert(

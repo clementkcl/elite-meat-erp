@@ -68,6 +68,18 @@ const stockRoles: UserRole[] = [
   "director",
 ]
 
+const stockItemMasterRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "delivery_team_general_worker",
+  "delivery_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "account",
+  "admin",
+  "director",
+]
+
 const stockOperatorRoles: UserRole[] = stockRoles.filter(
   (role) => role !== "director"
 )
@@ -101,7 +113,7 @@ const stockNav: NavItem[] = [
     href: "/stock/items",
     label: "Items",
     icon: Boxes,
-    roles: stockRoles,
+    roles: stockItemMasterRoles,
     moduleKey: "stock",
   },
   {
@@ -136,13 +148,6 @@ const stockNav: NavItem[] = [
     href: "/stock/return",
     label: "Return",
     icon: ClipboardList,
-    roles: stockOperatorRoles,
-    moduleKey: "stock",
-  },
-  {
-    href: "/stock/no-barcode-inbound",
-    label: "No-Barcode Inbound",
-    icon: PackageCheck,
     roles: stockOperatorRoles,
     moduleKey: "stock",
   },
@@ -300,6 +305,12 @@ const moduleNav: NavItem[] = [
 
 const routeAccess: RouteAccess[] = [
   {
+    prefix: "/stock/items",
+    moduleKey: "stock",
+    moduleName: "Item Master",
+    roles: stockItemMasterRoles,
+  },
+  {
     prefix: "/stock/inbound",
     moduleKey: "stock",
     moduleName: "Stock Inbound",
@@ -327,12 +338,6 @@ const routeAccess: RouteAccess[] = [
     prefix: "/stock/return",
     moduleKey: "stock",
     moduleName: "Stock Return",
-    roles: stockOperatorRoles,
-  },
-  {
-    prefix: "/stock/no-barcode-inbound",
-    moduleKey: "stock",
-    moduleName: "No-Barcode Inbound",
     roles: stockOperatorRoles,
   },
   {

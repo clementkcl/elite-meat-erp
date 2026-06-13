@@ -2,10 +2,14 @@
 
 Use this checklist for internal testing after applying migrations in order and running the seed file. Each module has at least one happy path and one blocked or invalid path to verify.
 
+For Stock-only completion evidence, also run `docs/STOCK_QA_RUNBOOK.md` and fill in `docs/STOCK_QA_EVIDENCE.md`.
+
 ## Environment Checks
 
 - Run with anon Supabase keys only in `.env.local`; no service-role key in frontend.
 - Confirm `npm run lint`, `npm run typecheck`, `npm run build`, and `npm run smoke` pass.
+- Confirm `npm run smoke` runs route checks, barcode/label regression checks, and stock acceptance coverage checks.
+- Confirm that a configured Supabase project with a missing/failed stock table shows a clear stock data load error instead of demo data.
 - Create test users in Supabase Auth and assign `profiles`, `profile_roles`, `outlet_id`, `department_id`, and `stock_location_id`.
 - Verify non-admin users show a scope badge in the sidebar/header.
 - After running `supabase/seed.sql`, use `ORD-SEED-PICKUP-001` with `EM-SEED-OUT-001` and `EM-SEED-OUT-002` for the first order outbound test.
@@ -23,17 +27,31 @@ Use this checklist for internal testing after applying migrations in order and r
 
 ## Stock
 
+- Happy path: sign in as each ERP role with Stock module access, open `/stock/items`, create or edit a numeric item code with category, default brand, and product name, and verify non-numeric item codes are rejected.
 - Happy path: inbound scan a new barcode into the user stock location; verify `stock_units`, `stock_movements`, and `barcode_scan_logs` rows are created.
 - Happy path: transfer a barcode from source location; verify location does not change until receive-transfer scan completes.
 - Happy path: receive-transfer scan at the destination; verify the unit location changes to destination.
+- Happy path: confirm a transfer scanned out for more than 3 days appears in overdue receive alerts.
 - Happy path: return stock; verify the unit status becomes `IN_STOCK`.
+- Happy path: customer return after sale goes to hold/inspection, cannot be outbounded, then manager/admin inspection release changes it to `IN_STOCK`.
+- Happy path: direct outbound supports `SALES`, `TRANSFER`, and `PROCESSING` without a customer order.
+- Happy path: order outbound can scan different items under the same order, shows a warning for requested/scanned differences, and records substitutions separately.
 - Happy path: create stock take for assigned location, scan a barcode at that location, submit, then approve as director/admin.
+- Happy path: leave one expected barcode unscanned in the selected item+brand+location; after director approval, confirm the missing barcode appears as variance and the stock unit becomes adjusted out.
+- Happy path: damage/spoilage request requires photo and a reason, manager review, then director approval before stock deduction.
+- Happy path: return supplier request requires approval before stock deduction.
 - Blocked path: inbound scan the same barcode twice; second scan must fail.
 - Blocked path: outbound a missing or already sold barcode; action must fail.
+- Blocked path: outbound a wrong-status or wrong-location barcode; action must fail.
+- Blocked path: damage/spoilage or return-supplier deduction cannot be completed through direct outbound without the approval workflow.
+- Blocked path: transfer cannot be cancelled after it has been scanned out.
 - Blocked path: stock take scan a barcode from the wrong location; action must fail.
+- Blocked path: open stock take blocks inbound/outbound only for the selected item+brand in that location, not unrelated stock.
 - Blocked path: general worker tries to approve/reject stock take; RLS/action must block it.
 - Blocked path: general worker tries another location; server action must show missing/wrong stock-location access.
-- Blocked path: director can view stock dashboards/reports and approve submitted stock take, but direct visits to `/stock/inbound`, `/stock/outbound`, `/stock/transfer`, `/stock/receive-transfer`, `/stock/return`, and `/stock/no-barcode-inbound` must show the module access block or fail the server action.
+- Blocked path: director can view stock dashboards/reports and approve submitted stock take, but direct visits to `/stock/inbound`, `/stock/outbound`, `/stock/transfer`, `/stock/receive-transfer`, and `/stock/return` must show the module access block or fail the server action.
+- Blocked path: non-admin/director cannot delete item master rows even though they can create/edit them.
+- No-barcode-to-barcode path: visit `/stock/no-barcode-inbound`, verify it redirects to `/stock/inbound`, generate/print a label, attach it, then complete Barcode Inbound.
 
 ## Delivery
 
@@ -137,7 +155,9 @@ Use this checklist for internal testing after applying migrations in order and r
 - Order outbound happy path: select a ready customer order, scan multiple barcodes, confirm outbound as `SALES`, and verify the outbound batch, batch lines, stock movements, scan logs, and stock unit statuses.
 - Seeded outbound happy path: select `ORD-SEED-PICKUP-001`, scan `EM-SEED-OUT-001` and `EM-SEED-OUT-002`, confirm `SALES`, and verify the scanned list clears after success.
 - Order outbound transfer path: select `TRANSFER`, verify confirm stays disabled until a destination is selected, confirm the batch, and verify stock units are `TRANSFER_PENDING` until receive-transfer scan.
+- Direct outbound happy path: select `Direct outbound`, scan multiple in-stock barcodes, confirm as `PROCESSING` or `SALES`, and verify outbound batch/lines have `order_id = null`.
+- Direct outbound transfer path: select `Direct outbound` and `TRANSFER`, verify destination is required, confirm, and verify stock units are `TRANSFER_PENDING` until receive-transfer scan.
 - Order outbound blocked path: scan duplicate, missing, sold/outbounded, or mixed-location barcodes; each invalid case should show a clear error and avoid partial stock updates.
-- Visit `/stock/inbound`, `/stock/outbound`, `/stock/transfer`, `/stock/receive-transfer`, `/stock/return`, and `/stock/stock-take`; verify scanner button opens camera permission flow and manual fallback exists.
+- Visit `/stock/inbound`, `/stock/outbound`, `/stock/transfer`, `/stock/receive-transfer`, `/stock/return`, and `/stock/stock-take`; verify the large scanner button opens camera permission flow, manual fallback text field exists, and the recent scan list is shown after scans.
 - Visit `/delivery/dashboard`, `/attendance/today`, `/oa-actions/dashboard`, `/retail/dashboard`, `/processing/dashboard`, `/cleaning/tasks`, `/accounting-finance/dashboard`, and `/director-reports/dashboard`; verify no runtime error boundary appears.
 - Submit one intentionally invalid form per module and verify the page shows an error state without losing the full page.

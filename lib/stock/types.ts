@@ -6,6 +6,8 @@ export const stockMovementTypes = [
   "OUTBOUND_TRANSFER",
   "OUTBOUND_PROCESSING",
   "OUTBOUND_SPOILED",
+  "OUTBOUND_RETURN_SUPPLIER",
+  "INBOUND_VOID",
   "TRANSFER_RECEIVED",
   "RETURN",
   "STOCK_TAKE_ADJUSTMENT",
@@ -21,6 +23,9 @@ export const stockUnitStatuses = [
   "TRANSFERRED",
   "SOLD",
   "RETURNED",
+  "HOLD",
+  "INSPECTION",
+  "VOIDED",
   "ADJUSTED_OUT",
   "DAMAGED",
 ] as const
@@ -28,6 +33,11 @@ export const stockUnitStatuses = [
 export const stockInboundSources = [
   "supplier_import",
   "processing_output",
+  "customer_return",
+  "transfer_received",
+  "manual_adjustment",
+  "other",
+  // Legacy values kept readable for existing rows/migrations.
   "return",
   "transfer",
 ] as const
@@ -40,11 +50,38 @@ export const stockTakeStatuses = [
   "REJECTED",
 ] as const
 
+export const stockDamageReasons = [
+  "expired",
+  "broken_packaging",
+  "smell",
+  "wrong_temperature",
+  "customer_rejected",
+  "other",
+] as const
+
+export const stockDamageRequestStatuses = [
+  "SUBMITTED",
+  "MANAGER_REVIEWED",
+  "DIRECTOR_APPROVED",
+  "REJECTED",
+] as const
+
+export const stockReturnSupplierRequestStatuses = [
+  "SUBMITTED",
+  "MANAGER_REVIEWED",
+  "REJECTED",
+] as const
+
 export type StockCategory = (typeof stockCategories)[number]
 export type StockMovementType = (typeof stockMovementTypes)[number]
 export type StockUnitStatus = (typeof stockUnitStatuses)[number]
 export type StockInboundSource = (typeof stockInboundSources)[number]
 export type StockTakeStatus = (typeof stockTakeStatuses)[number]
+export type StockDamageReason = (typeof stockDamageReasons)[number]
+export type StockDamageRequestStatus =
+  (typeof stockDamageRequestStatuses)[number]
+export type StockReturnSupplierRequestStatus =
+  (typeof stockReturnSupplierRequestStatuses)[number]
 
 export type Brand = {
   id: string
@@ -68,10 +105,14 @@ export type Item = {
   id: string
   itemCode: string
   category: StockCategory
+  defaultBrandId: string | null
   section: string
   name: string
+  chineseName: string | null
+  ibanName: string | null
   barcodeRequired: boolean
   active: boolean
+  defaultLowStockLevel: number
 }
 
 export type StockUnit = {
@@ -93,10 +134,11 @@ export type BarcodeWeightRule = {
   itemId: string
   brandId: string | null
   originId: string | null
-  locationId: string
+  locationId: string | null
   barcodeWeightStart: number
   barcodeWeightLength: number
   barcodeWeightDecimals: number
+  updatedAt: string
 }
 
 export type NoBarcodeStock = {
@@ -112,6 +154,7 @@ export type NoBarcodeStock = {
 export type StockMovement = {
   id: string
   movementType: StockMovementType
+  stockUnitId: string | null
   itemName: string
   barcode: string
   fromLocation: string
@@ -160,6 +203,16 @@ export type StockAgeAlert = {
   alertLevel: StockAgeAlertLevel
 }
 
+export type TransferPendingAlert = {
+  id: string
+  barcode: string
+  itemName: string
+  fromLocation: string
+  toLocation: string
+  transferredAt: string
+  ageDays: number
+}
+
 export type DashboardKpi = {
   label: string
   value: string
@@ -183,10 +236,15 @@ export type StockTakeSession = {
   sessionNo: string
   locationId: string
   locationName: string
+  itemId: string | null
+  brandId: string | null
   status: StockTakeStatus
   createdAt: string
   submittedAt: string | null
+  managerReviewedAt: string | null
+  managerSignature: string | null
   approvedAt: string | null
+  directorSignature: string | null
 }
 
 export type StockTakeLine = {
@@ -202,6 +260,40 @@ export type StockTakeLine = {
   actualWeightKg: number
   varianceWeightKg: number
   notes: string
+}
+
+export type StockDamageRequest = {
+  id: string
+  requestNo: string
+  barcode: string
+  stockUnitId: string
+  itemId: string
+  itemName: string
+  locationId: string
+  locationName: string
+  reason: StockDamageReason
+  status: StockDamageRequestStatus
+  photoPath: string
+  notes: string
+  managerSignature: string | null
+  directorSignature: string | null
+  requestedAt: string
+}
+
+export type StockReturnSupplierRequest = {
+  id: string
+  requestNo: string
+  barcode: string
+  stockUnitId: string
+  itemId: string
+  itemName: string
+  locationId: string
+  locationName: string
+  supplierName: string
+  status: StockReturnSupplierRequestStatus
+  notes: string
+  managerSignature: string | null
+  requestedAt: string
 }
 
 export type StockReportRow = {
@@ -227,6 +319,8 @@ export type StockPageData = {
   balances: StockBalanceRow[]
   stockTakeSessions: StockTakeSession[]
   stockTakeLines: StockTakeLine[]
+  damageRequests: StockDamageRequest[]
+  returnSupplierRequests: StockReturnSupplierRequest[]
   reports: StockReportRow[]
   dashboard: {
     kpis: DashboardKpi[]
@@ -235,6 +329,7 @@ export type StockPageData = {
     movementTrend: MovementTrendPoint[]
     negativeStockAlerts: NegativeStockAlert[]
     stockAgeAlerts: StockAgeAlert[]
+    transferPendingAlerts: TransferPendingAlert[]
   }
 }
 

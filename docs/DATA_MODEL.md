@@ -2,7 +2,7 @@
 
 ## What Already Exists
 
-The database is defined through Supabase SQL migrations in `supabase/migrations`. The current migration sequence runs from `202606100001_erp_core_stock_v1.sql` through `202606100036_failed_delivery_return_workflow_v1.sql`.
+The database is defined through Supabase SQL migrations in `supabase/migrations`. The current migration sequence runs from `202606100001_erp_core_stock_v1.sql` through `202606100051_stock_take_approval_requires_lines_v1.sql`.
 
 ## Core Tables By Area
 
@@ -38,11 +38,40 @@ These tables support Auth profile mapping, role assignment, branch/outlet/depart
 - `stock_outbound_batches`
 - `stock_outbound_batch_lines`
 
-Stock uses barcode units for individually scanned stock and no-barcode tables for loose stock. Movements and scan logs are the audit trail. Outbound batches group scanned barcodes against customer orders.
+Stock uses barcode units for individually scanned stock. Item master identity is category plus default brand plus product section/name, while actual brand is still captured on barcode stock units, barcode rules, prices, damage/return requests, and stock-take scope. Legacy no-barcode tables remain for compatibility, but the MVP direction is to generate/print an internal numeric barcode label first whenever supplier/import stock has no usable barcode, then inbound/outbound the item as normal barcode stock. The Stock module no longer exposes a loose no-barcode inbound workflow for new stock. Movements and scan logs are the audit trail. Outbound batches group scanned barcodes against customer orders.
+
+Migration `202606100037_stock_inbound_labels_rules_v1.sql` extends item master with `chinese_name`, `iban_name`, and `default_low_stock_level`, converts legacy non-numeric `items.item_code` values to numeric codes, and enforces numeric-only item codes. It also expands stock inbound/source values to include `customer_return`, `transfer_received`, `manual_adjustment`, and `other`.
+
+Migration `202606100044_item_master_all_roles_v1.sql` adds `public.can_edit_item_master()` and updates `items` RLS so every ERP role can create/edit item master records when they can access the Stock module. Item deletion remains admin/director only through `public.can_administer_stock()`.
+
+Migration `202606100045_item_master_default_brand_v1.sql` adds `items.default_brand_id`, replaces the old category/section/name uniqueness with category/default-brand/section/name uniqueness, and indexes the default brand for item master lookup.
+Migration `202606100046_customer_return_inspection_status_v1.sql` adds `HOLD` and `INSPECTION` stock-unit statuses so customer returns can be kept out of sellable stock until checked.
+Migration `202606100047_atomic_transfer_receive_rpcs_v1.sql` adds atomic transfer and receive-transfer RPCs so unit status/location, movement rows, scan logs, and audit logs succeed or fail together.
+Migration `202606100048_atomic_stock_return_rpc_v1.sql` adds an atomic normal stock-return RPC so returning a barcode to `IN_STOCK` cannot happen without movement, scan-log, and audit-log rows.
+Migration `202606100049_atomic_inspection_release_rpc_v1.sql` adds an atomic inspection-release RPC so customer-return stock cannot move from `HOLD`/`INSPECTION` to `IN_STOCK` without movement, scan-log, and audit-log rows.
+Migration `202606100050_atomic_barcode_inbound_rpc_v1.sql` adds an atomic barcode inbound RPC so stock-unit creation, inbound movement, scan log, audit log, and optional global barcode weight-rule save succeed or fail together.
+
+Migration `202606100051_stock_take_approval_requires_lines_v1.sql` updates `public.approve_stock_take_session` so director approval fails if the reviewed stock take session has no scanned barcode lines.
+
+Migration `202606100053_stock_inbound_session_undo_v1.sql` adds `VOIDED` stock-unit status, `INBOUND_VOID` stock movement type, and `public.void_inbound_stock_unit`. The RPC voids a current-session inbound stock unit, writes a negative reversal movement, logs the scan, and writes an audit record instead of deleting the original unit or movement.
+
+`barcode_weight_rules` now supports global item + brand + origin rules by allowing `location_id` to be null. Existing location-specific rules can remain for compatibility, but the stock inbound workflow saves new rules globally by item, brand, and origin.
+
+Migration `202606100038_stock_take_scoped_approval_v1.sql` adds item+brand scope and manager/director signature fields to `stock_take_sessions`. Open stock take sessions can now lock only the selected item+brand at the selected location while counting is in progress.
+
+Migration `202606100039_stock_damage_approval_v1.sql` adds `stock_damage_requests` for staff damage/spoilage requests with required photo path, manager review signature, director approval signature, and a link to the final stock movement when stock is deducted.
+
+Migration `202606100040_stock_return_supplier_approval_v1.sql` adds `stock_return_supplier_requests` for staff return-supplier requests. Manager approval deducts the barcode from available stock and writes an `OUTBOUND_RETURN_SUPPLIER` movement.
+
+Migration `202606100042_atomic_stock_approval_rpcs_v1.sql` adds atomic approval RPCs for damage/spoilage and return-supplier stock deduction.
+
+Migration `202606100043_atomic_stock_take_approval_rpc_v1.sql` adds `public.approve_stock_take_session`, which atomically writes stock-take adjustment movements, records the director approval, and writes the audit log.
 
 Temporary negative stock alerts are derived in the application data layer from `no_barcode_stock` and combined balance rows. No extra table is required for the current alert surface.
 
 Stock age alerts are derived in the application data layer from `stock_units.received_at` for stockable barcode units. No extra table is required for the current 6-month and 12-month alert surface.
+
+`supabase/seed.sql` includes stock QA fixtures for order outbound, customer-return inspection, damage request/review, return-supplier approval, and stock-take review/approval. The fixture identifiers are listed in `docs/STOCK_QA_RUNBOOK.md`.
 
 ### Customers, Orders, And Pricing
 
@@ -122,11 +151,22 @@ Finance covers AR/AP invoices, containers/import tracking, aging, review/approva
 - `profile_roles` links profiles to `roles`.
 - `outlet_module_access` links outlets to enabled module keys.
 - `stock_units` link item/brand/origin/location and feed stock movements/scans.
-- `no_barcode_stock` is unique by item/brand/origin/location.
+- Barcode inbound calls `public.inbound_stock_unit`, which creates `stock_units`, `stock_movements`, `barcode_scan_logs`, `audit_logs`, and optional global `barcode_weight_rules` rows in one transaction.
+- `no_barcode_stock` is unique by item/brand/origin/location for legacy compatibility, but new Stock-module inbound should generate a barcode label and create `stock_units` instead.
 - `customer_orders` link to customers and scope fields.
 - `customer_order_items` link to `customer_orders` and `items`.
 - `order_stock_reservations` link prepared/picked order items to items and stock locations. They represent stock reserved after picking starts. Active reservations on cancelled orders are released by explicitly changing the reservation status to `RELEASED`; cancellation alone must not free stock.
-- `stock_outbound_batches` link outbound scans to customer orders.
+- `stock_outbound_batches` link outbound scans to customer orders when `order_id` is present. Direct outbound batches use `order_id = null` and are scoped by stock location.
+- `stock_outbound_batch_lines` can also store direct outbound lines with `order_id = null`; failed-delivery return lookup only uses order-linked `SALES` lines.
+- Order outbound batch lines preserve the scanned/substituted barcode item separately from the original customer order item so staff can fulfill practical substitutions while keeping the requested item visible.
+- Direct outbound is for `SALES`, `TRANSFER`, and `PROCESSING`. Damage/spoilage and supplier return use request/approval tables and RPCs before stock deduction.
+- Transfer outbound sets barcode units to `TRANSFER_PENDING`; the actual stock location changes only when the destination receive scan succeeds.
+- Single-barcode transfer and receive-transfer actions call `public.transfer_stock_unit` and `public.receive_stock_transfer` so audit records cannot be partially written after the stock unit changes.
+- Normal barcode stock return calls `public.return_stock_unit` so `IN_STOCK` restoration and audit records are written together. `HOLD` and `INSPECTION` stock must use inspection release instead of normal return.
+- Customer returns after sale enter `INSPECTION` before becoming sellable. Manager/admin inspection release calls `public.release_inspection_stock_unit`, changes the barcode unit back to `IN_STOCK`, and writes a `MANUAL_ADJUSTMENT` movement with `source_type = customer_return`. Failed customer-order delivery returns linked barcode stock directly to `IN_STOCK` because the sale was not completed.
+- `stock_take_sessions` can link to `items` and `brands` to define the exact item+brand under count. Manager review and director final approval signatures are captured on the session. Director final approval uses `public.approve_stock_take_session` to compare expected active barcode units with scanned barcode lines, auto-create missing-barcode variance lines, update missing `stock_units` to `ADJUSTED_OUT`, write `STOCK_TAKE_ADJUSTMENT` movements/logs, and approve the session atomically.
+- `stock_damage_requests` links one damaged barcode stock unit to the request/review/approval workflow. Director approval uses `public.approve_stock_damage_request` to atomically update the stock unit to `DAMAGED`, record an `OUTBOUND_SPOILED` movement, write the scan/audit logs, and link the movement back to the request.
+- `stock_return_supplier_requests` links one barcode stock unit to a supplier-return request. Manager approval uses `public.approve_stock_return_supplier_request` to atomically update the stock unit to `OUTBOUNDED`, record an `OUTBOUND_RETURN_SUPPLIER` movement, write the scan/audit logs, and link the movement back to the request.
 - Failed customer-order delivery proof calls `public.fail_customer_order_delivery_with_proof`, which locks the order, finds `stock_outbound_batch_lines` for `SALES`, returns linked barcode `stock_units` to `IN_STOCK`, writes `stock_movements.movement_type = 'RETURN'` with `source_type = 'return'` and `reference_no = customer_orders.id`, writes `barcode_scan_logs.action = 'RETURN'`, and updates the order failed-return counters. The RPC does not release or delete active reservations.
 - `delivery_orders` can reference operational source data; customer-order delivery handoff is handled through customer order status/actions.
 - `approval_logs` references OA requests by request type/id rather than one shared parent table.
@@ -138,8 +178,8 @@ Finance covers AR/AP invoices, containers/import tracking, aging, review/approva
 - Database-level tests proving every RLS policy for every role.
 - A normalized multi-outlet/multi-location staff access table.
 - Real Supabase QA evidence for manual reservation release after customer cancellations.
-- A manager-then-director approval model for stock-take adjustment.
-- A director approval model for damaged/spoiled stock deduction.
+- Real Supabase QA evidence for the manager-then-director stock-take adjustment model, including missing-barcode adjustment-out behavior.
+- Real Supabase QA evidence for director-approved damaged/spoiled stock deduction.
 - A single normalized production planning model separate from retail processing batches.
 - Processing line tables for multiple raw items from multiple batches/barcodes and multiple finished outputs.
 - Finished-product barcode generation from processing output.
@@ -149,6 +189,8 @@ Finance covers AR/AP invoices, containers/import tracking, aging, review/approva
 - Price override reason fields/workflow enforcement.
 - AutoCount-format aging bucket schema or shared reporting helper.
 - Failed-delivery return support for standalone deliveries and no-barcode/loose stock links.
+- Real Supabase QA evidence for return-supplier request/review/deduction workflow.
+- Browser/device QA evidence for stock-unit label reprints.
 
 ## Risky Logic
 
@@ -157,6 +199,8 @@ Finance covers AR/AP invoices, containers/import tracking, aging, review/approva
 - Several status workflows depend on server actions and RLS working together.
 - `order_stock_reservations` now represents prepared/picked quantity or weight. It still does not by itself lock specific barcode units until outbound scan.
 - Failed-delivery return currently uses barcode outbound lines as the source of truth. If a failed order used loose/no-barcode stock or a standalone delivery with no order outbound linkage, the system records `NO_STOCK_LINK` and requires manual stock follow-up.
+- Damage, return-supplier, and stock-take final approval RPCs are atomic, but still need real migrated Supabase/RLS QA with manager/director users.
+- Stock take is location plus item+brand scoped. Open count sessions should lock only the selected item+brand in the selected location, not unrelated stock in the same location.
 - Migration `202606100033_order_item_reservation_rpc_v1.sql` created an add-item reservation RPC that is superseded by `202606100034_order_reservation_on_picking_v1.sql`; fresh projects must run both in order so the old RPC is dropped.
 - Retail processing and general processing concepts are currently close together; future production planning may require a clearer domain split.
 - File metadata may exist without confirmed Storage object access.

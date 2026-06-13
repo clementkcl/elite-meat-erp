@@ -1,5 +1,5 @@
-import { StockPage } from "@/components/stock/stock-page"
+import { redirect } from "next/navigation"
 
 export default function StockNoBarcodeInboundPage() {
-  return <StockPage route="no-barcode-inbound" />
+  redirect("/stock/inbound")
 }

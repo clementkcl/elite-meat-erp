@@ -1,4 +1,11 @@
-import { Search } from "lucide-react"
+import {
+  ArrowRightLeft,
+  PackageCheck,
+  PackagePlus,
+  RotateCcw,
+  Search,
+  Send,
+} from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,16 +23,24 @@ import { StockDashboardCharts } from "@/components/stock/dashboard-charts"
 import { ReportToolbar } from "@/components/ui/report-toolbar"
 import {
   BarcodeInboundForm,
+  DamageRequestWorkbench,
+  InspectionReleaseForm,
   ItemMasterForm,
   MasterDataForms,
   NoBarcodeInboundForm,
   OutboundSalesForm,
   ReceiveTransferForm,
   ReturnForm,
+  ReturnSupplierWorkbench,
   StockTakeWorkbench,
   TransferForm,
 } from "@/components/stock/workflow-forms"
 import { getStockPageData } from "@/lib/stock/data"
+import {
+  buildCsv,
+  buildStockWhatsappSummary,
+  type StockReportTableRow,
+} from "@/lib/stock/report-export"
 import { stockMovementTypes, type MovementFilters } from "@/lib/stock/types"
 import { getOrdersPageData } from "@/lib/orders/data"
 import { moduleAccessBlock } from "@/lib/auth/module-guard"
@@ -47,7 +62,7 @@ export type StockRoute =
   | "reports"
   | "settings"
 
-type TableRow = Record<string, string | number | boolean>
+type TableRow = StockReportTableRow
 
 const stockRoles: UserRole[] = [
   "retail_team_general_worker",
@@ -60,11 +75,31 @@ const stockRoles: UserRole[] = [
   "director",
 ]
 
+const stockItemMasterRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "delivery_team_general_worker",
+  "delivery_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "account",
+  "admin",
+  "director",
+]
+
 const stockOperatorRoles: UserRole[] = stockRoles.filter(
   (role) => role !== "director"
 )
 
+const stockManagerRoles: UserRole[] = [
+  "retail_manager",
+  "delivery_manager",
+  "processing_manager",
+  "admin",
+]
+
 const stockRouteRoles: Partial<Record<StockRoute, UserRole[]>> = {
+  items: stockItemMasterRoles,
   inbound: stockOperatorRoles,
   outbound: stockOperatorRoles,
   transfer: stockOperatorRoles,
@@ -87,8 +122,9 @@ const titles: Record<StockRoute, { title: string; description: string }> = {
     description: "Receive barcode-tracked stock units into a selected location.",
   },
   outbound: {
-    title: "Order Outbound",
-    description: "Attach scanned barcode stock units to a customer order and confirm outbound type.",
+    title: "Outbound",
+    description:
+      "Scan barcode stock units for order-based or direct outbound batches.",
   },
   transfer: {
     title: "Stock Transfer",
@@ -103,8 +139,9 @@ const titles: Record<StockRoute, { title: string; description: string }> = {
     description: "Return barcode stock back to an active location.",
   },
   "no-barcode-inbound": {
-    title: "No-Barcode Inbound",
-    description: "Receive loose or bulk stock by quantity and weight.",
+    title: "No-Barcode Label Flow",
+    description:
+      "Generate a barcode label first, then receive the item through Barcode Inbound.",
   },
   balance: {
     title: "Stock Balance",
@@ -131,6 +168,7 @@ const titles: Record<StockRoute, { title: string; description: string }> = {
 const itemColumns: DataTableColumn<TableRow>[] = [
   { key: "itemCode", header: "Item code" },
   { key: "category", header: "Category" },
+  { key: "defaultBrandName", header: "Brand" },
   { key: "section", header: "Section" },
   { key: "name", header: "Name" },
   { key: "barcodeRequired", header: "Barcode" },
@@ -143,11 +181,22 @@ const balanceColumns: DataTableColumn<TableRow>[] = [
   { key: "category", header: "Category" },
   { key: "unitCount", header: "Barcode units", align: "right" },
   { key: "totalWeightKg", header: "Barcode kg", align: "right" },
-  { key: "noBarcodeQuantity", header: "No-barcode qty", align: "right" },
-  { key: "noBarcodeWeightKg", header: "No-barcode kg", align: "right" },
+  { key: "noBarcodeQuantity", header: "Legacy qty", align: "right" },
+  { key: "noBarcodeWeightKg", header: "Legacy kg", align: "right" },
   { key: "totalQuantity", header: "Total qty", align: "right" },
   { key: "combinedWeightKg", header: "Total kg", align: "right" },
   { key: "stockStatus", header: "Alert" },
+]
+
+const unitColumns: DataTableColumn<TableRow>[] = [
+  { key: "barcode", header: "Barcode" },
+  { key: "itemName", header: "Item" },
+  { key: "brandName", header: "Brand" },
+  { key: "originName", header: "Origin" },
+  { key: "locationName", header: "Location" },
+  { key: "status", header: "Status" },
+  { key: "netWeightKg", header: "Kg", align: "right" },
+  { key: "receivedAt", header: "Received" },
 ]
 
 const movementColumns: DataTableColumn<TableRow>[] = [
@@ -221,6 +270,63 @@ function KpiCards({ kpis }: { kpis: { label: string; value: string; detail: stri
           </CardContent>
         </Card>
       ))}
+    </div>
+  )
+}
+
+const stockShortcuts = [
+  {
+    label: "Inbound",
+    href: "/stock/inbound",
+    icon: PackagePlus,
+  },
+  {
+    label: "Outbound",
+    href: "/stock/outbound",
+    icon: Send,
+  },
+  {
+    label: "Transfer",
+    href: "/stock/transfer",
+    icon: ArrowRightLeft,
+  },
+  {
+    label: "Receive",
+    href: "/stock/receive-transfer",
+    icon: PackageCheck,
+  },
+  {
+    label: "Return",
+    href: "/stock/return",
+    icon: RotateCcw,
+  },
+]
+
+function StockShortcutButtons() {
+  return (
+    <div className="space-y-3">
+      <div>
+        <h2 className="text-base font-semibold">Stock shortcuts</h2>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        {stockShortcuts.map((shortcut) => {
+          const Icon = shortcut.icon
+
+          return (
+            <Button
+              key={shortcut.href}
+              asChild
+              variant="outline"
+              className="h-12 justify-start gap-2"
+            >
+              <a href={shortcut.href}>
+                <Icon className="size-4" />
+                {shortcut.label}
+              </a>
+            </Button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -350,10 +456,75 @@ function StockAgeAlertPanel({
   )
 }
 
+function TransferPendingAlertPanel({
+  alerts,
+}: {
+  alerts: Awaited<
+    ReturnType<typeof getStockPageData>
+  >["dashboard"]["transferPendingAlerts"]
+}) {
+  if (alerts.length === 0) {
+    return null
+  }
+
+  const previewAlerts = alerts.slice(0, 4)
+  const hiddenCount = alerts.length - previewAlerts.length
+
+  return (
+    <Card className="border-orange-200 bg-orange-50/60 dark:border-orange-900 dark:bg-orange-950/30">
+      <CardHeader className="pb-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="text-base text-orange-950 dark:text-orange-100">
+              Transfer receive overdue
+            </CardTitle>
+            <CardDescription className="text-orange-900/80 dark:text-orange-200/80">
+              Transfers scanned out for more than 3 days should be received or
+              investigated.
+            </CardDescription>
+          </div>
+          <Badge variant="warning">{alerts.length} open</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-2 sm:grid-cols-2">
+        {previewAlerts.map((alert) => (
+          <div
+            key={alert.id}
+            className="rounded-md border border-orange-200 bg-background p-3 text-sm dark:border-orange-900"
+          >
+            <div className="font-medium">{alert.itemName}</div>
+            <div className="mt-1 break-all font-mono text-xs">
+              {alert.barcode}
+            </div>
+            <div className="mt-2 text-muted-foreground">
+              {alert.fromLocation} {"->"} {alert.toLocation}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Scanned out {dateText(alert.transferredAt)}
+            </div>
+            <div className="mt-2 tabular-nums text-orange-700 dark:text-orange-300">
+              {alert.ageDays} day{alert.ageDays === 1 ? "" : "s"} pending
+            </div>
+          </div>
+        ))}
+        {hiddenCount > 0 ? (
+          <div className="rounded-md border border-dashed border-orange-200 bg-background p-3 text-sm text-muted-foreground dark:border-orange-900">
+            {hiddenCount} more overdue transfer
+            {hiddenCount === 1 ? "" : "s"} awaiting receive scan.
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
 function itemRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[] {
   return data.items.map((item) => ({
     itemCode: item.itemCode,
     category: item.category,
+    defaultBrandName:
+      data.brands.find((brand) => brand.id === item.defaultBrandId)?.name ??
+      "No brand",
     section: item.section,
     name: item.name,
     barcodeRequired: item.barcodeRequired,
@@ -374,6 +545,29 @@ function balanceRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableR
     combinedWeightKg: balance.combinedWeightKg,
     stockStatus: balance.hasNegativeStock ? "NEGATIVE_STOCK" : "OK",
   }))
+}
+
+function unitRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[] {
+  return data.units.map((unit) => {
+    const item = data.items.find((candidate) => candidate.id === unit.itemId)
+    const brand = data.brands.find((candidate) => candidate.id === unit.brandId)
+    const origin = data.origins.find((candidate) => candidate.id === unit.originId)
+    const location = data.locations.find(
+      (candidate) => candidate.id === unit.locationId
+    )
+
+    return {
+      id: unit.id,
+      barcode: unit.barcode,
+      itemName: item?.name ?? "Unknown item",
+      brandName: brand?.name ?? "Unbranded",
+      originName: origin?.name ?? "Unknown origin",
+      locationName: location?.name ?? "Unknown location",
+      status: unit.status,
+      netWeightKg: unit.netWeightKg,
+      receivedAt: dateText(unit.receivedAt),
+    }
+  })
 }
 
 function movementRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[] {
@@ -399,45 +593,6 @@ function reportRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRo
     weightKg: report.weightKg,
     generatedAt: dateText(report.generatedAt),
   }))
-}
-
-function csvCell(value: string | number | boolean) {
-  return `"${String(value).replaceAll('"', '""')}"`
-}
-
-function buildCsv(rows: TableRow[]) {
-  const headers = Object.keys(rows[0] ?? {})
-
-  if (headers.length === 0) {
-    return ""
-  }
-
-  return [
-    headers.map(csvCell).join(","),
-    ...rows.map((row) => headers.map((header) => csvCell(row[header])).join(",")),
-  ].join("\n")
-}
-
-function buildStockWhatsappSummary(
-  rows: TableRow[],
-  negativeStockAlertCount: number,
-  stockAgeAlertCount: number
-) {
-  const totalCount = rows.reduce((sum, row) => sum + Number(row.count ?? 0), 0)
-  const totalWeight = rows.reduce((sum, row) => sum + Number(row.weightKg ?? 0), 0)
-  const locations = new Set(rows.map((row) => String(row.locationName))).size
-
-  return [
-    "Elite Meat Stock Report",
-    `Locations: ${locations}`,
-    `Report rows: ${rows.length}`,
-    `Total count: ${totalCount}`,
-    `Total weight: ${totalWeight.toLocaleString(undefined, {
-      maximumFractionDigits: 3,
-    })} kg`,
-    `Negative stock alerts: ${negativeStockAlertCount}`,
-    `Stock age alerts: ${stockAgeAlertCount}`,
-  ].join("\n")
 }
 
 function masterRows(rows: { name: string; active: boolean }[]): TableRow[] {
@@ -494,12 +649,15 @@ function MovementsFilter({ filters }: { filters: MovementFilters }) {
 
 function DashboardView({
   data,
+  canOperateStock,
 }: {
   data: Awaited<ReturnType<typeof getStockPageData>>
+  canOperateStock: boolean
 }) {
   return (
     <>
       <KpiCards kpis={data.dashboard.kpis} />
+      {canOperateStock ? <StockShortcutButtons /> : null}
       <StockDashboardCharts
         categoryMix={data.dashboard.categoryMix}
         locationStock={data.dashboard.locationStock}
@@ -575,7 +733,8 @@ export async function StockPage({
 
   const profile = await requireCurrentProfile()
   const canOperateStock = hasAnyRole(profile, stockOperatorRoles)
-  const canApproveStock = hasAnyRole(profile, ["admin", "director"])
+  const canManageStockTake = hasAnyRole(profile, stockManagerRoles)
+  const canDirectorApproveStockTake = hasAnyRole(profile, ["admin", "director"])
 
   const [data, ordersResult] = await Promise.all([
     getStockPageData(filters),
@@ -599,7 +758,8 @@ export async function StockPage({
   const stockWhatsappSummary = buildStockWhatsappSummary(
     stockReportRows,
     data.dashboard.negativeStockAlerts.length,
-    data.dashboard.stockAgeAlerts.length
+    data.dashboard.stockAgeAlerts.length,
+    data.dashboard.transferPendingAlerts.length
   )
 
   return (
@@ -607,12 +767,17 @@ export async function StockPage({
       <PageHeader route={route} demoMode={data.demoMode} />
       <NegativeStockAlertPanel alerts={data.dashboard.negativeStockAlerts} />
       <StockAgeAlertPanel alerts={data.dashboard.stockAgeAlerts} />
+      <TransferPendingAlertPanel
+        alerts={data.dashboard.transferPendingAlerts}
+      />
 
-      {route === "dashboard" ? <DashboardView data={data} /> : null}
+      {route === "dashboard" ? (
+        <DashboardView data={data} canOperateStock={canOperateStock} />
+      ) : null}
 
       {route === "items" ? (
         <>
-          <ItemMasterForm items={data.items} />
+          <ItemMasterForm items={data.items} brands={data.brands} />
           <Card>
             <CardHeader>
               <CardTitle>Items</CardTitle>
@@ -632,6 +797,9 @@ export async function StockPage({
           origins={data.origins}
           locations={data.locations}
           barcodeWeightRules={data.barcodeWeightRules}
+          units={data.units}
+          defaultLocationId={profile.stockLocationId}
+          scannedByName={profile.fullName || profile.email}
         />
       ) : null}
 
@@ -639,6 +807,7 @@ export async function StockPage({
         ordersResult?.ordersData ? (
           <OutboundSalesForm
             orders={ordersResult.ordersData.orders}
+            orderItems={ordersResult.ordersData.items}
             locations={data.locations}
             units={data.units}
             items={data.items}
@@ -669,27 +838,61 @@ export async function StockPage({
 
       {route === "return" ? <ReturnForm locations={data.locations} /> : null}
 
-      {route === "no-barcode-inbound" ? (
-        <NoBarcodeInboundForm
-          items={data.items}
-          brands={data.brands}
-          origins={data.origins}
-          locations={data.locations}
+      {route === "return" ? (
+        <InspectionReleaseForm canManage={canManageStockTake} />
+      ) : null}
+
+      {route === "return" ? (
+        <DamageRequestWorkbench
+          requests={data.damageRequests}
+          canOperate={canOperateStock}
+          canManage={canManageStockTake}
+          canDirectorApprove={canDirectorApproveStockTake}
         />
       ) : null}
 
+      {route === "return" ? (
+        <ReturnSupplierWorkbench
+          requests={data.returnSupplierRequests}
+          canOperate={canOperateStock}
+          canManage={canManageStockTake}
+        />
+      ) : null}
+
+      {route === "no-barcode-inbound" ? <NoBarcodeInboundForm /> : null}
+
       {route === "balance" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Balance by item and location</CardTitle>
-            <CardDescription>
-              Barcode units and no-barcode stock combined.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataTable columns={balanceColumns} data={balanceRows(data)} />
-          </CardContent>
-        </Card>
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Balance by item and location</CardTitle>
+              <CardDescription>
+                Barcode stock with legacy loose balances kept visible for old
+                records.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable columns={balanceColumns} data={balanceRows(data)} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Barcode stock units</CardTitle>
+              <CardDescription>
+                Open a stock unit to review its history or reprint a 50mm x 30mm
+                label.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable
+                columns={unitColumns}
+                data={unitRows(data)}
+                getRowHref={(row) => `/stock/units/${row.id}`}
+                emptyText="No barcode stock units found."
+              />
+            </CardContent>
+          </Card>
+        </>
       ) : null}
 
       {route === "movements" ? (
@@ -713,12 +916,13 @@ export async function StockPage({
       {route === "stock-take" ? (
         <StockTakeWorkbench
           items={data.items}
+          brands={data.brands}
           locations={data.locations}
-          balances={data.balances}
           sessions={data.stockTakeSessions}
           lines={data.stockTakeLines}
           canOperate={canOperateStock}
-          canApprove={canApproveStock}
+          canManage={canManageStockTake}
+          canDirectorApprove={canDirectorApproveStockTake}
         />
       ) : null}
 
@@ -728,7 +932,8 @@ export async function StockPage({
             <div>
               <CardTitle>Printable stock reports</CardTitle>
               <CardDescription>
-                Summary totals by location and category.
+                Stock balance by item, brand, location, inbound age, stock take
+                variance, damage/spoilage, and return-supplier summaries.
               </CardDescription>
             </div>
             <ReportToolbar
