@@ -4744,3 +4744,45 @@ Remaining issues:
 Next recommended task:
 
 - After Vercel deploys the pushed branch, run the first 10 steps in `docs/REMOTE_QA_STOCK_INBOUND.md`.
+
+## 2026-06-13 - Supabase migration handoff for Stock Inbound QA
+
+Task completed:
+
+- Inspected local Supabase configuration before attempting live database work.
+- Confirmed local `.env.local` points to `https://aikfqnbsshflbtuakwrz.supabase.co`.
+- Confirmed Supabase CLI is not installed in this environment.
+- Confirmed no local Supabase link metadata exists in `supabase/config.toml` or `supabase/.temp`.
+- Did not run live Supabase migrations because the CLI project link and remote migration history could not be verified safely.
+- Created exact SQL Editor migration handoff through migration `053`.
+
+Files changed:
+
+- `docs/SUPABASE_MIGRATION_HANDOFF.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None in this handoff slice.
+- Existing required latest migration remains `supabase/migrations/202606100053_stock_inbound_session_undo_v1.sql`.
+
+Exact migration order:
+
+- Run every migration in filename order through `supabase/migrations/202606100053_stock_inbound_session_undo_v1.sql`.
+- Then run `supabase/seed.sql` only for a safe demo/staging reseed.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issues:
+
+- Remote migration history could not be checked because Supabase CLI is unavailable and no safe database admin connection is configured.
+- Migration `053` still needs to be applied to the target Supabase project before Stock Inbound undo works in Vercel.
+
+Next recommended task:
+
+- In Supabase SQL Editor for `https://aikfqnbsshflbtuakwrz.supabase.co`, follow `docs/SUPABASE_MIGRATION_HANDOFF.md`, then test `/stock/inbound` on Vercel.
