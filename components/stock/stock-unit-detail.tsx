@@ -1,9 +1,15 @@
 "use client"
 
-import { ArrowLeft, Printer } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 
 import { DataTable, type DataTableColumn } from "@/components/stock/data-table"
+import {
+  StockLabelPreview,
+  StockLabelPrintActions,
+  StockLabelPrintArea,
+  StockLabelPrintNote,
+} from "@/components/stock/stock-label"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -61,34 +67,19 @@ export function StockUnitDetailView({
   movements: StockMovement[]
   demoMode: boolean
 }) {
+  const label = {
+    id: unit.id,
+    companyName: "Elite Meat",
+    productName: unit.itemName,
+    weightKg: unit.netWeightKg.toLocaleString(undefined, {
+      maximumFractionDigits: 3,
+    }),
+    barcode: unit.barcode,
+  }
+
   return (
     <div className="space-y-5">
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-
-          .stock-label-print-area,
-          .stock-label-print-area * {
-            visibility: visible;
-          }
-
-          .stock-label-print-area {
-            position: fixed;
-            inset: 0;
-            width: 50mm;
-            height: 30mm;
-            padding: 2mm;
-            background: white;
-          }
-
-          @page {
-            size: 50mm 30mm;
-            margin: 0;
-          }
-        }
-      `}</style>
+      <StockLabelPrintArea labels={[label]} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
@@ -106,15 +97,14 @@ export function StockUnitDetailView({
               {demoMode ? <Badge variant="warning">Demo data</Badge> : null}
             </div>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              View barcode status, movement history, and reprint the 50mm x 30mm
-              thermal label.
+              View barcode status, movement history, and reprint the old label
+              from a phone. No reason is required.
             </p>
           </div>
         </div>
-        <Button type="button" onClick={() => window.print()}>
-          <Printer className="size-4" />
-          Print / Export PDF label
-        </Button>
+        <div className="w-full sm:w-[320px]">
+          <StockLabelPrintActions />
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -177,31 +167,11 @@ export function StockUnitDetailView({
         <Card>
           <CardHeader>
             <CardTitle>Label preview</CardTitle>
-            <CardDescription>
-              Printed as one 50mm x 30mm label per page.
-            </CardDescription>
+            <CardDescription>Simple mobile reprint label.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="stock-label-print-area mx-auto flex aspect-[5/3] w-full max-w-[280px] flex-col justify-between rounded border bg-white p-3 text-black shadow-xs">
-              <div>
-                <div className="text-xs font-bold uppercase">Elite Meat</div>
-                <div className="mt-1 line-clamp-2 text-sm font-semibold leading-tight">
-                  {unit.itemName}
-                </div>
-              </div>
-              <div className="text-xl font-bold tabular-nums">
-                {unit.netWeightKg.toLocaleString(undefined, {
-                  maximumFractionDigits: 3,
-                })}{" "}
-                kg
-              </div>
-              <div className="space-y-1">
-                <div className="h-9 w-full bg-[repeating-linear-gradient(90deg,#000_0,#000_2px,#fff_2px,#fff_4px,#000_4px,#000_5px,#fff_5px,#fff_7px)]" />
-                <div className="break-all text-center text-[10px] font-semibold tracking-wide">
-                  {unit.barcode}
-                </div>
-              </div>
-            </div>
+          <CardContent className="space-y-3">
+            <StockLabelPreview label={label} />
+            <StockLabelPrintNote />
           </CardContent>
         </Card>
       </div>

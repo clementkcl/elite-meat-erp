@@ -14,6 +14,8 @@ import {
   demoMovements,
   demoNoBarcodeStock,
   demoOrigins,
+  demoOutlets,
+  demoScanLogs,
   demoDamageRequests,
   demoReturnSupplierRequests,
   demoStockTakeLines,
@@ -45,8 +47,11 @@ import {
   type StockLocation,
   type StockMovement,
   type StockMovementType,
+  type StockOutlet,
   type StockPageData,
   type StockReportRow,
+  type StockScanAlert,
+  type StockScanLog,
   type StockInboundSource,
   type StockTakeLine,
   type StockTakeSession,
@@ -141,6 +146,7 @@ function isDashboardOutboundMovement(movementType: StockMovementType) {
     "OUTBOUND_PROCESSING",
     "OUTBOUND_SPOILED",
     "OUTBOUND_RETURN_SUPPLIER",
+    "OUTBOUND_SAMPLE_TESTING",
     "NO_BARCODE_OUTBOUND",
   ].includes(movementType)
 }
@@ -184,7 +190,16 @@ function mapLocation(row: Record<string, unknown>): StockLocation {
   return {
     id: readString(row.id),
     name: readString(row.name),
+    outletId: readNullableString(row.outlet_id),
+    isDefaultForOutlet: readBoolean(row.is_default_for_outlet),
     active: readBoolean(row.is_active, true),
+  }
+}
+
+function mapOutlet(row: Record<string, unknown>): StockOutlet {
+  return {
+    id: readString(row.id),
+    name: readString(row.name),
   }
 }
 
@@ -282,6 +297,8 @@ function mapStockTakeLine(
   items: Item[]
 ): StockTakeLine {
   const itemId = readString(row.item_id)
+  const exceptionType = readNullableString(row.exception_type)
+  const exceptionStatus = readNullableString(row.exception_status)
   const systemCount = readNumber(row.system_count)
   const actualCount = readNumber(row.actual_count)
   const systemWeightKg = readNumber(row.system_weight_kg)
@@ -291,6 +308,7 @@ function mapStockTakeLine(
     id: readString(row.id),
     sessionId: readString(row.session_id),
     itemId,
+    brandId: readNullableString(row.brand_id),
     barcode: readNullableString(row.barcode),
     itemName: formatItemName(items.find((item) => item.id === itemId)),
     systemCount,
@@ -302,6 +320,17 @@ function mapStockTakeLine(
       row.variance_weight_kg,
       actualWeightKg - systemWeightKg
     ),
+    exceptionType:
+      exceptionType === "UNKNOWN_BARCODE" || exceptionType === "WRONG_LOCATION"
+        ? exceptionType
+        : null,
+    exceptionStatus:
+      exceptionStatus === "PENDING" || exceptionStatus === "RESOLVED"
+        ? exceptionStatus
+        : null,
+    exceptionLocationId: readNullableString(row.exception_location_id),
+    sourceStockUnitId: readNullableString(row.source_stock_unit_id),
+    resolvedStockUnitId: readNullableString(row.resolved_stock_unit_id),
     notes: readString(row.notes, ""),
   }
 }
@@ -385,6 +414,18 @@ function mapMovement(
     weightKg: readNumber(row.weight_kg),
     referenceNo: readString(row.reference_no, "-"),
     notes: readString(row.notes, ""),
+    createdAt: readString(row.created_at, new Date().toISOString()),
+  }
+}
+
+function mapScanLog(row: Record<string, unknown>): StockScanLog {
+  return {
+    id: readString(row.id),
+    barcode: readString(row.barcode),
+    action: readString(row.action),
+    success: readBoolean(row.success),
+    message: readString(row.message),
+    scannedBy: readNullableString(row.scanned_by),
     createdAt: readString(row.created_at, new Date().toISOString()),
   }
 }
@@ -601,6 +642,9 @@ function buildReports(
   items: Item[] = [],
   brands: Brand[] = [],
   locations: StockLocation[] = [],
+  movements: StockMovement[] = [],
+  stockAgeAlerts: StockAgeAlert[] = [],
+  scanLogs: StockScanLog[] = [],
   damageRequests: StockDamageRequest[] = [],
   returnSupplierRequests: StockReturnSupplierRequest[] = [],
   stockTakeLines: StockTakeLine[] = [],
@@ -610,6 +654,80 @@ function buildReports(
   const totalByLocation = new Map<string, StockReportRow>()
   const totalByCategory = new Map<string, StockReportRow>()
   const stockByInboundAge = new Map<string, StockReportRow>()
+  const movementHistoryRows = movements.map((movement) => ({
+    id: `report-movement-${movement.id}`,
+    reportName: "Stock movement history",
+    locationName: movement.toLocation !== "-" ? movement.toLocation : movement.fromLocation,
+    category: movement.movementType,
+    count: movement.quantity,
+    weightKg: roundWeight(movement.weightKg),
+    generatedAt: movement.createdAt,
+  }) satisfies StockReportRow)
+  const inboundRows = movements
+    .filter((movement) => isDashboardInboundMovement(movement.movementType))
+    .map((movement) => ({
+      id: `report-inbound-${movement.id}`,
+      reportName: "Inbound",
+      locationName: movement.toLocation,
+      category: movement.itemName,
+      count: movement.quantity,
+      weightKg: roundWeight(movement.weightKg),
+      generatedAt: movement.createdAt,
+    }) satisfies StockReportRow)
+  const outboundRows = movements
+    .filter((movement) => isDashboardOutboundMovement(movement.movementType))
+    .map((movement) => ({
+      id: `report-outbound-${movement.id}`,
+      reportName: "Outbound",
+      locationName: movement.fromLocation,
+      category: movement.movementType,
+      count: movement.quantity,
+      weightKg: roundWeight(movement.weightKg),
+      generatedAt: movement.createdAt,
+    }) satisfies StockReportRow)
+  const transferPendingRows = units
+    .filter((unit) => unit.status === "TRANSFER_PENDING")
+    .map((unit) => {
+      const movement = movements.find(
+        (candidate) =>
+          candidate.movementType === "OUTBOUND_TRANSFER" &&
+          candidate.barcode === unit.barcode
+      )
+
+      return {
+        id: `report-transfer-pending-${unit.id}`,
+        reportName: "Transfer pending",
+        locationName: findName(locations, unit.locationId),
+        category: unit.barcode,
+        count: 1,
+        weightKg: roundWeight(unit.netWeightKg),
+        generatedAt: movement?.createdAt ?? unit.receivedAt,
+      } satisfies StockReportRow
+    })
+  const oldStockRows = stockAgeAlerts.map((alert) => ({
+    id: `report-old-stock-${alert.id}`,
+    reportName: "Old stock 6 months",
+    locationName: alert.locationName,
+    category: `${alert.itemName} / ${
+      alert.alertLevel === "OVER_12_MONTHS" ? "Over 12 months" : "Over 6 months"
+    }`,
+    count: 1,
+    weightKg: roundWeight(
+      units.find((unit) => unit.barcode === alert.barcode)?.netWeightKg ?? 0
+    ),
+    generatedAt: now,
+  }) satisfies StockReportRow)
+  const barcodeScanErrorRows = scanLogs
+    .filter((log) => !log.success)
+    .map((log) => ({
+      id: `report-barcode-scan-error-${log.id}`,
+      reportName: "Barcode scan errors",
+      locationName: "SCAN LOG",
+      category: `${log.action}: ${log.message}`,
+      count: 1,
+      weightKg: 0,
+      generatedAt: log.createdAt,
+    }) satisfies StockReportRow)
 
   balances.forEach((balance) => {
     const locationRow =
@@ -697,7 +815,7 @@ function buildReports(
         id: `report-damage-${request.id}`,
         reportName: "Damage/spoilage",
         locationName: request.locationName,
-        category: request.status,
+        category: `${request.status} / Manager signature: ${request.managerSignature ?? "Pending"} / Director signature: ${request.directorSignature ?? "Pending"}`,
         count: 1,
         weightKg: roundWeight(linkedUnit?.netWeightKg ?? 0),
         generatedAt: request.requestedAt,
@@ -732,7 +850,7 @@ function buildReports(
           id: `report-stock-take-variance-${line.id}`,
           reportName: "Stock take variance",
           locationName: session?.locationName ?? "STOCK TAKE",
-          category: line.itemName,
+          category: `${line.itemName} / Manager signature: ${session?.managerSignature ?? "Pending"} / Director signature: ${session?.directorSignature ?? "Pending"}`,
           count: line.varianceCount,
           weightKg: roundWeight(line.varianceWeightKg),
           generatedAt: session?.approvedAt ?? session?.createdAt ?? now,
@@ -743,9 +861,15 @@ function buildReports(
     ...totalByLocation.values(),
     ...totalByCategory.values(),
     ...stockByInboundAge.values(),
+    ...movementHistoryRows,
+    ...inboundRows,
+    ...outboundRows,
+    ...transferPendingRows,
+    ...oldStockRows,
     ...stockTakeVarianceRows,
     ...damageRows,
     ...returnSupplierRows,
+    ...barcodeScanErrorRows,
   ]
 }
 
@@ -756,7 +880,10 @@ function buildDashboard(
   noBarcodeStock: NoBarcodeStock[],
   movements: StockMovement[],
   balances: StockBalanceRow[],
-  stockTakeLines: StockTakeLine[]
+  stockTakeLines: StockTakeLine[],
+  stockTakeSessions: StockTakeSession[] = [],
+  damageRequests: StockDamageRequest[] = [],
+  scanLogs: StockScanLog[] = []
 ) {
   const inStockUnits = units.filter((unit) =>
     stockableStatuses.includes(unit.status)
@@ -784,6 +911,38 @@ function buildDashboard(
     movements,
     items
   )
+  const pendingDamageApprovals = damageRequests.filter((request) =>
+    ["SUBMITTED", "MANAGER_REVIEWED"].includes(request.status)
+  )
+  const pendingStockTakeApprovals = stockTakeSessions.filter((session) =>
+    ["SUBMITTED", "REVIEWED"].includes(session.status)
+  )
+  const duplicateScanAttempts = scanLogs.filter(
+    (log) => !log.success && log.message.toLowerCase().includes("duplicate")
+  )
+  const barcodeDecodeErrors = scanLogs.filter((log) => {
+    const message = log.message.toLowerCase()
+
+    return (
+      !log.success &&
+      (message.includes("decode") ||
+        message.includes("confident") ||
+        message.includes("weight"))
+    )
+  })
+  const scanAlerts: StockScanAlert[] = [
+    ...duplicateScanAttempts,
+    ...barcodeDecodeErrors,
+  ]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 8)
+    .map((log) => ({
+      id: `scan-alert-${log.id}`,
+      barcode: log.barcode,
+      action: log.action,
+      message: log.message,
+      createdAt: log.createdAt,
+    }))
   const today = tableDate(new Date().toISOString())
   const todayInboundWeight = movements
     .filter(
@@ -921,6 +1080,26 @@ function buildDashboard(
             ? "Stock older than 6 or 12 months"
             : "No aged stock detected",
       },
+      {
+        label: "Damage pending approval",
+        value: String(pendingDamageApprovals.length),
+        detail: "Submitted or manager-reviewed damage requests",
+      },
+      {
+        label: "Stock take pending approval",
+        value: String(pendingStockTakeApprovals.length),
+        detail: "Submitted manager review or director approval",
+      },
+      {
+        label: "Duplicate scan attempts",
+        value: String(duplicateScanAttempts.length),
+        detail: "Blocked duplicate barcode scan logs",
+      },
+      {
+        label: "Barcode decode errors",
+        value: String(barcodeDecodeErrors.length),
+        detail: "Blocked weight/decode scan logs",
+      },
     ],
     categoryMix,
     locationStock,
@@ -928,6 +1107,7 @@ function buildDashboard(
     negativeStockAlerts,
     stockAgeAlerts,
     transferPendingAlerts,
+    scanAlerts,
   }
 }
 
@@ -936,10 +1116,16 @@ function filterMovements(
   filters: MovementFilters = {}
 ) {
   const query = filters.q?.trim().toLowerCase()
-  const type = filters.type?.trim()
+  const type = filters.movementType?.trim() || filters.type?.trim()
   const location = filters.location?.trim().toLowerCase()
+  const dateFrom = filters.dateFrom?.trim()
+  const dateTo = filters.dateTo?.trim()
+  const item = filters.item?.trim().toLowerCase()
+  const status = filters.status?.trim().toLowerCase()
+  const user = filters.user?.trim().toLowerCase()
 
   return movements.filter((movement) => {
+    const movementDate = tableDate(movement.createdAt)
     const matchesQuery =
       !query ||
       [
@@ -956,8 +1142,26 @@ function filterMovements(
       !location ||
       movement.fromLocation.toLowerCase().includes(location) ||
       movement.toLocation.toLowerCase().includes(location)
+    const matchesDateFrom = !dateFrom || movementDate >= dateFrom
+    const matchesDateTo = !dateTo || movementDate <= dateTo
+    const matchesItem =
+      !item || movement.itemName.toLowerCase().includes(item)
+    const matchesStatus =
+      !status ||
+      movement.movementType.toLowerCase().includes(status) ||
+      movement.notes.toLowerCase().includes(status)
+    const matchesUser = !user || movement.notes.toLowerCase().includes(user)
 
-    return matchesQuery && matchesType && matchesLocation
+    return (
+      matchesQuery &&
+      matchesType &&
+      matchesLocation &&
+      matchesDateFrom &&
+      matchesDateTo &&
+      matchesItem &&
+      matchesStatus &&
+      matchesUser
+    )
   })
 }
 
@@ -965,12 +1169,14 @@ async function loadSupabaseData(filters: MovementFilters) {
   const [
     brandRows,
     originRows,
+    outletRows,
     locationRows,
     itemRows,
     unitRows,
     barcodeWeightRuleRows,
     noBarcodeRows,
     movementRows,
+    scanLogRows,
     stockTakeSessionRows,
     stockTakeLineRows,
     damageRequestRows,
@@ -978,12 +1184,14 @@ async function loadSupabaseData(filters: MovementFilters) {
   ] = await Promise.all([
     loadRows("brands"),
     loadRows("origins"),
+    loadRows("outlets"),
     loadRows("stock_locations"),
     loadRows("items"),
     loadRows("stock_units"),
     loadRows("barcode_weight_rules"),
     loadRows("no_barcode_stock"),
     loadRows("stock_movements"),
+    loadRows("barcode_scan_logs"),
     loadRows("stock_take_sessions"),
     loadRows("stock_take_lines"),
     loadRows("stock_damage_requests"),
@@ -993,12 +1201,14 @@ async function loadSupabaseData(filters: MovementFilters) {
   if (
     !brandRows ||
     !originRows ||
+    !outletRows ||
     !locationRows ||
     !itemRows ||
     !unitRows ||
     !barcodeWeightRuleRows ||
     !noBarcodeRows ||
     !movementRows ||
+    !scanLogRows ||
     !stockTakeSessionRows ||
     !stockTakeLineRows ||
     !damageRequestRows ||
@@ -1009,6 +1219,7 @@ async function loadSupabaseData(filters: MovementFilters) {
 
   const brands = brandRows.map(mapBrand)
   const origins = originRows.map(mapOrigin)
+  const outlets = outletRows.map(mapOutlet)
   const locations = locationRows.map(mapLocation)
   const items = itemRows.map(mapItem)
   const units = unitRows.map(mapUnit)
@@ -1020,6 +1231,9 @@ async function loadSupabaseData(filters: MovementFilters) {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     filters
   )
+  const scanLogs = scanLogRows
+    .map(mapScanLog)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const balances = buildBalances(items, locations, units, noBarcodeStock)
   const stockTakeSessions = stockTakeSessionRows
     .map((row) => mapStockTakeSession(row, locations))
@@ -1039,6 +1253,9 @@ async function loadSupabaseData(filters: MovementFilters) {
     items,
     brands,
     locations,
+    movements,
+    buildStockAgeAlerts(units, items, locations),
+    scanLogs,
     damageRequests,
     returnSupplierRequests,
     stockTakeLines,
@@ -1049,12 +1266,14 @@ async function loadSupabaseData(filters: MovementFilters) {
     demoMode: false,
     brands,
     origins,
+    outlets,
     locations,
     items,
     units,
     barcodeWeightRules,
     noBarcodeStock,
     movements,
+    scanLogs,
     balances,
     stockTakeSessions,
     stockTakeLines,
@@ -1068,7 +1287,10 @@ async function loadSupabaseData(filters: MovementFilters) {
       noBarcodeStock,
       movements,
       balances,
-      stockTakeLines
+      stockTakeLines,
+      stockTakeSessions,
+      damageRequests,
+      scanLogs
     ),
   } satisfies StockPageData
 }
@@ -1087,6 +1309,9 @@ function buildDemoData(filters: MovementFilters): StockPageData {
     demoItems,
     demoBrands,
     demoLocations,
+    movements,
+    buildStockAgeAlerts(demoUnits, demoItems, demoLocations),
+    demoScanLogs,
     demoDamageRequests,
     demoReturnSupplierRequests,
     demoStockTakeLines,
@@ -1097,12 +1322,14 @@ function buildDemoData(filters: MovementFilters): StockPageData {
     demoMode: true,
     brands: demoBrands,
     origins: demoOrigins,
+    outlets: demoOutlets,
     locations: demoLocations,
     items: demoItems,
     units: demoUnits,
     barcodeWeightRules: demoBarcodeWeightRules,
     noBarcodeStock: demoNoBarcodeStock,
     movements,
+    scanLogs: demoScanLogs,
     balances,
     stockTakeSessions: demoStockTakeSessions,
     stockTakeLines: demoStockTakeLines,
@@ -1116,7 +1343,10 @@ function buildDemoData(filters: MovementFilters): StockPageData {
       demoNoBarcodeStock,
       movements,
       balances,
-      demoStockTakeLines
+      demoStockTakeLines,
+      demoStockTakeSessions,
+      demoDamageRequests,
+      demoScanLogs
     ),
   }
 }

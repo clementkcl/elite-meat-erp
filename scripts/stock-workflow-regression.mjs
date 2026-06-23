@@ -31,6 +31,7 @@ import {
   duplicateOutboundBarcode,
   outboundUnitBlockReason,
   parseOutboundBarcodes,
+  requireSubstitutionConfirmation,
 } from "../lib/stock/outbound-rules.ts"
 import {
   requireSignature,
@@ -260,6 +261,33 @@ assert.throws(
   () => assertCustomerOrderReadyForOutbound({ status: "PREPARING" }),
   /Customer order must be marked ready/,
   "Non-ready orders should be blocked from outbound confirmation."
+)
+assert.throws(
+  () =>
+    requireSubstitutionConfirmation({
+      hasSubstitution: true,
+      confirmed: false,
+    }),
+  /Confirm substitution/,
+  "Order outbound substitutions should require explicit confirmation."
+)
+assert.doesNotThrow(
+  () =>
+    requireSubstitutionConfirmation({
+      hasSubstitution: true,
+      confirmed: true,
+    }),
+  "Confirmed substitutions should be allowed."
+)
+assert.equal(
+  activeStockStatus("HOLD_RETURN_SUPPLIER"),
+  false,
+  "Return-supplier hold stock should be unavailable for normal outbound."
+)
+assert.equal(
+  movementTypeForOutboundType("SAMPLE_TESTING"),
+  "OUTBOUND_SAMPLE_TESTING",
+  "Sample/testing direct outbound should create sample/testing movement rows."
 )
 
 assert.equal(

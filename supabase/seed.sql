@@ -106,7 +106,8 @@ insert into public.customers (
   outlet_id,
   credit_term_days,
   latitude,
-  longitude
+  longitude,
+  remarks
 )
 select
   seed.customer_code,
@@ -117,7 +118,8 @@ select
   outlet.id,
   seed.credit_term_days,
   seed.latitude,
-  seed.longitude
+  seed.longitude,
+  seed.remarks
 from (values
   (
     'CUST-JC-PICKUP-001',
@@ -128,7 +130,8 @@ from (values
     'JALAN CHANNEL',
     0,
     2.2871000,
-    111.8320000
+    111.8320000,
+    'Prefers morning pickup.'
   ),
   (
     'CUST-SM-CREDIT-001',
@@ -139,7 +142,8 @@ from (values
     'SUNGAI MERAH',
     30,
     2.3123000,
-    111.8460000
+    111.8460000,
+    'Call before delivery.'
   )
 ) as seed(
   customer_code,
@@ -150,7 +154,8 @@ from (values
   outlet_name,
   credit_term_days,
   latitude,
-  longitude
+  longitude,
+  remarks
 )
 join public.customer_categories category on category.code = seed.category_code
 join public.outlets outlet on outlet.name = seed.outlet_name
@@ -163,6 +168,7 @@ on conflict (customer_code) do update set
   credit_term_days = excluded.credit_term_days,
   latitude = excluded.latitude,
   longitude = excluded.longitude,
+  remarks = excluded.remarks,
   is_active = true;
 
 update public.profiles profile
@@ -741,7 +747,28 @@ on conflict (order_no) do update set
 update public.customer_orders customer_order
 set customer_id = customer.id,
     source_type = 'manual_erp',
-    source_reference = customer_order.order_no
+    source_reference = customer_order.order_no,
+    salesperson_id = coalesce(customer_order.salesperson_id, customer_order.created_by),
+    total_order_price = case
+      when customer_order.order_no = 'ORD-SEED-PICKUP-001' then 188.00
+      when customer_order.order_no = 'ORD-SEED-DELIVERY-001' then 128.00
+      else customer_order.total_order_price
+    end,
+    required_at = case
+      when customer_order.order_no = 'ORD-SEED-PICKUP-001' then '2026-06-11 10:00:00+08'::timestamptz
+      when customer_order.order_no = 'ORD-SEED-DELIVERY-001' then '2026-06-11 14:00:00+08'::timestamptz
+      else customer_order.required_at
+    end,
+    customer_remarks = customer.remarks,
+    reservation_expires_at = coalesce(
+      customer_order.reservation_expires_at,
+      '2026-06-10 23:59:59+08'::timestamptz
+    ),
+    order_v1_status = public.customer_order_v1_status(
+      customer_order.status::text,
+      customer_order.stock_not_enough,
+      customer_order.picked_up_at
+    )
 from public.customers customer
 where (
     (customer_order.order_no = 'ORD-SEED-PICKUP-001' and customer.customer_code = 'CUST-JC-PICKUP-001')
@@ -751,25 +778,35 @@ where (
 insert into public.customer_order_items (
   order_id,
   item_id,
+  ordering_unit,
   requested_quantity,
   requested_weight_kg,
+  estimated_weight_kg,
   prepared_quantity,
   prepared_weight_kg,
   prepared_by,
   prepared_at,
   status,
+  item_request_remarks,
+  processing_required,
+  stock_not_enough,
   notes
 )
 select
   customer_order.id,
   item.id,
+  'KG',
   seed.requested_quantity,
+  seed.requested_weight_kg,
   seed.requested_weight_kg,
   seed.prepared_quantity,
   seed.prepared_weight_kg,
   first_profile.id,
   '2026-06-10 09:00:00+08'::timestamptz,
   'PREPARED'::public.customer_order_item_status,
+  seed.notes,
+  false,
+  false,
   seed.notes
 from (values
   ('ORD-SEED-PICKUP-001', '0001', 2.000, 24.250, 2.000, 24.250, 'Seed prepared pickup order line.'),
@@ -807,6 +844,8 @@ insert into public.order_stock_reservations (
   reserved_quantity,
   reserved_weight_kg,
   status,
+  stock_not_enough,
+  expires_at,
   created_by
 )
 select
@@ -817,6 +856,8 @@ select
   customer_order_item.requested_quantity,
   customer_order_item.requested_weight_kg,
   'ACTIVE',
+  false,
+  '2026-06-10 23:59:59+08'::timestamptz,
   first_profile.id
 from public.customer_order_items customer_order_item
 join public.customer_orders customer_order on customer_order.id = customer_order_item.order_id

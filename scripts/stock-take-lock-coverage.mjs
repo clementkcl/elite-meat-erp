@@ -23,6 +23,20 @@ function functionBody(source, name) {
   return source.slice(start, next === -1 ? source.length : next)
 }
 
+function internalFunctionBody(source, name) {
+  const marker = `async function ${name}`
+  const start = source.indexOf(marker)
+
+  assert(start >= 0, `Missing stock helper: ${name}`)
+
+  const nextExport = source.indexOf("\nexport async function ", start + marker.length)
+  const nextInternal = source.indexOf("\nasync function ", start + marker.length)
+  const nextCandidates = [nextExport, nextInternal].filter((index) => index >= 0)
+  const next = nextCandidates.length > 0 ? Math.min(...nextCandidates) : -1
+
+  return source.slice(start, next === -1 ? source.length : next)
+}
+
 function includesAll(source, fragments, label) {
   for (const fragment of fragments) {
     assert(source.includes(fragment), `${label} missing: ${fragment}`)
@@ -30,15 +44,15 @@ function includesAll(source, fragments, label) {
 }
 
 function assertLockCallShape(body, label) {
-  const callStart = body.indexOf("await assertStockNotLockedByTake(context,")
+  const callStart = body.indexOf("await warnIfStockTakeOpen(context,")
 
-  assert(callStart >= 0, `${label} must call assertStockNotLockedByTake.`)
+  assert(callStart >= 0, `${label} must call warnIfStockTakeOpen.`)
 
   const callEnd = body.indexOf("})", callStart)
   const call = body.slice(callStart, callEnd === -1 ? body.length : callEnd)
 
   for (const fragment of ["itemId", "brandId", "locationId", "action:"]) {
-    assert(call.includes(fragment), `${label} lock call missing ${fragment}.`)
+    assert(call.includes(fragment), `${label} warning call missing ${fragment}.`)
   }
 }
 
@@ -55,16 +69,18 @@ const packageJson = read("package.json")
 includesAll(
   actions,
   [
-    "async function assertStockNotLockedByTake",
+    "async function warnIfStockTakeOpen",
     ".from(\"stock_take_sessions\")",
     ".select(\"session_no,item_id,brand_id,status\")",
     ".eq(\"location_id\", input.locationId)",
     ".in(\"status\", [\"DRAFT\", \"SUBMITTED\", \"REVIEWED\"])",
     "String(session.item_id ?? \"\") === input.itemId",
     "sameNullableId(session.brand_id, input.brandId)",
-    "is open for this item and brand at this location.",
+    "STOCK_TAKE_OPERATION_WARNING",
+    "Stock take is active for this item/brand/location.",
+    "You can continue, but this movement will be recorded.",
   ],
-  "Stock take selected item+brand lock helper"
+  "Stock take selected item+brand warning helper"
 )
 
 for (const [name, actionText] of [
@@ -75,29 +91,47 @@ for (const [name, actionText] of [
   ["receiveTransferAction", "receive transfer"],
   ["returnStockAction", "return stock"],
   ["releaseInspectionStockAction", "release inspection stock"],
-  ["createDamageRequestAction", "request damage/spoilage deduction"],
-  ["createReturnSupplierRequestAction", "request return supplier deduction"],
 ]) {
   const body = functionBody(actions, name)
 
   includesAll(
     body,
     [
-      "await assertStockNotLockedByTake(context,",
+      "await warnIfStockTakeOpen(context,",
       actionText,
     ],
-    `${name} stock-take lock`
+    `${name} stock-take warning`
   )
-  assertLockCallShape(body, `${name} stock-take lock`)
+  assertLockCallShape(body, `${name} stock-take warning`)
+}
+
+for (const [name, actionText] of [
+  ["createDamageRequestForUnit", "request damage/spoilage deduction"],
+  ["createReturnSupplierRequestForUnit", "request return supplier deduction"],
+]) {
+  const body = internalFunctionBody(actions, name)
+
+  includesAll(
+    body,
+    [
+      "await warnIfStockTakeOpen(context,",
+      actionText,
+    ],
+    `${name} stock-take warning`
+  )
+  assertLockCallShape(body, `${name} stock-take warning`)
 }
 
 includesAll(
   functionBody(actions, "scanStockTakeBarcodeAction"),
   [
     "requireStockTakeScopeMatch(session",
-    "Barcode belongs to a different stock take location.",
+    "UNKNOWN_BARCODE",
+    "WRONG_LOCATION",
+    "Unknown barcode exception recorded for manager/director approval.",
+    "Wrong-location barcode exception recorded for manager/director approval.",
   ],
-  "Stock take scan scope enforcement"
+  "Stock take scan exception handling"
 )
 
 includesAll(
@@ -118,12 +152,12 @@ includesAll(
   workflowForms,
   [
     "Barcode-only count",
-    "Manual count entry is disabled for MVP.",
-    "Session scope is locked to the selected item and brand.",
-    "Inbound, outbound, transfer, return, and damage requests",
-    "for that exact scope will be blocked.",
+    "Wrong item/brand blocked.",
+    "Unknown barcode is exception.",
+    "Missing barcode adjustment waits for manager",
+    "Stock take is active for this item/brand/location. You can",
   ],
-  "Stock take worker lock guidance"
+  "Stock take worker warning guidance"
 )
 
 includesAll(
@@ -162,6 +196,25 @@ includesAll(
   "Stock take review and approval require scanned lines"
 )
 
+const stockTakeExceptionRpc = read(
+  "supabase/migrations/202606100055_stock_take_exceptions_v1.sql"
+)
+
+includesAll(
+  actions + workflowForms + stockTakeExceptionRpc,
+  [
+    "exception_type",
+    "exception_status",
+    "UNKNOWN_BARCODE",
+    "WRONG_LOCATION",
+    "Stock take unknown barcode created after approval",
+    "Stock take wrong-location barcode moved after approval",
+    "exceptionLines",
+    "stockTakeExceptionsResolved",
+  ],
+  "Stock take unknown and wrong-location exception coverage"
+)
+
 assert(
   !workflowForms.includes("Add actual stock count") &&
     !workflowForms.includes("Add count line"),
@@ -185,4 +238,4 @@ assert(
   "npm run smoke must include stock-take-lock-coverage.mjs"
 )
 
-console.log("Stock take lock coverage checks passed.")
+console.log("Stock take warning coverage checks passed.")

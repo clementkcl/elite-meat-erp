@@ -23,8 +23,10 @@ const labelHelper = read("lib/stock/barcode-label.ts")
 const data = read("lib/stock/data.ts")
 const types = read("lib/stock/types.ts")
 const demoData = read("lib/stock/demo-data.ts")
+const code128 = read("lib/stock/code128.ts")
 const workflowForms = read("components/stock/workflow-forms.tsx")
 const unitDetail = read("components/stock/stock-unit-detail.tsx")
+const stockLabel = read("components/stock/stock-label.tsx")
 const regression = read("scripts/stock-workflow-regression.mjs")
 const packageJson = read("package.json")
 
@@ -63,18 +65,81 @@ includesAll(
 )
 
 includesAll(
+  stockLabel,
+  [
+    "export const stockLabelSizes",
+    "thermal-50x30",
+    "StockLabelPrintActions",
+    "StockLabelPrintArea",
+    "StockLabelPreview",
+    "Code128Barcode",
+    "encodeCode128",
+  ],
+  "Reusable stock label component"
+)
+
+includesAll(
+  code128,
+  [
+    "export function encodeCode128",
+    "const startCodeB = 104",
+    "const startCodeC = 105",
+    "const stopCode = 106",
+    "function canUseCodeSetC",
+    "function canUseCodeSetB",
+    "function checksum",
+    "quietZoneWidth",
+    "bars.push({ x, width })",
+    "mode: encoded.mode",
+  ],
+  "Code 128 label barcode encoder"
+)
+
+includesAll(
+  stockLabel,
+  [
+    'width: "50mm"',
+    'height: "30mm"',
+    'pageSize: "50mm 30mm"',
+    "@page { size: ${size.pageSize}; margin: 0; }",
+    "width: ${size.width};",
+    "height: ${size.height};",
+    "page-break-after: always;",
+    "break-after: page;",
+    "labels.map((label)",
+    "label.companyName",
+    "label.productName",
+    "label.weightKg",
+    "label.barcode",
+    "Bluetooth label printer",
+    "PDF fallback",
+    "Use your phone print sheet",
+    "window.print()",
+    "aria-label=\"Print label with phone print sheet or Bluetooth printer\"",
+    "aria-label=\"Open PDF fallback for label printing\"",
+    "h-12 w-full justify-center",
+    "viewBox={`0 0 ${encoded.width} 40`}",
+    "preserveAspectRatio=\"none\"",
+    "<rect",
+    "stock-label-bars",
+    "letter-spacing: 0",
+    "tracking-normal",
+  ],
+  "Reusable stock label print/export surface"
+)
+
+assert(
+  !stockLabel.includes("repeating-linear-gradient"),
+  "Stock labels must render real Code 128 bars, not decorative placeholder stripes."
+)
+
+includesAll(
   workflowForms,
   [
-    "function PrintLabels",
-    "@page { size: 50mm 30mm; margin: 0; }",
-    "width: 50mm;",
-    "height: 30mm;",
-    "page-break-after: always;",
-    "labels.map((label)",
-    "Elite Meat",
-    "Generate label barcode",
+    "Generate internal label",
     "makeUniqueInternalBarcode",
-    "Generated an unused internal numeric barcode. Print the label, attach it, then save inbound.",
+    "Internal label generated. Saving stock now; print and attach the label after it appears below.",
+    "Stock saves immediately.",
     "recentInboundWeightKg",
     "Saved scans",
     "Saved weight",
@@ -83,29 +148,33 @@ includesAll(
     "Finish Inbound Session",
     "Inbound session summary",
     "Undo scan",
-    "Barcode has no confident weight. Go to barcode label printing",
-    "Duplicate/error scans this session",
+    "No weight found. Generate an internal label, print it, then attach it.",
+    "Blocked/error scans this session",
     "Recent inbound scans",
-    "Recent labels print one 50mm x 30mm label per page when",
-    "window.print()",
-    "Export labels PDF",
+    "StockLabelPrintActions",
+    "StockLabelPrintArea",
+    "StockLabelPreview",
   ],
-  "Inbound label print/export surface"
+  "Inbound label generation surface"
 )
 
 includesAll(
-  unitDetail,
+  unitDetail + stockLabel,
   [
-    "stock-label-print-area",
-    "width: 50mm;",
-    "height: 30mm;",
-    "size: 50mm 30mm;",
-    "Print / Export PDF label",
+    "StockLabelPrintArea",
+    "StockLabelPreview",
+    "StockLabelPrintActions",
+    "StockLabelPrintNote",
+    'width: "50mm"',
+    'height: "30mm"',
+    'pageSize: "50mm 30mm"',
+    "Print label",
+    "PDF fallback",
     "window.print()",
     "Label preview",
     "Elite Meat",
-    "Printed as one 50mm x 30mm label per page.",
-    "{unit.barcode}",
+    "No reason is required.",
+    "barcode: unit.barcode",
   ],
   "Stock unit label reprint surface"
 )

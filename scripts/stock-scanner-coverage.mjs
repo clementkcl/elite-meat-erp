@@ -38,21 +38,39 @@ includesAll(
     "AudioContext",
     "Scan Barcode",
     "size=\"lg\"",
-    "min-h-11",
-    "min-[390px]:w-auto",
+    "min-h-12 w-full gap-2 text-base sm:w-auto",
+    "min-h-11 text-base sm:text-sm",
     "Manual fallback: type or paste the barcode here.",
     "recentScans",
     "Recent scans",
     "slice(0, 5)",
     "Allow camera permission to scan.",
     "Continuous scan is on.",
-    "Unable to start the camera scanner.",
+    "function cameraErrorMessage",
+    "Camera blocked. Allow camera permission or type barcode.",
+    "No camera found. Type barcode manually.",
+    "Camera is busy. Close other camera apps and try again.",
+    "Camera needs a secure browser page. Type barcode manually.",
+    "Camera could not start. Type barcode manually.",
     "getTracks().forEach",
     "track.stop()",
     "videoElement.srcObject = null",
     "setOpen(false)",
+    "min-h-11 min-w-11",
+    "min-h-11 w-full sm:w-auto",
+    "aria-label=\"Scan barcode with camera\"",
+    "aria-label=\"Close scanner\"",
+    "role=\"alert\"",
+    "aria-live=\"polite\"",
+    "Last scan",
+    "break-all font-mono text-xs",
   ],
   "Barcode scanner mobile UX"
+)
+
+assert(
+  !scanner.includes("scanError.message"),
+  "Barcode scanner must not show raw browser camera errors to workers."
 )
 
 const barcodeFieldCount = workflowForms.match(/<BarcodeField/g)?.length ?? 0

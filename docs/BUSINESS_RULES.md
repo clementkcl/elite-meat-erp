@@ -45,6 +45,7 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 - Legacy loose/non-barcode tables still exist for compatibility and older records, but new MVP stock flow should use barcode labels instead of creating a separate no-barcode balance.
 - New no-barcode inbound is disabled in the Stock module; `/stock/no-barcode-inbound` redirects to Barcode Inbound.
 - Inbound writes stock units, stock movements, and barcode scan logs.
+- Stock-unit fields should not be directly edited after inbound; corrections must use movement, adjustment, void, inspection release, return, or stock-take workflows.
 - Barcode inbound writes the stock unit, movement row, scan log, audit log, and optional item+brand+origin weight rule atomically through a database RPC.
 - Continuous barcode inbound shows the current scan preset, saved scan count, saved total weight, and recent inbound scans/labels for the current worker session.
 - Barcode inbound starts with recent item+brand+origin templates so workers can reuse a saved setup and scan immediately.
@@ -68,20 +69,23 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 - No-barcode failed delivery return is not required for MVP because no-barcode stock should be converted to barcode stock before operational movement.
 - Damaged/spoiled stock requires staff request with photo, department manager review, then director approval before deduction.
 - Damage/spoilage reasons are expired, broken packaging, smell, wrong temperature, customer rejected, and other.
-- Return supplier stock requires staff request, department manager approval, then stock deduction.
+- Return supplier stock requires staff request, `HOLD_RETURN_SUPPLIER` status while pending, department manager approval, then stock deduction. Rejected return-supplier requests release the barcode back to `IN_STOCK`.
 - Stock take sessions are created by department managers/admin for one location and one item+brand scope.
 - Staff can scan/count barcode stock for the scoped stock take session.
-- While a stock take is open, inbound/outbound/transfer/return actions are blocked only for the selected item+brand in that location.
+- While a stock take is open, inbound/outbound/transfer/return actions for the selected item+brand in that location show a warning only for the mobile MVP.
 - Stock take counting is barcode scanning only.
+- Unknown barcodes scanned during stock take are recorded as pending exceptions and create new barcode stock units only after manager review and director approval.
+- Barcodes that belong to another location are recorded as wrong-location exceptions and move automatically to the stock take location only after director approval.
 - Stock take adjustment needs department manager approval first, then director final approval.
 - Manager and director electronic signatures are required for stock take review/final approval.
 - Stock take adjustments happen only after both approval steps.
 - At director final approval, expected in-stock/returned barcode units in the selected item+brand+location are compared with scanned barcodes. Missing barcodes are recorded as stock-take variance and adjusted out only after approval.
 - Stock reports group stock by item, brand, location, and inbound age.
-- Stock reports include stock balance, stock take variance, damage/spoilage, and return-supplier summaries.
+- Stock reports include stock balance, stock movement history, inbound, outbound, transfer pending, old stock 6 months, stock take variance, damage/spoilage, return-supplier, and barcode scan error summaries.
+- Stock report filters include date range, outlet/location, item, brand, origin, status, user, and movement type where the underlying report row has that data.
 - Damage/spoilage and return-supplier report rows should include linked barcode stock-unit weight when available.
 - Stock reports support CSV export, print/PDF-ready view, and WhatsApp-ready summary text.
-- Stock dashboard KPIs include total stock weight, barcode units, today inbound, today outbound, pending transfers, legacy no-barcode visibility, stock-take variance, negative-stock alerts, and stock-age alerts.
+- Stock dashboard KPIs include total stock weight, barcode units, today inbound, today outbound, pending transfers, legacy no-barcode visibility, stock-take variance, negative-stock alerts, stock-age alerts, pending damage approvals, pending stock-take approvals, duplicate scan attempts, and barcode decode errors.
 - Stock dashboard shortcuts link stock operators/admins to inbound, outbound, transfer, receive-transfer, and return workflows. Director/view-only users should not see routine operation shortcuts.
 
 ### Barcode Rules
@@ -97,7 +101,7 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 - If barcode weight cannot be decoded confidently, staff must see a clear error and manually confirm weight before saving.
 - Internal generated barcode labels are numeric only and are based on date, numeric item code, weight in grams, and a serial number. The barcode itself does not include `KG` text.
 - Internal generated barcode labels must skip existing stock-unit barcodes and labels generated during the current inbound session before printing.
-- Thermal label output is 50mm x 30mm with company name, product name, weight, and barcode. Browser print/export is used to save labels as PDF, one label per page.
+- Thermal label output is 50mm x 30mm with company name, product name, weight, and machine-readable Code 128 barcode. Browser print/export is used to save labels as PDF, one label per page.
 - Historical barcode labels can be reprinted from the stock-unit detail page.
 - Stock-unit detail history should include movements linked by stock unit id or barcode so older incomplete movement rows remain auditable.
 
@@ -107,32 +111,50 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 - Order statuses include `NEW`, `PREPARING`, `READY`, `READY_FOR_PICKUP`, `READY_FOR_DELIVERY`, `OUT_FOR_DELIVERY`, `DELIVERED`, `FAILED`, and `CANCELLED`.
 - Order items store requested quantity/weight and prepared quantity/weight.
 - Prepared items record `prepared_by` and preparation logs.
-- Stock is reserved only when picking/preparation starts, not when the order is created or when an order item is added.
-- After stock is reserved, staff cannot freely edit the order. Cancel and recreate if changes are needed.
+- Order V1 source is `MANUAL_ERP`; WhatsApp order entry is future work only.
+- Orders have no draft step. Manual ERP orders are treated as confirmed immediately after creation.
+- Order numbers follow `ORD-YYYYMMDD[OutletCode][RunningNo]`, using outlet order codes such as `10`, `11`, and `12`.
+- Stock is reserved immediately when a confirmed Manual ERP order is created.
+- Reservation is by item estimated weight first, not exact barcode.
+- Exact barcode selection happens during picking.
+- If stock is not enough, the order is still created, marked stock not enough, and shown in picking.
+- Active order reservations expire at end of day.
+- Order creator/staff can edit order details only before picking starts.
+- After picking starts, staff cannot freely edit the order. Cancel and recreate if changes are needed.
 - Partial delivery is not allowed for MVP.
-- If the customer cancels after reservation, keep stock reserved until staff manually releases it.
-- Manual reservation release is allowed only after the order is `CANCELLED`; cancellation must not automatically free reserved stock.
+- Orders cannot be deleted; they can only be cancelled.
+- Cancelling an order automatically releases active reserved stock.
 - Orders cannot be marked ready until all items are prepared.
+- Ready tolerance is 10kg for all orders.
+- Manual picked weight without barcode requires one of the predefined manual reasons.
+- Wrong item scans are recorded as mismatches only.
+- Duplicate picked barcodes show a warning.
+- Pickup completion is recorded by staff on ready pickup orders.
 - Overdue credit customer warning is informational only; it should not hard block order entry.
-- WhatsApp notification placeholder events exist for ready/out-for-delivery/delivered.
+- WhatsApp notification placeholder events exist for ready/out-for-delivery/delivered but are skipped in V1.
 
 ### Outbound
 
 - Outbound supports order-based and direct stock movement batches.
 - A ready customer order must be selected before order-based outbound confirmation.
 - Outbound types are `SALES`, `TRANSFER`, `PROCESSING`, `DAMAGE`/`SPOILED`, and `RETURN_SUPPLIER`.
-- Direct outbound is allowed for `SALES`, `TRANSFER`, and `PROCESSING` stock movement.
-- Damage/spoilage and supplier-return stock deduction must use their review/approval workflows instead of direct outbound.
+- Direct outbound is allowed for `SALES`, `PROCESSING`, `TRANSFER`, and `SAMPLE_TESTING` stock movement.
+- Direct outbound always requires remarks.
+- Damage/spoilage and supplier-return choices from the outbound screen create request workflows instead of immediate deduction.
+- Damage/spoilage request stock remains `IN_STOCK` but an open request makes the barcode unavailable for normal outbound until rejected or approved.
+- Return-supplier request stock becomes `HOLD_RETURN_SUPPLIER` and is unavailable for normal outbound until rejected or approved.
 - Outbound scanning is batch-first: staff scan multiple barcodes continuously, then confirm the outbound batch.
 - Scans are batched into outbound batch and batch-line records.
 - Order outbound may scan different/substituted items under the same order. The original ordered item remains on the order item line and the scanned/substituted item is recorded on the outbound batch line.
 - If scanned order-outbound quantity or weight differs from requested quantity or weight, show a warning but allow staff to continue.
 - Atomic RPCs block duplicate lines, missing barcodes, already-outbounded barcodes, wrong-status barcodes, wrong-location barcodes, invalid transfer destination, and non-ready orders for order-based outbound.
 - Outbound batch UI should pre-block transfer scans where the selected destination is the same as the barcode unit's current location.
+- Transfer destination is selected as a destination stock location. The system must validate that the destination stock location is active and allowed for the user's stock scope.
 - Transfer outbound sets `TRANSFER_PENDING`; receive-transfer later changes location.
 - Transfer and receive-transfer update the barcode unit, movement row, scan log, and audit log atomically through database RPCs.
 - Transfers still pending after 3 days show an overdue receive alert.
 - Transfer cannot be cancelled after scanned out.
+- If a receiver scans at the wrong receiving outlet/location, receive-transfer is blocked for the mobile MVP. The worker must choose the transfer destination before receiving.
 
 ### Processing
 

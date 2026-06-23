@@ -84,14 +84,29 @@ const stockOperatorRoles: UserRole[] = stockRoles.filter(
   (role) => role !== "director"
 )
 
-const orderRoles: UserRole[] = [
-  "retail_team_general_worker",
+const stockAdvancedRoles: UserRole[] = [
   "retail_manager",
-  "processing_team_general_worker",
+  "delivery_manager",
   "processing_manager",
   "admin",
   "director",
 ]
+
+const orderRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "retail_manager",
+  "delivery_team_general_worker",
+  "delivery_manager",
+  "processing_team_general_worker",
+  "processing_manager",
+  "account",
+  "admin",
+  "director",
+]
+
+const orderOperatorRoles: UserRole[] = orderRoles.filter(
+  (role) => role !== "director"
+)
 
 const dashboardNav: NavItem[] = [
   {
@@ -176,7 +191,7 @@ const stockNav: NavItem[] = [
     href: "/stock/reports",
     label: "Reports",
     icon: BarChart3,
-    roles: stockRoles,
+    roles: stockAdvancedRoles,
     moduleKey: "stock",
   },
   {
@@ -194,6 +209,34 @@ const orderNav: NavItem[] = [
     label: "Orders",
     icon: ClipboardList,
     roles: orderRoles,
+    moduleKey: "orders",
+  },
+  {
+    href: "/orders/create",
+    label: "Create Order",
+    icon: ClipboardList,
+    roles: orderOperatorRoles,
+    moduleKey: "orders",
+  },
+  {
+    href: "/orders/picking",
+    label: "Picking",
+    icon: PackageCheck,
+    roles: orderOperatorRoles,
+    moduleKey: "orders",
+  },
+  {
+    href: "/orders/ready",
+    label: "Ready Orders",
+    icon: Truck,
+    roles: orderOperatorRoles,
+    moduleKey: "orders",
+  },
+  {
+    href: "/orders/customers",
+    label: "Customers",
+    icon: Users,
+    roles: orderOperatorRoles,
     moduleKey: "orders",
   },
 ]
@@ -235,10 +278,17 @@ const retailNav: NavItem[] = [
 const deliveryNav: NavItem[] = [
   {
     href: "/delivery/dashboard",
-    label: "Delivery",
+    label: "Delivery Dashboard",
     icon: Truck,
     moduleKey: "delivery",
-    roles: ["delivery_team_general_worker", "delivery_manager", "admin", "director"],
+    roles: ["delivery_manager", "admin", "director"],
+  },
+  {
+    href: "/delivery/driver",
+    label: "Driver Delivery",
+    icon: Truck,
+    moduleKey: "delivery",
+    roles: ["delivery_team_general_worker", "delivery_manager", "admin"],
   },
 ]
 
@@ -305,6 +355,18 @@ const moduleNav: NavItem[] = [
 
 const routeAccess: RouteAccess[] = [
   {
+    prefix: "/stock/reports",
+    moduleKey: "stock",
+    moduleName: "Stock Reports",
+    roles: stockAdvancedRoles,
+  },
+  {
+    prefix: "/stock/settings",
+    moduleKey: "stock",
+    moduleName: "Stock Settings",
+    roles: ["admin", "director"],
+  },
+  {
     prefix: "/stock/items",
     moduleKey: "stock",
     moduleName: "Item Master",
@@ -345,6 +407,42 @@ const routeAccess: RouteAccess[] = [
     moduleKey: "stock",
     moduleName: "Stock",
     roles: stockRoles,
+  },
+  {
+    prefix: "/orders/create",
+    moduleKey: "orders",
+    moduleName: "Create Order",
+    roles: orderOperatorRoles,
+  },
+  {
+    prefix: "/orders/new",
+    moduleKey: "orders",
+    moduleName: "Create Order",
+    roles: orderOperatorRoles,
+  },
+  {
+    prefix: "/orders/picking",
+    moduleKey: "orders",
+    moduleName: "Order Picking",
+    roles: orderOperatorRoles,
+  },
+  {
+    prefix: "/orders/prepare",
+    moduleKey: "orders",
+    moduleName: "Order Picking",
+    roles: orderOperatorRoles,
+  },
+  {
+    prefix: "/orders/ready",
+    moduleKey: "orders",
+    moduleName: "Ready Orders",
+    roles: orderOperatorRoles,
+  },
+  {
+    prefix: "/orders/customers",
+    moduleKey: "orders",
+    moduleName: "Order Customers",
+    roles: orderOperatorRoles,
   },
   {
     prefix: "/orders",

@@ -1,5 +1,6 @@
 import {
   ArrowRightLeft,
+  ClipboardList,
   PackageCheck,
   PackagePlus,
   RotateCcw,
@@ -20,6 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DataTable, type DataTableColumn } from "@/components/stock/data-table"
 import { StockDashboardCharts } from "@/components/stock/dashboard-charts"
+import { StockUnitsTableClient } from "@/components/stock/stock-units-table-client"
 import { ReportToolbar } from "@/components/ui/report-toolbar"
 import {
   BarcodeInboundForm,
@@ -41,7 +43,11 @@ import {
   buildStockWhatsappSummary,
   type StockReportTableRow,
 } from "@/lib/stock/report-export"
-import { stockMovementTypes, type MovementFilters } from "@/lib/stock/types"
+import {
+  stockMovementTypes,
+  stockUnitStatuses,
+  type MovementFilters,
+} from "@/lib/stock/types"
 import { getOrdersPageData } from "@/lib/orders/data"
 import { moduleAccessBlock } from "@/lib/auth/module-guard"
 import { hasAnyRole, requireCurrentProfile } from "@/lib/auth/session"
@@ -91,12 +97,20 @@ const stockOperatorRoles: UserRole[] = stockRoles.filter(
   (role) => role !== "director"
 )
 
+const stockWorkerRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "delivery_team_general_worker",
+  "processing_team_general_worker",
+]
+
 const stockManagerRoles: UserRole[] = [
   "retail_manager",
   "delivery_manager",
   "processing_manager",
   "admin",
 ]
+
+const stockAdvancedRoles: UserRole[] = [...stockManagerRoles, "director"]
 
 const stockRouteRoles: Partial<Record<StockRoute, UserRole[]>> = {
   items: stockItemMasterRoles,
@@ -106,6 +120,8 @@ const stockRouteRoles: Partial<Record<StockRoute, UserRole[]>> = {
   "receive-transfer": stockOperatorRoles,
   return: stockOperatorRoles,
   "no-barcode-inbound": stockOperatorRoles,
+  reports: stockAdvancedRoles,
+  settings: stockAdvancedRoles,
 }
 
 const titles: Record<StockRoute, { title: string; description: string }> = {
@@ -186,17 +202,6 @@ const balanceColumns: DataTableColumn<TableRow>[] = [
   { key: "totalQuantity", header: "Total qty", align: "right" },
   { key: "combinedWeightKg", header: "Total kg", align: "right" },
   { key: "stockStatus", header: "Alert" },
-]
-
-const unitColumns: DataTableColumn<TableRow>[] = [
-  { key: "barcode", header: "Barcode" },
-  { key: "itemName", header: "Item" },
-  { key: "brandName", header: "Brand" },
-  { key: "originName", header: "Origin" },
-  { key: "locationName", header: "Location" },
-  { key: "status", header: "Status" },
-  { key: "netWeightKg", header: "Kg", align: "right" },
-  { key: "receivedAt", header: "Received" },
 ]
 
 const movementColumns: DataTableColumn<TableRow>[] = [
@@ -296,19 +301,32 @@ const stockShortcuts = [
     icon: PackageCheck,
   },
   {
-    label: "Return",
+    label: "Return / Damage",
     href: "/stock/return",
     icon: RotateCcw,
   },
+  {
+    label: "Stock Take",
+    href: "/stock/stock-take",
+    icon: ClipboardList,
+  },
 ]
 
-function StockShortcutButtons() {
+function StockShortcutButtons({
+  showHeading = true,
+  workerHome = false,
+}: {
+  showHeading?: boolean
+  workerHome?: boolean
+}) {
   return (
     <div className="space-y-3">
-      <div>
-        <h2 className="text-base font-semibold">Stock shortcuts</h2>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      {showHeading ? (
+        <div>
+          <h2 className="text-base font-semibold">Stock shortcuts</h2>
+        </div>
+      ) : null}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {stockShortcuts.map((shortcut) => {
           const Icon = shortcut.icon
 
@@ -317,10 +335,14 @@ function StockShortcutButtons() {
               key={shortcut.href}
               asChild
               variant="outline"
-              className="h-12 justify-start gap-2"
+              className={
+                workerHome
+                  ? "h-20 justify-start gap-3 text-lg"
+                  : "h-16 justify-start gap-3 text-base"
+              }
             >
               <a href={shortcut.href}>
-                <Icon className="size-4" />
+                <Icon className={workerHome ? "size-6" : "size-5"} />
                 {shortcut.label}
               </a>
             </Button>
@@ -329,6 +351,10 @@ function StockShortcutButtons() {
       </div>
     </div>
   )
+}
+
+function StockWorkerHome() {
+  return <StockShortcutButtons showHeading={false} workerHome />
 }
 
 function NegativeStockAlertPanel({
@@ -480,7 +506,8 @@ function TransferPendingAlertPanel({
             </CardTitle>
             <CardDescription className="text-orange-900/80 dark:text-orange-200/80">
               Transfers scanned out for more than 3 days should be received or
-              investigated.
+              investigated by sender outlet manager, receiver outlet manager,
+              admin, and director.
             </CardDescription>
           </div>
           <Badge variant="warning">{alerts.length} open</Badge>
@@ -498,6 +525,9 @@ function TransferPendingAlertPanel({
             </div>
             <div className="mt-2 text-muted-foreground">
               {alert.fromLocation} {"->"} {alert.toLocation}
+            </div>
+            <div className="mt-1 text-xs text-orange-800 dark:text-orange-200">
+              Alert: sender manager, receiver manager, admin, director.
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
               Scanned out {dateText(alert.transferredAt)}
@@ -584,8 +614,46 @@ function movementRows(data: Awaited<ReturnType<typeof getStockPageData>>): Table
   }))
 }
 
-function reportRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[] {
-  return data.reports.map((report) => ({
+function reportRows(
+  data: Awaited<ReturnType<typeof getStockPageData>>,
+  filters: MovementFilters = {}
+): TableRow[] {
+  const query = filters.q?.trim().toLowerCase()
+  const dateFrom = filters.dateFrom?.trim()
+  const dateTo = filters.dateTo?.trim()
+  const location = filters.location?.trim().toLowerCase()
+  const item = filters.item?.trim().toLowerCase()
+  const brand = filters.brand?.trim().toLowerCase()
+  const origin = filters.origin?.trim().toLowerCase()
+  const status = filters.status?.trim().toLowerCase()
+  const user = filters.user?.trim().toLowerCase()
+  const movementType = filters.movementType?.trim() || filters.type?.trim()
+
+  return data.reports.filter((report) => {
+    const generatedDate = report.generatedAt.slice(0, 10)
+    const haystack = [
+      report.reportName,
+      report.locationName,
+      report.category,
+      String(report.count),
+      String(report.weightKg),
+    ]
+      .join(" ")
+      .toLowerCase()
+
+    return (
+      (!query || haystack.includes(query)) &&
+      (!dateFrom || generatedDate >= dateFrom) &&
+      (!dateTo || generatedDate <= dateTo) &&
+      (!location || report.locationName.toLowerCase().includes(location)) &&
+      (!item || report.category.toLowerCase().includes(item)) &&
+      (!brand || report.category.toLowerCase().includes(brand)) &&
+      (!origin || report.category.toLowerCase().includes(origin)) &&
+      (!status || report.category.toLowerCase().includes(status)) &&
+      (!user || report.category.toLowerCase().includes(user)) &&
+      (!movementType || report.category.includes(movementType))
+    )
+  }).map((report) => ({
     reportName: report.reportName,
     locationName: report.locationName,
     category: report.category,
@@ -647,13 +715,130 @@ function MovementsFilter({ filters }: { filters: MovementFilters }) {
   )
 }
 
+function ReportsFilter({ filters }: { filters: MovementFilters }) {
+  return (
+    <Card className="print:hidden">
+      <CardContent className="pt-4 sm:pt-5">
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-5" method="get">
+          <div className="space-y-2">
+            <Label htmlFor="reportQ">Search</Label>
+            <Input id="reportQ" name="q" defaultValue={filters.q ?? ""} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dateFrom">Date from</Label>
+            <Input
+              id="dateFrom"
+              name="dateFrom"
+              type="date"
+              defaultValue={filters.dateFrom ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dateTo">Date to</Label>
+            <Input
+              id="dateTo"
+              name="dateTo"
+              type="date"
+              defaultValue={filters.dateTo ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reportLocation">Outlet / location</Label>
+            <Input
+              id="reportLocation"
+              name="location"
+              defaultValue={filters.location ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reportMovementType">Movement type</Label>
+            <select
+              id="reportMovementType"
+              name="movementType"
+              defaultValue={filters.movementType ?? filters.type ?? ""}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+            >
+              <option value="">All movement types</option>
+              {stockMovementTypes.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reportItem">Item</Label>
+            <Input
+              id="reportItem"
+              name="item"
+              defaultValue={filters.item ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reportBrand">Brand</Label>
+            <Input
+              id="reportBrand"
+              name="brand"
+              defaultValue={filters.brand ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reportOrigin">Origin</Label>
+            <Input
+              id="reportOrigin"
+              name="origin"
+              defaultValue={filters.origin ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reportStatus">Status</Label>
+            <select
+              id="reportStatus"
+              name="status"
+              defaultValue={filters.status ?? ""}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+            >
+              <option value="">All statuses</option>
+              {stockUnitStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="reportUser">User</Label>
+            <Input
+              id="reportUser"
+              name="user"
+              defaultValue={filters.user ?? ""}
+            />
+          </div>
+          <div className="flex items-end xl:col-span-5">
+            <Button type="submit" className="w-full md:w-auto">
+              <Search className="size-4" />
+              Filter reports
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
 function DashboardView({
   data,
   canOperateStock,
+  isGeneralWorker,
 }: {
   data: Awaited<ReturnType<typeof getStockPageData>>
   canOperateStock: boolean
+  isGeneralWorker: boolean
 }) {
+  if (isGeneralWorker) {
+    return <StockWorkerHome />
+  }
+
   return (
     <>
       <KpiCards kpis={data.dashboard.kpis} />
@@ -663,6 +848,7 @@ function DashboardView({
         locationStock={data.dashboard.locationStock}
         movementTrend={data.dashboard.movementTrend}
       />
+      <ScanAlertPanel alerts={data.dashboard.scanAlerts} />
       <Card>
         <CardHeader>
           <CardTitle>Latest movements</CardTitle>
@@ -676,6 +862,40 @@ function DashboardView({
         </CardContent>
       </Card>
     </>
+  )
+}
+
+function ScanAlertPanel({
+  alerts,
+}: {
+  alerts: Awaited<ReturnType<typeof getStockPageData>>["dashboard"]["scanAlerts"]
+}) {
+  if (alerts.length === 0) {
+    return null
+  }
+
+  return (
+    <Card className="border-amber-200 bg-amber-50/70">
+      <CardHeader>
+        <CardTitle>Barcode scan alerts</CardTitle>
+        <CardDescription>
+          Recent duplicate scan attempts and barcode weight/decode errors.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {alerts.map((alert) => (
+          <div
+            key={alert.id}
+            className="rounded-md border border-amber-200 bg-background px-3 py-2 text-sm"
+          >
+            <div className="font-medium">{alert.barcode}</div>
+            <div className="text-muted-foreground">
+              {alert.action} - {alert.message}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -733,6 +953,7 @@ export async function StockPage({
 
   const profile = await requireCurrentProfile()
   const canOperateStock = hasAnyRole(profile, stockOperatorRoles)
+  const isGeneralStockWorker = hasAnyRole(profile, stockWorkerRoles)
   const canManageStockTake = hasAnyRole(profile, stockManagerRoles)
   const canDirectorApproveStockTake = hasAnyRole(profile, ["admin", "director"])
 
@@ -750,7 +971,7 @@ export async function StockPage({
           }))
       : Promise.resolve(null),
   ])
-  const stockReportRows = reportRows(data)
+  const stockReportRows = reportRows(data, filters)
   const stockReportCsv = buildCsv(stockReportRows)
   const stockReportCsvHref = `data:text/csv;charset=utf-8,${encodeURIComponent(
     stockReportCsv
@@ -761,18 +982,30 @@ export async function StockPage({
     data.dashboard.stockAgeAlerts.length,
     data.dashboard.transferPendingAlerts.length
   )
+  const isWorkerDashboard = route === "dashboard" && isGeneralStockWorker
+  const showDashboardAlerts = !isWorkerDashboard
 
   return (
     <div className="space-y-5">
-      <PageHeader route={route} demoMode={data.demoMode} />
-      <NegativeStockAlertPanel alerts={data.dashboard.negativeStockAlerts} />
-      <StockAgeAlertPanel alerts={data.dashboard.stockAgeAlerts} />
-      <TransferPendingAlertPanel
-        alerts={data.dashboard.transferPendingAlerts}
-      />
+      {isWorkerDashboard ? null : (
+        <PageHeader route={route} demoMode={data.demoMode} />
+      )}
+      {showDashboardAlerts ? (
+        <>
+          <NegativeStockAlertPanel alerts={data.dashboard.negativeStockAlerts} />
+          <StockAgeAlertPanel alerts={data.dashboard.stockAgeAlerts} />
+          <TransferPendingAlertPanel
+            alerts={data.dashboard.transferPendingAlerts}
+          />
+        </>
+      ) : null}
 
       {route === "dashboard" ? (
-        <DashboardView data={data} canOperateStock={canOperateStock} />
+        <DashboardView
+          data={data}
+          canOperateStock={canOperateStock}
+          isGeneralWorker={isGeneralStockWorker}
+        />
       ) : null}
 
       {route === "items" ? (
@@ -808,6 +1041,7 @@ export async function StockPage({
           <OutboundSalesForm
             orders={ordersResult.ordersData.orders}
             orderItems={ordersResult.ordersData.items}
+            outlets={data.outlets}
             locations={data.locations}
             units={data.units}
             items={data.items}
@@ -829,11 +1063,11 @@ export async function StockPage({
       ) : null}
 
       {route === "transfer" ? (
-        <TransferForm locations={data.locations} />
+        <TransferForm outlets={data.outlets} locations={data.locations} />
       ) : null}
 
       {route === "receive-transfer" ? (
-        <ReceiveTransferForm locations={data.locations} />
+        <ReceiveTransferForm outlets={data.outlets} locations={data.locations} />
       ) : null}
 
       {route === "return" ? <ReturnForm locations={data.locations} /> : null}
@@ -884,12 +1118,7 @@ export async function StockPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable
-                columns={unitColumns}
-                data={unitRows(data)}
-                getRowHref={(row) => `/stock/units/${row.id}`}
-                emptyText="No barcode stock units found."
-              />
+              <StockUnitsTableClient rows={unitRows(data)} />
             </CardContent>
           </Card>
         </>
@@ -927,25 +1156,30 @@ export async function StockPage({
       ) : null}
 
       {route === "reports" ? (
-        <Card className="print:border-0 print:shadow-none">
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <CardTitle>Printable stock reports</CardTitle>
-              <CardDescription>
-                Stock balance by item, brand, location, inbound age, stock take
-                variance, damage/spoilage, and return-supplier summaries.
-              </CardDescription>
-            </div>
-            <ReportToolbar
-              csvHref={stockReportCsvHref}
-              filename="elite-meat-stock-report.csv"
-              whatsappText={stockWhatsappSummary}
-            />
-          </CardHeader>
-          <CardContent>
-            <DataTable columns={reportColumns} data={stockReportRows} />
-          </CardContent>
-        </Card>
+        <>
+          <ReportsFilter filters={filters} />
+          <Card className="print:border-0 print:shadow-none">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle>Elite Meat stock reports</CardTitle>
+                <CardDescription>
+                  Formal stock balance, movement history, inbound, outbound,
+                  transfer pending, old stock, stock take variance,
+                  damage/spoilage, return supplier, and barcode scan error
+                  reports.
+                </CardDescription>
+              </div>
+              <ReportToolbar
+                csvHref={stockReportCsvHref}
+                filename="elite-meat-stock-report.csv"
+                whatsappText={stockWhatsappSummary}
+              />
+            </CardHeader>
+            <CardContent>
+              <DataTable columns={reportColumns} data={stockReportRows} />
+            </CardContent>
+          </Card>
+        </>
       ) : null}
 
       {route === "settings" ? (

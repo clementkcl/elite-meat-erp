@@ -27,7 +27,7 @@ Local commands currently expected before handoff:
 - stock security/no-service-role coverage
 - stock item-master coverage
 - stock label coverage
-- stock-take lock coverage
+- stock-take warning coverage
 - stock report coverage
 
 ## Acceptance Test Audit

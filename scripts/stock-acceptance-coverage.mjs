@@ -51,14 +51,19 @@ const migration042 = read("supabase/migrations/202606100042_atomic_stock_approva
 const migration043 = read("supabase/migrations/202606100043_atomic_stock_take_approval_rpc_v1.sql")
 const migration051 = read("supabase/migrations/202606100051_stock_take_approval_requires_lines_v1.sql")
 const migration052 = read("supabase/migrations/202606100052_stock_take_barcode_variance_rpc_v1.sql")
+const migration055 = read("supabase/migrations/202606100055_stock_take_exceptions_v1.sql")
 const migration044 = read("supabase/migrations/202606100044_item_master_all_roles_v1.sql")
 const migration040 = read("supabase/migrations/202606100040_stock_return_supplier_approval_v1.sql")
 const migration046 = read("supabase/migrations/202606100046_customer_return_inspection_status_v1.sql")
 const migration047 = read("supabase/migrations/202606100047_atomic_transfer_receive_rpcs_v1.sql")
+const migration054 = read("supabase/migrations/202606100054_stock_outbound_transfer_hardening_v1.sql")
 const migration048 = read("supabase/migrations/202606100048_atomic_stock_return_rpc_v1.sql")
 const migration049 = read("supabase/migrations/202606100049_atomic_inspection_release_rpc_v1.sql")
 const migration050 = read("supabase/migrations/202606100050_atomic_barcode_inbound_rpc_v1.sql")
 const migration053 = read("supabase/migrations/202606100053_stock_inbound_session_undo_v1.sql")
+const migration230002 = read("supabase/migrations/202606230002_stock_mobile_worker_mvp_v1.sql")
+const migration230003 = read("supabase/migrations/202606230003_stock_receive_transfer_wrong_location_block_v1.sql")
+const migration230006 = read("supabase/migrations/202606230006_stock_transfer_any_location_v1.sql")
 
 includesAll(
   actions + migration050,
@@ -104,7 +109,7 @@ includesAll(
     "rejectBarcodeScan(context",
     "isDuplicateInboundBarcode",
     "submitAfterScan && isDuplicateInboundBarcode(value)",
-    "Remove it before saving inbound.",
+    "Duplicate barcode. Inbound is blocked.",
     "decodeStatus === \"error\"",
   ],
   "Acceptance 2 duplicate inbound"
@@ -128,16 +133,20 @@ includesAll(
 includesAll(
   workflowForms +
     unitDetail +
+    read("components/stock/stock-label.tsx") +
     read("lib/stock/barcode-label.ts") +
     stockWorkflowRegression,
   [
     "makeInternalBarcode",
     "makeUniqueInternalBarcode",
-    "Generate label barcode",
-    "PrintLabels",
+    "Generate internal label",
+    "StockLabelPrintArea",
+    "StockLabelPrintActions",
     "50mm x 30mm",
+    "Bluetooth label printer",
+    "PDF fallback",
     "window.print()",
-    "Print / Export PDF label",
+    "No reason is required.",
     "Generated barcode should be blank when item code is not numeric.",
     "Generated barcode should skip existing labels and use the next serial.",
   ],
@@ -145,22 +154,29 @@ includesAll(
 )
 
 includesAll(
-  actions + workflowForms + migration028 + outboundRules + stockWorkflowRegression,
+  actions + workflowForms + migration028 + migration054 + outboundRules + stockWorkflowRegression,
   [
     "export async function confirmOrderOutboundAction",
     "\"confirm_order_outbound_batch\"",
     "assertCustomerOrderReadyForOutbound",
-    "Order scan warning - check before confirming",
+    "Check before confirm",
+    "Weight difference is allowed.",
+    "Order item checklist",
     "Substitution scanned",
+    "Confirm substitution. No reason needed.",
+    "requireSubstitutionConfirmation",
     "Customer order must be marked ready before confirming outbound scans.",
     "parseOutboundBarcodes",
     "duplicateOutboundBarcode",
     "missingScannedBarcodes",
-    "Missing barcode scan",
-    "remove missing or blocked scans",
+    "Barcode not found",
+    "Remove barcode not found.",
     "outboundUnitBlockReason",
-    "Blocked barcode scan",
+    "Blocked barcode",
     "cannot be outbounded.",
+    "No customer name",
+    "No photo",
+    "Photo required. Stock goes to approval.",
     "Non-ready orders should be blocked from outbound confirmation.",
     "Outbound batch should detect duplicate scanned barcodes.",
     "Transfer-pending barcode units should show a clear outbound block reason.",
@@ -173,6 +189,10 @@ includesAll(
     workflowForms +
     migration041 +
     migration047 +
+    migration054 +
+    migration230002 +
+    migration230003 +
+    migration230006 +
     data +
     stockPage +
     unitStatusRules +
@@ -184,15 +204,27 @@ includesAll(
     "\"receive_stock_transfer\"",
     "create or replace function public.transfer_stock_unit",
     "create or replace function public.receive_stock_transfer",
+    "is_default_for_outlet",
+    "transferDestinationAnyActiveLocation",
+    "enforce_default_transfer_destination",
+    "Barcode has an open damage request and cannot be outbounded.",
+    "Barcode has an open return supplier request and cannot be outbounded.",
+    "Destination stock location",
+    "Choose destination stock location and scan barcode.",
+    "Choose an allowed stock location.",
+    "Wrong location. This barcode must be received at",
+    "wrongLocationException', false",
     "'atomic', true",
     "\"TRANSFER_PENDING\"",
     "\"TRANSFER_RECEIVED\"",
     "Transfer receive overdue",
     "buildTransferPendingAlerts",
+    "sender outlet manager, receiver outlet manager",
+    "Alert: sender manager, receiver manager, admin, director.",
     "overdueTransferDays = 3",
     "sameDestinationTransferUnits",
-    "Invalid transfer destination",
-    "These barcodes are already at the selected destination.",
+    "Wrong destination",
+    "Choose another destination or remove it.",
     "stockableStatuses",
     "INSPECTION",
     "should not be active stock for normal outbound workflows.",
@@ -202,12 +234,14 @@ includesAll(
 )
 
 includesAll(
-  actions + migration039Maybe() + migration042 + approvalRules + stockWorkflowRegression,
+  actions + migration039Maybe() + migration042 + migration054 + approvalRules + stockWorkflowRegression,
   [
     "export async function createDamageRequestAction",
     "export async function reviewDamageRequestAction",
     "export async function approveDamageRequestAction",
     "Damage photo is required.",
+    "DAMAGE_SPOILAGE",
+    "createDamageRequestForUnit",
     "Only manager-reviewed damage requests can be approved.",
     "\"approve_stock_damage_request\"",
     "OUTBOUND_SPOILED",
@@ -221,12 +255,14 @@ includesAll(
 )
 
 includesAll(
-  actions + migration040 + migration042 + approvalRules + stockWorkflowRegression,
+  actions + migration040 + migration042 + migration054 + approvalRules + stockWorkflowRegression,
   [
     "export async function createReturnSupplierRequestAction",
     "export async function approveReturnSupplierRequestAction",
     "export async function rejectReturnSupplierRequestAction",
     "Supplier name is required.",
+    "HOLD_RETURN_SUPPLIER",
+    "createReturnSupplierRequestForUnit",
     "Only submitted return supplier requests can be approved.",
     "\"approve_stock_return_supplier_request\"",
     "OUTBOUND_RETURN_SUPPLIER",
@@ -244,6 +280,7 @@ includesAll(
     migration043 +
     migration051 +
     migration052 +
+    migration055 +
     stockTakeRules +
     stockWorkflowRegression,
   [
@@ -268,6 +305,11 @@ includesAll(
     "Auto-created at director approval for missing barcode",
     "Stock take missing barcode adjusted out",
     "barcodeVarianceComputed",
+    "UNKNOWN_BARCODE",
+    "WRONG_LOCATION",
+    "Stock take unknown barcode created after approval",
+    "Stock take wrong-location barcode moved after approval",
+    "stockTakeExceptionsResolved",
   ],
   "Acceptance 8 stock take approval"
 )
@@ -308,8 +350,16 @@ includesAll(
     "WhatsApp summary should include overdue transfer alert count.",
     "Stock by location",
     "Stock by inbound age",
+    "Stock movement history",
+    "Transfer pending",
+    "Old stock 6 months",
+    "Barcode scan errors",
     "Today inbound",
     "Today outbound",
+    "Damage pending approval",
+    "Stock take pending approval",
+    "Duplicate scan attempts",
+    "Barcode decode errors",
     "sixMonthStockAgeDays",
     "twelveMonthStockAgeDays",
     "Stock take variance",
@@ -360,7 +410,8 @@ includesAll(
     "Recent scans",
     "Allow camera permission to scan.",
     "onChange={(event) => onChange(event.target.value)}",
-    "Unable to start the camera scanner.",
+    "Camera blocked. Allow camera permission or type barcode.",
+    "Camera could not start. Type barcode manually.",
   ],
   "Acceptance 12 mobile scanner"
 )
@@ -401,12 +452,28 @@ includesAll(
     "Item master role policies",
     "Generated barcode helper must not include KG text inside the barcode.",
     "Stock unit label reprint surface",
-    "Stock take selected item+brand lock helper",
-    "stock-take lock",
+    "Stock take selected item+brand warning helper",
+    "stock-take warning",
     "Stock reports page export surface",
     "Stock report data sources",
   ],
   "Acceptance 13 automated stock workflow tests"
+)
+
+includesAll(
+  actions + workflowForms + unitStatusRules + migration054,
+  [
+    "Direct outbound remarks are required.",
+    "SAMPLE_TESTING",
+    "OUTBOUND_SAMPLE_TESTING",
+    "Direct outbound",
+    "Damage/spoilage photo is required.",
+    "RETURN_SUPPLIER",
+    "HOLD_RETURN_SUPPLIER",
+    "Barcode has an open damage request and cannot be outbounded.",
+    "Barcode has an open return supplier request and cannot be outbounded.",
+  ],
+  "Direct outbound hardening requirements"
 )
 
 includesAll(
@@ -453,7 +520,7 @@ includesAll(
     "STOCK_INSPECTION_RELEASED",
     "Release inspected return",
     "Release to stock",
-    "Customer returns are saved for inspection first",
+    "Customer returns go to inspection first.",
     "alter type public.stock_unit_status add value if not exists 'HOLD'",
     "alter type public.stock_unit_status add value if not exists 'INSPECTION'",
     "EM-SEED-RETURN-INSPECTION-001",

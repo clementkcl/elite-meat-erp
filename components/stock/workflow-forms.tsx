@@ -1,6 +1,6 @@
 "use client"
 
-import { Printer, Save } from "lucide-react"
+import { Save } from "lucide-react"
 import {
   useActionState,
   useEffect,
@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ComponentProps,
   type ReactNode,
 } from "react"
 
@@ -49,6 +50,7 @@ import {
   nextItemCode,
 } from "@/lib/stock/item-code"
 import { outboundUnitBlockReason } from "@/lib/stock/outbound-rules"
+import { stockDamageReasons } from "@/lib/stock/types"
 import type {
   Brand,
   BarcodeWeightRule,
@@ -56,10 +58,12 @@ import type {
   Origin,
   StockDamageRequest,
   StockLocation,
+  StockOutlet,
   StockReturnSupplierRequest,
   StockTakeLine,
   StockTakeSession,
   StockUnit,
+  StockDamageReason,
 } from "@/lib/stock/types"
 import type { CustomerOrder, CustomerOrderItem } from "@/lib/orders/types"
 import { Button } from "@/components/ui/button"
@@ -70,11 +74,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { Input as BaseInput } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { BarcodeField } from "@/components/stock/barcode-scanner"
+import {
+  StockLabelPreview,
+  StockLabelPrintActions,
+  StockLabelPrintArea,
+  StockLabelPrintNote,
+} from "@/components/stock/stock-label"
 import { decodeBarcodeWeight } from "@/lib/stock/barcode-weight"
 import { makeUniqueInternalBarcode } from "@/lib/stock/barcode-label"
 
@@ -83,20 +93,46 @@ type StatefulAction = (
   formData: FormData
 ) => Promise<StockActionState>
 
+function Input({ className, ...props }: ComponentProps<typeof BaseInput>) {
+  return (
+    <BaseInput
+      className={["min-h-11 text-base sm:text-sm", className]
+        .filter(Boolean)
+        .join(" ")}
+      {...props}
+    />
+  )
+}
+
 function ActionMessage({ state }: { state: StockActionState }) {
-  if (!state.message) {
+  if (!state.message && !state.warning) {
     return null
   }
 
   return (
-    <div
-      className={
-        state.status === "success"
-          ? "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
-          : "rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-      }
-    >
-      {state.message}
+    <div className="space-y-2">
+      {state.message ? (
+        <div
+          role={state.status === "success" ? "status" : "alert"}
+          aria-live={state.status === "success" ? "polite" : "assertive"}
+          className={
+            state.status === "success"
+              ? "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+              : "rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          }
+        >
+          {state.message}
+        </div>
+      ) : null}
+      {state.warning ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800"
+        >
+          {state.warning}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -108,6 +144,7 @@ function NativeSelect({
   value,
   onChange,
   required = true,
+  disabled = false,
 }: {
   id: string
   name: string
@@ -115,6 +152,7 @@ function NativeSelect({
   value?: string
   onChange?: (value: string) => void
   required?: boolean
+  disabled?: boolean
 }) {
   return (
     <select
@@ -122,8 +160,9 @@ function NativeSelect({
       name={name}
       value={value}
       required={required}
+      disabled={disabled}
       onChange={(event) => onChange?.(event.target.value)}
-      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+      className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base shadow-xs transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30 sm:text-sm"
     >
       {children}
     </select>
@@ -134,13 +173,19 @@ function SubmitButton({
   pending,
   disabled = false,
   children,
+  className,
 }: {
   pending: boolean
   disabled?: boolean
   children: ReactNode
+  className?: string
 }) {
   return (
-    <Button type="submit" disabled={pending || disabled}>
+    <Button
+      type="submit"
+      disabled={pending || disabled}
+      className={["min-h-11 gap-2", className].filter(Boolean).join(" ")}
+    >
       <Save className="size-4" />
       {pending ? "Saving..." : children}
     </Button>
@@ -186,15 +231,23 @@ function ItemSelect({
   items,
   value,
   onChange,
+  disabled = false,
 }: {
   items: Item[]
   value?: string
   onChange?: (value: string) => void
+  disabled?: boolean
 }) {
   const activeItems = items.filter((item) => item.active)
 
   return (
-    <NativeSelect id="itemId" name="itemId" value={value} onChange={onChange}>
+    <NativeSelect
+      id="itemId"
+      name="itemId"
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+    >
       <option value="">Select item</option>
       {activeItems.map((item) => (
         <option key={item.id} value={item.id}>
@@ -211,12 +264,14 @@ function BrandSelect({
   onChange,
   allowOther = false,
   required = false,
+  disabled = false,
 }: {
   brands: Brand[]
   value?: string
   onChange?: (value: string) => void
   allowOther?: boolean
   required?: boolean
+  disabled?: boolean
 }) {
   const activeBrands = brands.filter((brand) => brand.active)
 
@@ -227,6 +282,7 @@ function BrandSelect({
       value={value}
       onChange={onChange}
       required={required}
+      disabled={disabled}
     >
       <option value="">No brand</option>
       {activeBrands.map((brand) => (
@@ -245,12 +301,14 @@ function OriginSelect({
   onChange,
   allowOther = false,
   required = false,
+  disabled = false,
 }: {
   origins: Origin[]
   value?: string
   onChange?: (value: string) => void
   allowOther?: boolean
   required?: boolean
+  disabled?: boolean
 }) {
   const activeOrigins = origins.filter((origin) => origin.active)
 
@@ -261,6 +319,7 @@ function OriginSelect({
       value={value}
       onChange={onChange}
       required={required}
+      disabled={disabled}
     >
       <option value="">No origin</option>
       {activeOrigins.map((origin) => (
@@ -279,17 +338,25 @@ function LocationSelect({
   name = "locationId",
   value,
   onChange,
+  disabled = false,
 }: {
   locations: StockLocation[]
   id?: string
   name?: string
   value?: string
   onChange?: (value: string) => void
+  disabled?: boolean
 }) {
   const activeLocations = locations.filter((location) => location.active)
 
   return (
-    <NativeSelect id={id} name={name} value={value} onChange={onChange}>
+    <NativeSelect
+      id={id}
+      name={name}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+    >
       <option value="">Select location</option>
       {activeLocations.map((location) => (
         <option key={location.id} value={location.id}>
@@ -297,6 +364,107 @@ function LocationSelect({
         </option>
       ))}
     </NativeSelect>
+  )
+}
+
+function transferDestinationOptions(
+  outlets: StockOutlet[],
+  locations: StockLocation[]
+) {
+  const activeLocations = locations.filter((location) => location.active)
+  const usedLocationIds = new Set<string>()
+  const outletOptions = outlets
+    .map((outlet) => {
+      const defaultLocation =
+        activeLocations.find(
+          (location) =>
+            location.outletId === outlet.id && location.isDefaultForOutlet
+        ) ??
+        activeLocations.find((location) => location.outletId === outlet.id)
+
+      if (!defaultLocation) {
+        return null
+      }
+
+      usedLocationIds.add(defaultLocation.id)
+
+      return {
+        optionId: outlet.id,
+        outletName: outlet.name,
+        locationId: defaultLocation.id,
+        locationName: defaultLocation.name,
+      }
+    })
+    .filter(
+      (
+        option
+      ): option is {
+        optionId: string
+        outletName: string
+        locationId: string
+        locationName: string
+      } => option !== null
+    )
+
+  const fallbackLocationOptions = activeLocations
+    .filter((location) => !usedLocationIds.has(location.id))
+    .map((location) => ({
+      optionId: `location-${location.id}`,
+      outletName: location.name,
+      locationId: location.id,
+      locationName: location.name,
+    }))
+
+  return [...outletOptions, ...fallbackLocationOptions]
+}
+
+function DestinationOutletSelect({
+  outlets,
+  locations,
+  id,
+  name,
+  value,
+  onChange,
+}: {
+  outlets: StockOutlet[]
+  locations: StockLocation[]
+  id: string
+  name: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  const options = transferDestinationOptions(outlets, locations)
+  const selectedOption =
+    options.find((option) => option.locationId === value) ?? null
+
+  return (
+    <>
+      <input type="hidden" name={name} value={value} />
+      <NativeSelect
+        id={id}
+        name={`${name}Outlet`}
+        value={selectedOption?.optionId ?? ""}
+        onChange={(optionId) => {
+          const option = options.find((candidate) => candidate.optionId === optionId)
+          onChange(option?.locationId ?? "")
+        }}
+      >
+        <option value="">Select stock location</option>
+        {options.map((option) => (
+          <option key={option.optionId} value={option.optionId}>
+            {option.locationName}
+            {option.outletName !== option.locationName
+              ? ` - ${option.outletName}`
+              : ""}
+          </option>
+        ))}
+      </NativeSelect>
+      {selectedOption ? (
+        <p className="text-xs text-muted-foreground">
+          Selected stock location: {selectedOption.locationName}
+        </p>
+      ) : null}
+    </>
   )
 }
 
@@ -977,37 +1145,41 @@ function vibrateAndBeep() {
   }
 }
 
-function PrintLabels({ labels }: { labels: InboundLabel[] }) {
-  if (labels.length === 0) {
-    return null
-  }
+function useOnlineStatus() {
+  const [isOnline, setIsOnline] = useState(
+    () => typeof navigator === "undefined" || navigator.onLine
+  )
 
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
+  }, [])
+
+  return isOnline
+}
+
+const offlineScanMessage = "Connection lost. Please reconnect before scanning."
+
+function OfflineScanAlert({ className = "" }: { className?: string }) {
   return (
-    <div className="hidden print:block">
-      <style>{`
-        @page { size: 50mm 30mm; margin: 0; }
-        body { margin: 0; }
-        .stock-label-page {
-          width: 50mm;
-          height: 30mm;
-          page-break-after: always;
-          padding: 2mm;
-          box-sizing: border-box;
-          font-family: Arial, sans-serif;
-        }
-        .stock-label-company { font-size: 9pt; font-weight: 700; }
-        .stock-label-product { font-size: 8pt; margin-top: 1mm; }
-        .stock-label-weight { font-size: 10pt; font-weight: 700; margin-top: 1mm; }
-        .stock-label-barcode { font-size: 7pt; letter-spacing: 1px; margin-top: 1mm; word-break: break-all; }
-      `}</style>
-      {labels.map((label) => (
-        <div key={label.id} className="stock-label-page">
-          <div className="stock-label-company">{label.companyName}</div>
-          <div className="stock-label-product">{label.productName}</div>
-          <div className="stock-label-weight">{label.weightKg} kg</div>
-          <div className="stock-label-barcode">{label.barcode}</div>
-        </div>
-      ))}
+    <div
+      role="alert"
+      className={[
+        "rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700",
+        className,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {offlineScanMessage}
     </div>
   )
 }
@@ -1067,6 +1239,7 @@ export function BarcodeInboundForm({
   const [quickItemCategory, setQuickItemCategory] = useState("MEAT")
   const [recentLabels, setRecentLabels] = useState<InboundLabel[]>([])
   const [sessionErrors, setSessionErrors] = useState<InboundSessionError[]>([])
+  const isOnline = useOnlineStatus()
   const pendingLabelRef = useRef<InboundLabel | null>(null)
   const lastErrorMessageRef = useRef("")
   const labelSerialRef = useRef(0)
@@ -1194,6 +1367,14 @@ export function BarcodeInboundForm({
     key: K,
     value: InboundPreset[K]
   ) {
+    if (scopeLocked && inboundScopeKeys.includes(key)) {
+      setDecodeStatus("warning")
+      setDecodeMessage(
+        "Finish this inbound session before changing product, brand, origin, or location."
+      )
+      return
+    }
+
     setPreset((current) => {
       const next = { ...current, [key]: value }
       return inboundScopeKeys.includes(key)
@@ -1212,6 +1393,16 @@ export function BarcodeInboundForm({
   }
 
   function handleBarcodeChange(value: string, submitAfterScan = false) {
+    if (submitAfterScan && !isOnline) {
+      const message = offlineScanMessage
+
+      setBarcode(value)
+      setDecodeStatus("error")
+      setDecodeMessage(message)
+      recordSessionError(value, message)
+      return
+    }
+
     const decoded = decodeBarcodeWeight({
       barcode: value,
       startText: preset.barcodeWeightStart,
@@ -1236,8 +1427,7 @@ export function BarcodeInboundForm({
 
     if (submitAfterScan && isDuplicateInboundBarcode(value)) {
       setDecodeStatus("error")
-      const message =
-        "Duplicate barcode warning: this barcode already exists. Remove it before saving inbound."
+      const message = "Duplicate barcode. Inbound is blocked."
       setDecodeMessage(message)
       recordSessionError(value, message)
       return
@@ -1245,7 +1435,22 @@ export function BarcodeInboundForm({
 
     if (submitAfterScan && decoded.status === "error") {
       const message =
-        "Barcode has no confident weight. Go to barcode label printing, enter the weight there, print and attach the generated label, then scan that generated barcode."
+        "No weight found. Generate an internal label, print it, then attach it."
+      setDecodeStatus("error")
+      setDecodeMessage(message)
+      recordSessionError(value, message)
+      return
+    }
+
+    if (
+      submitAfterScan &&
+      (!preset.itemId ||
+        !preset.brandId ||
+        !preset.originId ||
+        !preset.locationId)
+    ) {
+      const message = "Choose product, brand, origin, and location first."
+
       setDecodeStatus("error")
       setDecodeMessage(message)
       recordSessionError(value, message)
@@ -1254,7 +1459,6 @@ export function BarcodeInboundForm({
 
     const readyToSubmit =
       submitAfterScan &&
-      preset.autoSave &&
       preset.itemId &&
       preset.brandId &&
       preset.originId &&
@@ -1300,10 +1504,36 @@ export function BarcodeInboundForm({
       return
     }
 
+    if (!isOnline) {
+      event.preventDefault()
+      pendingLabelRef.current = null
+      setDecodeStatus("error")
+      setDecodeMessage(offlineScanMessage)
+      recordSessionError(barcode, "Connection lost.")
+      return
+    }
+
     rememberLabel()
   }
 
   function generateLabelBarcode() {
+    if (!isOnline) {
+      setDecodeStatus("error")
+      setDecodeMessage(offlineScanMessage)
+      return
+    }
+
+    if (
+      !selectedItem ||
+      !preset.brandId ||
+      !preset.originId ||
+      !preset.locationId
+    ) {
+      setDecodeStatus("error")
+      setDecodeMessage("Choose product, brand, origin, and location first.")
+      return
+    }
+
     const existingBarcodes = [
       ...units.map((unit) => unit.barcode),
       ...recentLabels.map((label) => label.barcode),
@@ -1317,9 +1547,7 @@ export function BarcodeInboundForm({
 
     if (!generated.barcode) {
       setDecodeStatus("error")
-      setDecodeMessage(
-        "Enter the weight before generating a barcode label, or change the weight if all serial numbers for this item are already used today."
-      )
+      setDecodeMessage("Enter weight before generating a label.")
       return
     }
 
@@ -1327,8 +1555,9 @@ export function BarcodeInboundForm({
     setBarcode(generated.barcode)
     setDecodeStatus("warning")
     setDecodeMessage(
-      "Generated an unused internal numeric barcode. Print the label, attach it, then save inbound."
+      "Internal label generated. Saving stock now; print and attach the label after it appears below."
     )
+    window.setTimeout(() => formRef.current?.requestSubmit(), 0)
   }
 
   const selectedItem = localItems.find((item) => item.id === preset.itemId)
@@ -1373,12 +1602,21 @@ export function BarcodeInboundForm({
     0
   )
   const latestSavedScan = savedSessionScans[0]
+  const scopeLocked = savedSessionScans.length > 0 && !sessionFinishedAt
   const quickItemCode = generatedItemCode(localItems)
   const activePrintLabels = recentLabels.filter(
     (label) => label.status === "SAVED"
   )
 
   function applyInboundTemplate(template: InboundTemplate) {
+    if (scopeLocked) {
+      setDecodeStatus("warning")
+      setDecodeMessage(
+        "Finish this inbound session before choosing another template."
+      )
+      return
+    }
+
     setPreset((current) =>
       applyMatchingWeightRule(
         {
@@ -1416,6 +1654,19 @@ export function BarcodeInboundForm({
           onSubmit={handleInboundFormSubmit}
           className="space-y-4"
         >
+          {scopeLocked ? (
+            <>
+              <input type="hidden" name="itemId" value={preset.itemId} />
+              <input type="hidden" name="brandId" value={preset.brandId} />
+              <input type="hidden" name="originId" value={preset.originId} />
+              <input type="hidden" name="locationId" value={preset.locationId} />
+              <input
+                type="hidden"
+                name="inboundSource"
+                value={preset.inboundSource}
+              />
+            </>
+          ) : null}
           <div className="space-y-2">
             <div className="font-medium">Recent inbound templates</div>
             {inboundTemplates.length > 0 ? (
@@ -1432,6 +1683,7 @@ export function BarcodeInboundForm({
                         : "outline"
                     }
                     className="h-auto justify-start whitespace-normal py-3 text-left"
+                    disabled={scopeLocked}
                     onClick={() => applyInboundTemplate(template)}
                   >
                     <span>
@@ -1457,6 +1709,9 @@ export function BarcodeInboundForm({
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
+              {!isOnline ? (
+                <OfflineScanAlert className="mb-3" />
+              ) : null}
               <BarcodeField
                 inputRef={barcodeInputRef}
                 id="barcode"
@@ -1473,20 +1728,15 @@ export function BarcodeInboundForm({
                   type="button"
                   variant="outline"
                   onClick={generateLabelBarcode}
+                  disabled={!isOnline || Boolean(sessionFinishedAt)}
                 >
-                  Generate label barcode
+                  Generate internal label
                 </Button>
-                {activePrintLabels.length > 0 ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => window.print()}
-                  >
-                    <Printer className="size-4" />
-                    Export labels PDF
-                  </Button>
-                ) : null}
               </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                If weight is missing, enter kg, generate an internal label, then
+                print and attach it. Stock saves immediately.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -1495,15 +1745,19 @@ export function BarcodeInboundForm({
                 value={productQuery}
                 onChange={(event) => setProductQuery(event.target.value)}
                 placeholder="Search product or item code"
+                disabled={scopeLocked}
               />
               <ItemSelect
                 items={filteredItems}
                 value={preset.itemId}
                 onChange={(value) => updatePreset("itemId", value)}
+                disabled={scopeLocked}
               />
-              <div className="rounded-md border bg-muted/30 p-3">
-                <div className="text-sm font-medium">Quick create product</div>
-                <div className="mt-2 grid gap-2 sm:grid-cols-[120px_1fr_auto]">
+              <details className="rounded-md border bg-muted/30 p-3">
+                <summary className="cursor-pointer text-sm font-medium">
+                  New product
+                </summary>
+                <div className="mt-3 grid gap-2 sm:grid-cols-[120px_1fr_auto]">
                   <NativeSelect
                     id="quickItemCategory"
                     name="quickItemCategory"
@@ -1523,7 +1777,11 @@ export function BarcodeInboundForm({
                     type="submit"
                     formAction={quickCreateAction}
                     data-stock-action="quick-create-item"
-                    disabled={quickCreatePending || quickItemName.trim().length < 2}
+                    disabled={
+                      quickCreatePending ||
+                      quickItemName.trim().length < 2 ||
+                      scopeLocked
+                    }
                     variant="outline"
                   >
                     {quickCreatePending ? "Creating..." : "Create"}
@@ -1539,34 +1797,7 @@ export function BarcodeInboundForm({
                   New item code: {quickItemCode}
                 </div>
                 <ActionMessage state={quickCreateState} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="inboundSource">Inbound source</Label>
-              <NativeSelect
-                id="inboundSource"
-                name="inboundSource"
-                value={preset.inboundSource}
-                onChange={(value) =>
-                  updatePreset(
-                    "inboundSource",
-                    value as InboundPreset["inboundSource"]
-                  )
-                }
-              >
-                <option value="supplier_import">Supplier / import</option>
-                <option value="processing_output">Processing output</option>
-                <option value="customer_return">Customer return</option>
-                <option value="transfer_received">Transfer received</option>
-                <option value="manual_adjustment">Manual adjustment</option>
-                <option value="other">Other</option>
-              </NativeSelect>
-              {preset.inboundSource === "customer_return" ? (
-                <p className="text-xs text-amber-700">
-                  Customer returns are saved for inspection first and are not
-                  available for outbound until released.
-                </p>
-              ) : null}
+              </details>
             </div>
             <div className="space-y-2">
               <Label htmlFor="brandId">Brand</Label>
@@ -1576,6 +1807,7 @@ export function BarcodeInboundForm({
                 onChange={(value) => updatePreset("brandId", value)}
                 allowOther
                 required
+                disabled={scopeLocked}
               />
               {preset.brandId === "__other" ? (
                 <Input
@@ -1583,6 +1815,7 @@ export function BarcodeInboundForm({
                   value={brandName}
                   onChange={(event) => setBrandName(event.target.value)}
                   placeholder="Enter custom brand"
+                  readOnly={scopeLocked}
                   required
                 />
               ) : null}
@@ -1595,6 +1828,7 @@ export function BarcodeInboundForm({
                 onChange={(value) => updatePreset("originId", value)}
                 allowOther
                 required
+                disabled={scopeLocked}
               />
               {preset.originId === "__other" ? (
                 <Input
@@ -1602,6 +1836,7 @@ export function BarcodeInboundForm({
                   value={originName}
                   onChange={(event) => setOriginName(event.target.value)}
                   placeholder="Enter custom origin"
+                  readOnly={scopeLocked}
                   required
                 />
               ) : null}
@@ -1612,6 +1847,7 @@ export function BarcodeInboundForm({
                 locations={locations}
                 value={preset.locationId}
                 onChange={(value) => updatePreset("locationId", value)}
+                disabled={scopeLocked}
               />
             </div>
             <div className="space-y-2">
@@ -1626,76 +1862,136 @@ export function BarcodeInboundForm({
                 onChange={(event) => setNetWeightKg(event.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="barcodeWeightStart">Weight start position</Label>
-              <Input
-                id="barcodeWeightStart"
-                name="barcodeWeightStart"
-                type="number"
-                min="1"
-                value={preset.barcodeWeightStart}
-                onChange={(event) =>
-                  updatePreset("barcodeWeightStart", event.target.value)
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="barcodeWeightLength">Weight digits</Label>
-              <Input
-                id="barcodeWeightLength"
-                name="barcodeWeightLength"
-                type="number"
-                min="1"
-                value={preset.barcodeWeightLength}
-                onChange={(event) =>
-                  updatePreset("barcodeWeightLength", event.target.value)
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="barcodeWeightDecimals">Weight decimals</Label>
-              <Input
-                id="barcodeWeightDecimals"
-                name="barcodeWeightDecimals"
-                type="number"
-                min="1"
-                max="3"
-                value={preset.barcodeWeightDecimals}
-                onChange={(event) =>
-                  updatePreset("barcodeWeightDecimals", event.target.value)
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="fixedWeightKg">Fallback fixed kg</Label>
-              <Input
-                id="fixedWeightKg"
-                type="number"
-                min="0"
-                step="0.001"
-                value={preset.fixedWeightKg}
-                onChange={(event) =>
-                  updatePreset("fixedWeightKg", event.target.value)
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="batchNo">Batch no.</Label>
-              <Input
-                id="batchNo"
-                name="batchNo"
-                value={batchNo}
-                onChange={(event) => setBatchNo(event.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="referenceNo">Reference no.</Label>
-              <Input id="referenceNo" name="referenceNo" placeholder="GRN-1001" />
-            </div>
+            <details className="rounded-md border bg-muted/30 p-3 md:col-span-2">
+              <summary className="cursor-pointer text-sm font-medium">
+                Weight rule and notes
+              </summary>
+              <div className="mt-3 grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="inboundSource">Inbound source</Label>
+                  <NativeSelect
+                    id="inboundSource"
+                    name="inboundSource"
+                    value={preset.inboundSource}
+                    onChange={(value) =>
+                      updatePreset(
+                        "inboundSource",
+                        value as InboundPreset["inboundSource"]
+                      )
+                    }
+                    disabled={scopeLocked}
+                  >
+                    <option value="supplier_import">Supplier / import</option>
+                    <option value="processing_output">Processing output</option>
+                    <option value="customer_return">Customer return</option>
+                    <option value="transfer_received">Transfer received</option>
+                    <option value="manual_adjustment">Manual adjustment</option>
+                    <option value="other">Other</option>
+                  </NativeSelect>
+                  {preset.inboundSource === "customer_return" ? (
+                    <p className="text-xs text-amber-700">
+                      Customer returns go to inspection first.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="barcodeWeightStart">Weight start position</Label>
+                  <Input
+                    id="barcodeWeightStart"
+                    name="barcodeWeightStart"
+                    type="number"
+                    min="1"
+                    value={preset.barcodeWeightStart}
+                    onChange={(event) =>
+                      updatePreset("barcodeWeightStart", event.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="barcodeWeightLength">Weight digits</Label>
+                  <Input
+                    id="barcodeWeightLength"
+                    name="barcodeWeightLength"
+                    type="number"
+                    min="1"
+                    value={preset.barcodeWeightLength}
+                    onChange={(event) =>
+                      updatePreset("barcodeWeightLength", event.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="barcodeWeightDecimals">Weight decimals</Label>
+                  <Input
+                    id="barcodeWeightDecimals"
+                    name="barcodeWeightDecimals"
+                    type="number"
+                    min="1"
+                    max="3"
+                    value={preset.barcodeWeightDecimals}
+                    onChange={(event) =>
+                      updatePreset("barcodeWeightDecimals", event.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fixedWeightKg">Fallback fixed kg</Label>
+                  <Input
+                    id="fixedWeightKg"
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={preset.fixedWeightKg}
+                    onChange={(event) =>
+                      updatePreset("fixedWeightKg", event.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="batchNo">Batch no.</Label>
+                  <Input
+                    id="batchNo"
+                    name="batchNo"
+                    value={batchNo}
+                    onChange={(event) => setBatchNo(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="referenceNo">Reference no.</Label>
+                  <Input
+                    id="referenceNo"
+                    name="referenceNo"
+                    placeholder="GRN-1001"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea id="notes" name="notes" />
+                </div>
+                <label className="flex items-center gap-2 text-sm md:col-span-2">
+                  <input
+                    type="checkbox"
+                    name="saveWeightRule"
+                    value="true"
+                    checked={preset.saveWeightRule}
+                    onChange={(event) =>
+                      updatePreset("saveWeightRule", event.target.checked)
+                    }
+                    className="size-4 rounded border-input"
+                  />
+                  Save weight rule for future scans
+                </label>
+              </div>
+            </details>
           </div>
 
           <div className="rounded-md border bg-muted/30 p-3 text-sm">
             <div className="font-medium">Current scan preset</div>
+            {scopeLocked ? (
+              <div className="mb-1 text-xs font-medium text-amber-700">
+                Session locked. Finish this session before changing setup.
+              </div>
+            ) : null}
             <div className="mt-1 text-muted-foreground">
               {selectedItem
                 ? `${selectedItem.category} / ${selectedItem.section} / ${selectedItem.name}`
@@ -1725,8 +2021,28 @@ export function BarcodeInboundForm({
             </div>
           </div>
 
+          {latestSavedScan ? (
+            <div
+              aria-live="polite"
+              className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
+            >
+              <div className="text-xs font-medium uppercase">Previous scan</div>
+              <div className="mt-1 font-semibold">
+                {latestSavedScan.productName}
+              </div>
+              <div className="mt-1 text-lg font-semibold tabular-nums">
+                {latestSavedScan.weightKg} kg
+              </div>
+              <div className="break-all font-mono text-xs">
+                {latestSavedScan.barcode}
+              </div>
+            </div>
+          ) : null}
+
           {decodeMessage ? (
             <div
+              role={decodeStatus === "error" ? "alert" : "status"}
+              aria-live={decodeStatus === "error" ? "assertive" : "polite"}
               className={
                 decodeStatus === "success"
                   ? "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
@@ -1741,42 +2057,10 @@ export function BarcodeInboundForm({
 
           {duplicateBarcode ? (
             <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              Duplicate barcode warning: this barcode already exists. Inbound
-              will be blocked.
+              Duplicate barcode. Inbound is blocked.
             </div>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                name="saveWeightRule"
-                value="true"
-                checked={preset.saveWeightRule}
-                onChange={(event) =>
-                  updatePreset("saveWeightRule", event.target.checked)
-                }
-                className="size-4 rounded border-input"
-              />
-              Save weight-position rule
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={preset.autoSave}
-                onChange={(event) =>
-                  updatePreset("autoSave", event.target.checked)
-                }
-                className="size-4 rounded border-input"
-              />
-              Auto-save after camera scan
-            </label>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea id="notes" name="notes" />
-          </div>
           <ActionMessage state={state} />
           {state.status === "error" ? (
             <p className="text-sm text-muted-foreground">
@@ -1790,6 +2074,7 @@ export function BarcodeInboundForm({
               disabled={
                 duplicateBarcode ||
                 decodeStatus === "error" ||
+                !isOnline ||
                 Boolean(sessionFinishedAt)
               }
             >
@@ -1807,23 +2092,13 @@ export function BarcodeInboundForm({
         </form>
         {recentLabels.length > 0 ? (
           <div className="mt-4 rounded-md border bg-muted/30 p-3">
-            <div className="flex items-center justify-between gap-3">
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start">
               <div>
                 <div className="font-medium">Recent inbound scans</div>
-                <div className="text-sm text-muted-foreground">
-                  Recent labels print one 50mm x 30mm label per page when
-                  exported to PDF.
-                </div>
+                <StockLabelPrintNote />
               </div>
               {activePrintLabels.length > 0 ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => window.print()}
-                >
-                  <Printer className="size-4" />
-                  Export PDF
-                </Button>
+                <StockLabelPrintActions />
               ) : null}
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1846,6 +2121,9 @@ export function BarcodeInboundForm({
                   <div className="break-all font-mono text-xs">
                     {label.barcode}
                   </div>
+                  {label.status === "SAVED" ? (
+                    <StockLabelPreview label={label} className="mt-3" />
+                  ) : null}
                   <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
                     <div>Time: {new Date(label.scannedAt).toLocaleString()}</div>
                     <div>Scanned by: {label.scannedBy}</div>
@@ -1878,12 +2156,6 @@ export function BarcodeInboundForm({
               ))}
             </div>
             <ActionMessage state={undoState} />
-          </div>
-        ) : null}
-        {latestSavedScan ? (
-          <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-            Previous saved scan: {latestSavedScan.weightKg} kg -{" "}
-            <span className="break-all font-mono">{latestSavedScan.barcode}</span>
           </div>
         ) : null}
         {sessionFinishedAt ? (
@@ -1950,13 +2222,16 @@ export function BarcodeInboundForm({
           </div>
         ) : null}
         {sessionErrors.length > 0 ? (
-          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
-            <div className="font-medium text-amber-900">
-              Duplicate/error scans this session
+          <div
+            role="alert"
+            className="mt-4 rounded-md border border-red-200 bg-red-50 p-3"
+          >
+            <div className="font-medium text-red-900">
+              Blocked/error scans this session
             </div>
             <div className="mt-2 grid gap-2">
               {sessionErrors.map((entry) => (
-                <div key={entry.id} className="text-sm text-amber-900">
+                <div key={entry.id} className="text-sm text-red-900">
                   <span className="font-mono">{entry.barcode}</span> -{" "}
                   {entry.message} ({new Date(entry.time).toLocaleTimeString()})
                 </div>
@@ -1964,7 +2239,7 @@ export function BarcodeInboundForm({
             </div>
           </div>
         ) : null}
-        <PrintLabels labels={activePrintLabels} />
+        <StockLabelPrintArea labels={activePrintLabels} />
       </CardContent>
     </Card>
   )
@@ -1983,12 +2258,14 @@ function stockUnitLabel(unit: StockUnit, items: Item[]) {
 export function OutboundSalesForm({
   orders,
   orderItems,
+  outlets,
   locations,
   units,
   items,
 }: {
   orders: CustomerOrder[]
   orderItems: CustomerOrderItem[]
+  outlets: StockOutlet[]
   locations: StockLocation[]
   units: StockUnit[]
   items: Item[]
@@ -2002,13 +2279,17 @@ export function OutboundSalesForm({
       ),
     [orders]
   )
-  const [orderId, setOrderId] = useState(availableOrders[0]?.id ?? "")
+  const [orderId, setOrderId] = useState("")
   const [outboundMode, setOutboundMode] = useState<"ORDER" | "DIRECT">("ORDER")
   const [outboundType, setOutboundType] = useState("SALES")
+  const [damageReason, setDamageReason] =
+    useState<StockDamageReason>("expired")
   const [toLocationId, setToLocationId] = useState("")
   const [barcode, setBarcode] = useState("")
   const [barcodes, setBarcodes] = useState<string[]>([])
+  const [confirmSubstitution, setConfirmSubstitution] = useState(false)
   const [scanError, setScanError] = useState("")
+  const isOnline = useOnlineStatus()
   const confirmOutboundFormAction: StatefulAction = async (
     previousState,
     formData
@@ -2040,7 +2321,7 @@ export function OutboundSalesForm({
   )
   const selectedOrderId = availableOrders.some((order) => order.id === orderId)
     ? orderId
-    : availableOrders[0]?.id ?? ""
+    : ""
   const selectedOrderItems = orderItems.filter(
     (item) => item.orderId === selectedOrderId
   )
@@ -2082,6 +2363,23 @@ export function OutboundSalesForm({
   const substitutionUnits = knownScannedUnits.filter(
     (unit) => !orderedItemIds.has(unit.itemId)
   )
+  const orderChecklistRows = selectedOrderItems.map((item) => {
+    const scannedForItem = knownScannedUnits.filter(
+      (unit) => unit.itemId === item.itemId
+    )
+    const scannedWeightKg = scannedForItem.reduce(
+      (sum, unit) => sum + unit.netWeightKg,
+      0
+    )
+
+    return {
+      item,
+      scannedQuantity: scannedForItem.length,
+      scannedWeightKg,
+      quantityDifference: scannedForItem.length - item.requestedQuantity,
+      weightDifferenceKg: scannedWeightKg - item.requestedWeightKg,
+    }
+  })
   const scannedQuantityDifference = knownScannedUnits.length - requestedQuantity
   const scannedWeightDifference = totalWeightKg - requestedWeightKg
   const showOrderScanWarning =
@@ -2092,17 +2390,91 @@ export function OutboundSalesForm({
       Math.abs(scannedWeightDifference) > 0.001 ||
       substitutionUnits.length > 0)
   const confirmDisabled =
+    !isOnline ||
     (outboundMode === "ORDER" && !selectedOrderId) ||
     barcodes.length === 0 ||
     (outboundType === "TRANSFER" && !toLocationId) ||
     missingScannedBarcodes.length > 0 ||
     blockedScannedUnits.length > 0 ||
-    sameDestinationTransferUnits.length > 0
+    sameDestinationTransferUnits.length > 0 ||
+    (outboundMode === "ORDER" &&
+      substitutionUnits.length > 0 &&
+      !confirmSubstitution)
+  const outboundModeOptions: {
+    value: "ORDER" | "DIRECT"
+    label: string
+    hint: string
+  }[] = [
+    {
+      value: "ORDER",
+      label: "Order outbound",
+      hint: "Pick order first",
+    },
+    {
+      value: "DIRECT",
+      label: "Direct outbound",
+      hint: "Worker allowed",
+    },
+  ]
+  const orderOutboundOptions = [
+    { value: "SALES", label: "Sales", hint: "For ready order" },
+    { value: "TRANSFER", label: "Transfer", hint: "Needs destination" },
+    { value: "PROCESSING", label: "Processing", hint: "Reduce now" },
+  ]
+  const directOutboundOptions = [
+    { value: "SALES", label: "Sales", hint: "No customer name" },
+    { value: "PROCESSING", label: "Processing", hint: "Reduce now" },
+    { value: "TRANSFER", label: "Transfer", hint: "Needs destination" },
+    { value: "SAMPLE_TESTING", label: "Sample/Testing", hint: "No photo" },
+    {
+      value: "DAMAGE_SPOILAGE",
+      label: "Damage/Spoilage",
+      hint: "Photo required",
+    },
+    {
+      value: "RETURN_SUPPLIER",
+      label: "Return Supplier",
+      hint: "Hold for supplier",
+    },
+  ]
+  const outboundTypeOptions =
+    outboundMode === "ORDER" ? orderOutboundOptions : directOutboundOptions
+  const activeOutboundType =
+    outboundTypeOptions.find((option) => option.value === outboundType) ??
+    {
+      label: outboundType.replaceAll("_", " "),
+      hint: "Check type",
+    }
+  const confirmDisabledMessage =
+    !isOnline
+      ? offlineScanMessage
+      : outboundMode === "ORDER" && !selectedOrderId
+        ? "Select order first."
+        : barcodes.length === 0
+          ? "Scan at least one barcode."
+          : outboundType === "TRANSFER" && !toLocationId
+            ? "Choose destination stock location."
+            : missingScannedBarcodes.length > 0
+              ? "Remove barcode not found."
+              : blockedScannedUnits.length > 0
+                ? "Remove blocked barcode."
+                : sameDestinationTransferUnits.length > 0
+                  ? "Choose another destination."
+                  : outboundMode === "ORDER" &&
+                      substitutionUnits.length > 0 &&
+                      !confirmSubstitution
+                    ? "Confirm substitution."
+                    : ""
 
   function addBarcode(value = barcode) {
     const nextBarcode = value.trim()
 
     setScanError("")
+
+    if (!isOnline) {
+      setScanError(offlineScanMessage)
+      return
+    }
 
     if (!nextBarcode) {
       setScanError("Enter or scan a barcode first.")
@@ -2125,43 +2497,89 @@ export function OutboundSalesForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Outbound batch</CardTitle>
+        <CardTitle>Outbound scan</CardTitle>
         <CardDescription>
-          Use order-based outbound for customer orders or direct outbound for
-          sales, transfer, and processing stock movement.
+          Select the job, scan barcodes, then confirm.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="space-y-4">
           <input type="hidden" name="barcodesJson" value={JSON.stringify(barcodes)} />
-          <div className="grid gap-4 md:grid-cols-2">
+          <input type="hidden" name="outboundMode" value={outboundMode} />
+          <input type="hidden" name="outboundType" value={outboundType} />
+          {outboundMode === "ORDER" ? (
+            <input
+              type="hidden"
+              name="confirmSubstitution"
+              value={confirmSubstitution ? "true" : "false"}
+            />
+          ) : null}
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="outboundMode">Outbound mode</Label>
-              <NativeSelect
-                id="outboundMode"
-                name="outboundMode"
-                value={outboundMode}
-                onChange={(value) =>
-                  setOutboundMode(value === "DIRECT" ? "DIRECT" : "ORDER")
-                }
-              >
-                <option value="ORDER">Order-based</option>
-                <option value="DIRECT">Direct outbound</option>
-              </NativeSelect>
+              <div className="text-sm font-medium">Outbound job</div>
+              <div className="grid gap-2 min-[390px]:grid-cols-2">
+                {outboundModeOptions.map((option) => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    variant={
+                      outboundMode === option.value ? "default" : "outline"
+                    }
+                    className="h-auto min-h-14 justify-start whitespace-normal py-3 text-left"
+                    aria-pressed={outboundMode === option.value}
+                    onClick={() => {
+                      setOutboundMode(option.value)
+                      setOutboundType("SALES")
+                      setConfirmSubstitution(false)
+                      setScanError("")
+                    }}
+                  >
+                    <span>
+                      <span className="block font-medium">{option.label}</span>
+                      <span className="block text-xs opacity-80">
+                        {option.hint}
+                      </span>
+                    </span>
+                  </Button>
+                ))}
+              </div>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="outboundType">Outbound type</Label>
-              <NativeSelect
-                id="outboundType"
-                name="outboundType"
-                value={outboundType}
-                onChange={setOutboundType}
-              >
-                <option value="SALES">SALES</option>
-                <option value="TRANSFER">TRANSFER</option>
-                <option value="PROCESSING">PROCESSING</option>
-              </NativeSelect>
+              <div className="text-sm font-medium">Outbound type</div>
+              <div className="grid gap-2 min-[390px]:grid-cols-2 lg:grid-cols-3">
+                {outboundTypeOptions.map((option) => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    variant={
+                      outboundType === option.value ? "default" : "outline"
+                    }
+                    className="h-auto min-h-14 justify-start whitespace-normal py-3 text-left"
+                    aria-pressed={outboundType === option.value}
+                    onClick={() => {
+                      setOutboundType(option.value)
+                      setScanError("")
+                    }}
+                  >
+                    <span>
+                      <span className="block font-medium">{option.label}</span>
+                      <span className="block text-xs opacity-80">
+                        {option.hint}
+                      </span>
+                    </span>
+                  </Button>
+                ))}
+              </div>
             </div>
+
+            <div className="rounded-md border bg-muted/30 p-3 text-sm">
+              {outboundMode === "ORDER"
+                ? "Order outbound: select a ready order before scanning."
+                : `${activeOutboundType.label}: ${activeOutboundType.hint}.`}
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
             {outboundMode === "ORDER" ? (
               <div className="space-y-2">
                 <Label htmlFor="orderId">Customer order</Label>
@@ -2179,8 +2597,13 @@ export function OutboundSalesForm({
                   ))}
                 </NativeSelect>
                 {availableOrders.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Mark an order ready before confirming outbound scans.
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    No ready orders yet.
+                  </p>
+                ) : null}
+                {availableOrders.length > 0 && !selectedOrderId ? (
+                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    Select order first.
                   </p>
                 ) : null}
               </div>
@@ -2189,10 +2612,11 @@ export function OutboundSalesForm({
             )}
             {outboundType === "TRANSFER" ? (
               <div className="space-y-2">
-                <Label htmlFor="toLocationId">Transfer destination</Label>
-                <LocationSelect
+                <Label htmlFor="toLocationId">Destination stock location</Label>
+                <DestinationOutletSelect
+                  outlets={outlets}
                   locations={locations}
-                  id="toLocationId"
+                  id="toOutletId"
                   name="toLocationId"
                   value={toLocationId}
                   onChange={setToLocationId}
@@ -2201,9 +2625,36 @@ export function OutboundSalesForm({
             ) : (
               <input type="hidden" name="toLocationId" value="" />
             )}
+            {outboundMode === "DIRECT" && outboundType === "DAMAGE_SPOILAGE" ? (
+              <>
+                <DamageReasonButtons
+                  name="damageReason"
+                  value={damageReason}
+                  onChange={setDamageReason}
+                />
+                <div className="space-y-2">
+                  <Label htmlFor="damagePhotoPath">Damage photo</Label>
+                  <Input
+                    id="damagePhotoPath"
+                    name="damagePhotoPath"
+                    placeholder="Photo reference"
+                  />
+                  <p className="text-sm text-amber-700">
+                    Photo required. Stock goes to approval.
+                  </p>
+                </div>
+              </>
+            ) : null}
+            {outboundMode === "DIRECT" && outboundType === "RETURN_SUPPLIER" ? (
+              <div className="space-y-2">
+                <Label htmlFor="supplierName">Supplier name</Label>
+                <Input id="supplierName" name="supplierName" />
+              </div>
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="referenceNo">Reference no.</Label>
               <Input id="referenceNo" name="referenceNo" placeholder="ORDER / INV / TRF" />
+            </div>
             </div>
           </div>
 
@@ -2217,14 +2668,24 @@ export function OutboundSalesForm({
               onScan={(value) => addBarcode(value)}
               continuousScan
               placeholder="EM-BC-000001"
+              disabled={!isOnline}
             />
             <div className="flex items-end">
-              <Button type="button" variant="outline" onClick={() => addBarcode()}>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 w-full md:w-auto"
+                disabled={!isOnline}
+                onClick={() => addBarcode()}
+              >
                 Add barcode
               </Button>
             </div>
           </div>
 
+          {!isOnline ? (
+            <OfflineScanAlert />
+          ) : null}
           <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 text-sm sm:grid-cols-3">
             <div>
               <div className="text-muted-foreground">Scanned units</div>
@@ -2245,23 +2706,26 @@ export function OutboundSalesForm({
           </div>
 
           {scanError ? (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
               {scanError}
             </div>
           ) : null}
-          {confirmDisabled ? (
+          {confirmDisabled && isOnline ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              {outboundMode === "ORDER"
-                ? "Select a ready order, scan at least one valid barcode, remove missing or blocked scans, and choose a destination for transfer batches before confirming."
-                : "Scan at least one valid barcode, remove missing or blocked scans, and choose a destination for transfer batches before confirming direct outbound."}
+              {confirmDisabledMessage}
             </div>
           ) : null}
           {missingScannedBarcodes.length > 0 ? (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              <div className="font-medium">Missing barcode scan</div>
+            <div
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
+              <div className="font-medium">Barcode not found</div>
               <div className="mt-1">
-                These barcodes are not in the stock list. Remove them or check
-                the label before confirming outbound:
+                Remove it or check the label.
               </div>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {missingScannedBarcodes.map((missingBarcode) => (
@@ -2273,11 +2737,12 @@ export function OutboundSalesForm({
             </div>
           ) : null}
           {blockedScannedUnits.length > 0 ? (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              <div className="font-medium">Blocked barcode scan</div>
-              <div className="mt-1">
-                Remove these barcode scans before confirming outbound:
-              </div>
+            <div
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
+              <div className="font-medium">Blocked barcode</div>
+              <div className="mt-1">Remove blocked scans.</div>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {blockedScannedUnits.map((row) => (
                   <li key={row.barcode}>{row.reason}</li>
@@ -2286,12 +2751,12 @@ export function OutboundSalesForm({
             </div>
           ) : null}
           {sameDestinationTransferUnits.length > 0 ? (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              <div className="font-medium">Invalid transfer destination</div>
-              <div className="mt-1">
-                These barcodes are already at the selected destination. Choose
-                another destination or remove them before confirming transfer:
-              </div>
+            <div
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
+              <div className="font-medium">Wrong destination</div>
+              <div className="mt-1">Choose another destination or remove it.</div>
               <ul className="mt-2 list-disc space-y-1 pl-5">
                 {sameDestinationTransferUnits.map((row) => (
                   <li key={row.barcode}>
@@ -2304,14 +2769,8 @@ export function OutboundSalesForm({
           ) : null}
           {showOrderScanWarning ? (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <div className="font-medium">
-                Order scan warning - check before confirming
-              </div>
-              <div className="mt-1">
-                Differences and substitutions are allowed for MVP, but the
-                scanned batch will be recorded separately from the original
-                ordered items.
-              </div>
+              <div className="font-medium">Check before confirm</div>
+              <div className="mt-1">Weight difference is allowed.</div>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <div>
                   Requested: {requestedQuantity.toLocaleString()} unit
@@ -2330,8 +2789,69 @@ export function OutboundSalesForm({
                   {substitutionUnits
                     .map((unit) => stockUnitLabel(unit, items))
                     .join(", ")}
+                  <label className="mt-2 flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={confirmSubstitution}
+                      onChange={(event) =>
+                        setConfirmSubstitution(event.target.checked)
+                      }
+                    />
+                    <span>
+                      Confirm substitution. No reason needed.
+                    </span>
+                  </label>
                 </div>
               ) : null}
+            </div>
+          ) : null}
+
+          {outboundMode === "ORDER" && selectedOrderId ? (
+            <div className="space-y-2 rounded-lg border p-3">
+              <div className="font-medium">Order item checklist</div>
+              <div className="space-y-2">
+                {orderChecklistRows.map((row) => (
+                  <div
+                    key={row.item.id}
+                    className="grid gap-1 rounded-md bg-muted/30 p-2 text-sm sm:grid-cols-[1fr_auto]"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">
+                        {row.item.itemLabel}
+                      </div>
+                      <div className="text-muted-foreground">
+                        Required {row.item.requestedQuantity.toLocaleString()}{" "}
+                        unit{row.item.requestedQuantity === 1 ? "" : "s"} /{" "}
+                        {row.item.requestedWeightKg.toFixed(3)} kg
+                      </div>
+                    </div>
+                    <div className="text-left tabular-nums sm:text-right">
+                      <div>
+                        Scanned {row.scannedQuantity.toLocaleString()} unit
+                        {row.scannedQuantity === 1 ? "" : "s"} /{" "}
+                        {row.scannedWeightKg.toFixed(3)} kg
+                      </div>
+                      <div
+                        className={
+                          Math.abs(row.quantityDifference) > 0 ||
+                          Math.abs(row.weightDifferenceKg) > 0.001
+                            ? "text-amber-700"
+                            : "text-emerald-700"
+                        }
+                      >
+                        Difference {row.quantityDifference.toLocaleString()} /{" "}
+                        {row.weightDifferenceKg.toFixed(3)} kg
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {substitutionUnits.length > 0 ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-sm text-amber-900">
+                    Confirm substitution before final confirm.
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
 
@@ -2349,7 +2869,7 @@ export function OutboundSalesForm({
                       <div className="text-sm text-muted-foreground">
                         {row.unit
                           ? `${stockUnitLabel(row.unit, items)} - ${row.unit.netWeightKg.toFixed(3)} kg`
-                          : "Will be checked against database when confirmed"}
+                          : "Not found"}
                       </div>
                     </div>
                     <Button
@@ -2372,7 +2892,16 @@ export function OutboundSalesForm({
 
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
-            <Textarea id="notes" name="notes" />
+            <Textarea
+              id="notes"
+              name="notes"
+              required={outboundMode === "DIRECT"}
+              placeholder={
+                outboundMode === "DIRECT"
+                  ? "Required for direct outbound"
+                  : undefined
+              }
+            />
           </div>
 
           <ActionMessage state={state} />
@@ -2385,123 +2914,265 @@ export function OutboundSalesForm({
   )
 }
 
-export function TransferForm({ locations }: { locations: StockLocation[] }) {
+export function TransferForm({
+  outlets,
+  locations,
+}: {
+  outlets: StockOutlet[]
+  locations: StockLocation[]
+}) {
   const [barcode, setBarcode] = useState("")
+  const [toLocationId, setToLocationId] = useState("")
+  const [state, formAction, pending] = useActionState(
+    transferAction,
+    initialStockActionState
+  )
+  const isOnline = useOnlineStatus()
+  const transferBlocked = !isOnline || !toLocationId || !barcode.trim()
 
   return (
-    <WorkflowCard
-      title="Create transfer"
-      description="Move a barcode unit into transfer pending status."
-      action={transferAction}
-      submitLabel="Create transfer"
-    >
-      <div className="grid gap-4 md:grid-cols-2">
-        <BarcodeField
-          id="barcode"
-          name="barcode"
-          label="Barcode"
-          value={barcode}
-          onChange={setBarcode}
-          placeholder="EM-LN-000003"
-        />
-        <div className="space-y-2">
-          <Label htmlFor="toLocationId">To location</Label>
-          <LocationSelect
-            locations={locations}
-            id="toLocationId"
-            name="toLocationId"
+    <Card>
+      <CardHeader>
+        <CardTitle>Transfer stock</CardTitle>
+        <CardDescription>
+          Choose destination stock location, scan barcode, then send.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form action={formAction} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="toOutletId">Destination stock location</Label>
+            <DestinationOutletSelect
+              outlets={outlets}
+              locations={locations}
+              id="toOutletId"
+              name="toLocationId"
+              value={toLocationId}
+              onChange={setToLocationId}
+            />
+          </div>
+
+          <BarcodeField
+            id="barcode"
+            name="barcode"
+            label="Barcode"
+            value={barcode}
+            onChange={setBarcode}
+            onScan={setBarcode}
+            placeholder="Scan transfer barcode"
+            disabled={!isOnline}
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="referenceNo">Reference no.</Label>
-          <Input id="referenceNo" name="referenceNo" placeholder="TRF-2031" />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea id="notes" name="notes" />
-      </div>
-    </WorkflowCard>
+
+          {!isOnline ? (
+            <OfflineScanAlert />
+          ) : null}
+
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Location changes only after receive scan.
+          </div>
+
+          <details className="rounded-md border bg-muted/30 p-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              Reference and notes
+            </summary>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="referenceNo">Reference no.</Label>
+                <Input id="referenceNo" name="referenceNo" placeholder="TRF-2031" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea id="notes" name="notes" />
+              </div>
+            </div>
+          </details>
+
+          {transferBlocked && isOnline ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Choose destination stock location and scan barcode.
+            </div>
+          ) : null}
+          <ActionMessage state={state} />
+          <SubmitButton
+            pending={pending}
+            disabled={transferBlocked}
+            className="h-12 w-full"
+          >
+            Send transfer
+          </SubmitButton>
+        </form>
+      </CardContent>
+    </Card>
   )
 }
 
 export function ReceiveTransferForm({
+  outlets,
   locations,
 }: {
+  outlets: StockOutlet[]
   locations: StockLocation[]
 }) {
   const [barcode, setBarcode] = useState("")
+  const [receiveLocationId, setReceiveLocationId] = useState("")
+  const [state, formAction, pending] = useActionState(
+    receiveTransferAction,
+    initialStockActionState
+  )
+  const isOnline = useOnlineStatus()
+  const receiveBlocked = !isOnline || !receiveLocationId || !barcode.trim()
 
   return (
-    <WorkflowCard
-      title="Receive transfer"
-      description="Confirm a pending transfer into the receiving location."
-      action={receiveTransferAction}
-      submitLabel="Receive transfer"
-    >
-      <div className="grid gap-4 md:grid-cols-2">
-        <BarcodeField
-          id="barcode"
-          name="barcode"
-          label="Barcode"
-          value={barcode}
-          onChange={setBarcode}
-          placeholder="EM-LN-000003"
-        />
-        <div className="space-y-2">
-          <Label htmlFor="receiveLocationId">Receive location</Label>
-          <LocationSelect
-            locations={locations}
-            id="receiveLocationId"
-            name="receiveLocationId"
+    <Card>
+      <CardHeader>
+        <CardTitle>Receive transfer</CardTitle>
+        <CardDescription>
+          Select receiving location, scan barcode, then receive.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form action={formAction} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="receiveOutletId">Receiving stock location</Label>
+            <DestinationOutletSelect
+              outlets={outlets}
+              locations={locations}
+              id="receiveOutletId"
+              name="receiveLocationId"
+              value={receiveLocationId}
+              onChange={setReceiveLocationId}
+            />
+          </div>
+
+          <BarcodeField
+            id="barcode"
+            name="barcode"
+            label="Barcode"
+            value={barcode}
+            onChange={setBarcode}
+            onScan={setBarcode}
+            placeholder="Scan transfer barcode"
+            disabled={!isOnline}
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="referenceNo">Reference no.</Label>
-          <Input id="referenceNo" name="referenceNo" placeholder="TRF-2031" />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea id="notes" name="notes" />
-      </div>
-    </WorkflowCard>
+
+          {!isOnline ? (
+            <OfflineScanAlert />
+          ) : null}
+
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            Wrong location is blocked.
+          </div>
+
+          <details className="rounded-md border bg-muted/30 p-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              Reference and notes
+            </summary>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="referenceNo">Reference no.</Label>
+                <Input id="referenceNo" name="referenceNo" placeholder="TRF-2031" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea id="notes" name="notes" />
+              </div>
+            </div>
+          </details>
+
+          {receiveBlocked && isOnline ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Choose location and scan barcode.
+            </div>
+          ) : null}
+          <ActionMessage state={state} />
+          <SubmitButton
+            pending={pending}
+            disabled={receiveBlocked}
+            className="h-12 w-full"
+          >
+            Receive barcode
+          </SubmitButton>
+        </form>
+      </CardContent>
+    </Card>
   )
 }
 
 export function ReturnForm({ locations }: { locations: StockLocation[] }) {
   const [barcode, setBarcode] = useState("")
+  const [locationId, setLocationId] = useState(locations[0]?.id ?? "")
+  const [state, formAction, pending] = useActionState(
+    returnStockAction,
+    initialStockActionState
+  )
+  const isOnline = useOnlineStatus()
+  const returnBlocked = !isOnline || !barcode.trim() || !locationId
 
   return (
-    <WorkflowCard
-      title="Stock return"
-      description="Return a barcode unit back to a stock location."
-      action={returnStockAction}
-      submitLabel="Save return"
-    >
-      <div className="grid gap-4 md:grid-cols-2">
-        <BarcodeField
-          id="barcode"
-          name="barcode"
-          label="Barcode"
-          value={barcode}
-          onChange={setBarcode}
-          placeholder="EM-OR-000004"
-        />
-        <div className="space-y-2">
-          <Label htmlFor="locationId">Return location</Label>
-          <LocationSelect locations={locations} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="referenceNo">Reference no.</Label>
-          <Input id="referenceNo" name="referenceNo" placeholder="RET-5501" />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea id="notes" name="notes" />
-      </div>
-    </WorkflowCard>
+    <Card>
+      <CardHeader>
+        <CardTitle>Stock return</CardTitle>
+        <CardDescription>
+          Scan barcode, choose return location, then save.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form action={formAction} className="space-y-4">
+          <BarcodeField
+            id="barcode"
+            name="barcode"
+            label="Barcode"
+            value={barcode}
+            onChange={setBarcode}
+            onScan={setBarcode}
+            placeholder="Scan return barcode"
+            disabled={!isOnline}
+          />
+          <div className="space-y-2">
+            <Label htmlFor="locationId">Return location</Label>
+            <LocationSelect
+              locations={locations}
+              value={locationId}
+              onChange={setLocationId}
+            />
+          </div>
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Customer returns may need inspection before normal outbound.
+          </div>
+          {!isOnline ? (
+            <OfflineScanAlert />
+          ) : null}
+          <details className="rounded-md border bg-muted/30 p-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              Reference and notes
+            </summary>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="referenceNo">Reference no.</Label>
+                <Input id="referenceNo" name="referenceNo" placeholder="RET-5501" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea id="notes" name="notes" />
+              </div>
+            </div>
+          </details>
+          {returnBlocked && isOnline ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Scan barcode and choose location.
+            </div>
+          ) : null}
+          <ActionMessage state={state} />
+          <SubmitButton
+            pending={pending}
+            disabled={returnBlocked}
+            className="h-12 w-full"
+          >
+            Save return
+          </SubmitButton>
+        </form>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -2511,6 +3182,8 @@ export function InspectionReleaseForm({ canManage }: { canManage: boolean }) {
     releaseInspectionStockAction,
     initialStockActionState
   )
+  const isOnline = useOnlineStatus()
+  const releaseBlocked = !isOnline || !canManage || !barcode.trim()
 
   return (
     <Card>
@@ -2530,7 +3203,9 @@ export function InspectionReleaseForm({ canManage }: { canManage: boolean }) {
               label="Inspection barcode"
               value={barcode}
               onChange={setBarcode}
+              onScan={setBarcode}
               placeholder="EM-SEED-RETURN-INSPECTION-001"
+              disabled={!isOnline}
             />
             <div className="space-y-2">
               <Label htmlFor="inspectionNotes">Inspection notes</Label>
@@ -2547,8 +3222,15 @@ export function InspectionReleaseForm({ canManage }: { canManage: boolean }) {
               become sellable.
             </p>
           ) : null}
+          {!isOnline ? (
+            <OfflineScanAlert />
+          ) : null}
           <ActionMessage state={state} />
-          <SubmitButton pending={pending} disabled={!canManage}>
+          <SubmitButton
+            pending={pending}
+            disabled={releaseBlocked}
+            className="h-12 w-full"
+          >
             Release to stock
           </SubmitButton>
         </form>
@@ -2564,6 +3246,41 @@ function damageReasonLabel(reason: string) {
     .join(" ")
 }
 
+function DamageReasonButtons({
+  name,
+  value,
+  onChange,
+}: {
+  name: string
+  value: StockDamageReason
+  onChange: (value: StockDamageReason) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <input type="hidden" name={name} value={value} />
+      <div className="text-sm font-medium">Damage reason</div>
+      <div className="grid gap-2 min-[390px]:grid-cols-2">
+        {stockDamageReasons.map((reason) => (
+          <button
+            key={reason}
+            type="button"
+            aria-pressed={value === reason}
+            onClick={() => onChange(reason)}
+            className={[
+              "min-h-14 rounded-md border px-3 py-2 text-left text-sm transition",
+              value === reason
+                ? "border-amber-300 bg-amber-50 font-semibold text-amber-900"
+                : "border-input bg-background hover:bg-muted",
+            ].join(" ")}
+          >
+            {damageReasonLabel(reason)}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function DamageRequestWorkbench({
   requests,
   canOperate,
@@ -2576,12 +3293,14 @@ export function DamageRequestWorkbench({
   canDirectorApprove: boolean
 }) {
   const [barcode, setBarcode] = useState("")
+  const [reason, setReason] = useState<StockDamageReason>("expired")
+  const [photoPath, setPhotoPath] = useState("")
   const [createState, createAction, createPending] = useActionState(
     createDamageRequestAction,
     initialStockActionState
   )
   const [reviewState, reviewAction, reviewPending] = useActionState(
-  reviewDamageRequestAction,
+    reviewDamageRequestAction,
     initialStockActionState
   )
   const [approveState, approveAction, approvePending] = useActionState(
@@ -2592,6 +3311,8 @@ export function DamageRequestWorkbench({
     rejectDamageRequestAction,
     initialStockActionState
   )
+  const isOnline = useOnlineStatus()
+  const damageBlocked = !isOnline || !barcode.trim() || !photoPath.trim()
 
   return (
     <Card>
@@ -2605,43 +3326,60 @@ export function DamageRequestWorkbench({
       <CardContent className="space-y-4">
         {canOperate ? (
           <form action={createAction} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <BarcodeField
-                id="damageBarcode"
-                name="barcode"
-                label="Barcode"
-                value={barcode}
-                onChange={setBarcode}
-                onScan={setBarcode}
-                placeholder="Scan damaged barcode"
+            <BarcodeField
+              id="damageBarcode"
+              name="barcode"
+              label="Barcode"
+              value={barcode}
+              onChange={setBarcode}
+              onScan={setBarcode}
+              placeholder="Scan damaged barcode"
+              disabled={!isOnline}
+            />
+            <div className="grid gap-3 min-[390px]:grid-cols-2">
+              <DamageReasonButtons
+                name="reason"
+                value={reason}
+                onChange={setReason}
               />
               <div className="space-y-2">
-                <Label htmlFor="damageReason">Reason</Label>
-                <NativeSelect id="damageReason" name="reason">
-                  <option value="expired">Expired</option>
-                  <option value="broken_packaging">Broken packaging</option>
-                  <option value="smell">Smell</option>
-                  <option value="wrong_temperature">Wrong temperature</option>
-                  <option value="customer_rejected">Customer rejected</option>
-                  <option value="other">Other</option>
-                </NativeSelect>
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="photoPath">Photo path / upload reference</Label>
+                <Label htmlFor="photoPath">Photo reference</Label>
                 <Input
                   id="photoPath"
                   name="photoPath"
+                  value={photoPath}
                   required
-                  placeholder="Upload photo first, then paste path/reference"
+                  onChange={(event) => setPhotoPath(event.target.value)}
+                  placeholder="Photo is required"
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="damageNotes">Notes</Label>
-              <Textarea id="damageNotes" name="notes" />
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Photo required. Request only; stock is not deducted now.
             </div>
+            {!isOnline ? (
+              <OfflineScanAlert />
+            ) : null}
+            <details className="rounded-md border bg-muted/30 p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                Notes
+              </summary>
+              <div className="mt-3 space-y-2">
+                <Label htmlFor="damageNotes">Notes</Label>
+                <Textarea id="damageNotes" name="notes" />
+              </div>
+            </details>
+            {damageBlocked && isOnline ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Scan barcode and add photo reference.
+              </div>
+            ) : null}
             <ActionMessage state={createState} />
-            <SubmitButton pending={createPending}>
+            <SubmitButton
+              pending={createPending}
+              disabled={damageBlocked}
+              className="h-12 w-full"
+            >
               Submit damage request
             </SubmitButton>
           </form>
@@ -2670,7 +3408,7 @@ export function DamageRequestWorkbench({
                       Director signature: {request.directorSignature ?? "Pending"}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid w-full gap-2 min-[390px]:grid-cols-2 lg:w-auto lg:flex lg:flex-wrap">
                     {canManage ? (
                       <>
                         <form action={reviewAction}>
@@ -2686,8 +3424,8 @@ export function DamageRequestWorkbench({
                           />
                           <Button
                             type="submit"
-                            size="sm"
                             variant="outline"
+                            className="h-11 w-full"
                             disabled={
                               reviewPending || request.status !== "SUBMITTED"
                             }
@@ -2708,8 +3446,8 @@ export function DamageRequestWorkbench({
                           />
                           <Button
                             type="submit"
-                            size="sm"
                             variant="destructive"
+                            className="h-11 w-full"
                             disabled={
                               rejectPending || request.status !== "SUBMITTED"
                             }
@@ -2734,7 +3472,7 @@ export function DamageRequestWorkbench({
                           />
                           <Button
                             type="submit"
-                            size="sm"
+                            className="h-11 w-full"
                             disabled={
                               approvePending ||
                               request.status !== "MANAGER_REVIEWED"
@@ -2756,8 +3494,8 @@ export function DamageRequestWorkbench({
                           />
                           <Button
                             type="submit"
-                            size="sm"
                             variant="destructive"
+                            className="h-11 w-full"
                             disabled={
                               rejectPending ||
                               request.status !== "MANAGER_REVIEWED"
@@ -2796,6 +3534,7 @@ export function ReturnSupplierWorkbench({
   canManage: boolean
 }) {
   const [barcode, setBarcode] = useState("")
+  const [supplierName, setSupplierName] = useState("")
   const [createState, createAction, createPending] = useActionState(
     createReturnSupplierRequestAction,
     initialStockActionState
@@ -2808,6 +3547,9 @@ export function ReturnSupplierWorkbench({
     rejectReturnSupplierRequestAction,
     initialStockActionState
   )
+  const isOnline = useOnlineStatus()
+  const returnSupplierBlocked =
+    !isOnline || !barcode.trim() || !supplierName.trim()
 
   return (
     <Card>
@@ -2821,32 +3563,53 @@ export function ReturnSupplierWorkbench({
       <CardContent className="space-y-4">
         {canOperate ? (
           <form action={createAction} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <BarcodeField
-                id="returnSupplierBarcode"
-                name="barcode"
-                label="Barcode"
-                value={barcode}
-                onChange={setBarcode}
-                onScan={setBarcode}
-                placeholder="Scan supplier return barcode"
-              />
-              <div className="space-y-2">
-                <Label htmlFor="supplierName">Supplier</Label>
-                <Input
-                  id="supplierName"
-                  name="supplierName"
-                  required
-                  placeholder="Supplier name"
-                />
-              </div>
-            </div>
+            <BarcodeField
+              id="returnSupplierBarcode"
+              name="barcode"
+              label="Barcode"
+              value={barcode}
+              onChange={setBarcode}
+              onScan={setBarcode}
+              placeholder="Scan supplier return barcode"
+              disabled={!isOnline}
+            />
             <div className="space-y-2">
-              <Label htmlFor="returnSupplierNotes">Notes</Label>
-              <Textarea id="returnSupplierNotes" name="notes" />
+              <Label htmlFor="supplierName">Supplier</Label>
+              <Input
+                id="supplierName"
+                name="supplierName"
+                value={supplierName}
+                required
+                onChange={(event) => setSupplierName(event.target.value)}
+                placeholder="Supplier name"
+              />
             </div>
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Stock goes on supplier hold until manager approval.
+            </div>
+            {!isOnline ? (
+              <OfflineScanAlert />
+            ) : null}
+            <details className="rounded-md border bg-muted/30 p-3">
+              <summary className="cursor-pointer text-sm font-medium">
+                Notes
+              </summary>
+              <div className="mt-3 space-y-2">
+                <Label htmlFor="returnSupplierNotes">Notes</Label>
+                <Textarea id="returnSupplierNotes" name="notes" />
+              </div>
+            </details>
+            {returnSupplierBlocked && isOnline ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Scan barcode and add supplier.
+              </div>
+            ) : null}
             <ActionMessage state={createState} />
-            <SubmitButton pending={createPending}>
+            <SubmitButton
+              pending={createPending}
+              disabled={returnSupplierBlocked}
+              className="h-12 w-full"
+            >
               Submit return supplier
             </SubmitButton>
           </form>
@@ -2872,7 +3635,7 @@ export function ReturnSupplierWorkbench({
                     </div>
                   </div>
                   {canManage ? (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="grid w-full gap-2 min-[390px]:grid-cols-2 lg:w-auto lg:flex lg:flex-wrap">
                       <form action={approveAction}>
                         <input
                           type="hidden"
@@ -2886,7 +3649,7 @@ export function ReturnSupplierWorkbench({
                         />
                         <Button
                           type="submit"
-                          size="sm"
+                          className="h-11 w-full"
                           disabled={
                             approvePending || request.status !== "SUBMITTED"
                           }
@@ -2907,8 +3670,8 @@ export function ReturnSupplierWorkbench({
                         />
                         <Button
                           type="submit"
-                          size="sm"
                           variant="destructive"
+                          className="h-11 w-full"
                           disabled={
                             rejectPending || request.status !== "SUBMITTED"
                           }
@@ -2987,7 +3750,7 @@ function StockTakeSessionActions({
   )
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="grid gap-2 min-[390px]:grid-cols-2 lg:flex lg:flex-wrap lg:items-center">
       <Badge variant={session.status === "APPROVED" ? "success" : "outline"}>
         {session.status}
       </Badge>
@@ -2996,8 +3759,8 @@ function StockTakeSessionActions({
           <input type="hidden" name="sessionId" value={session.id} />
           <Button
             type="submit"
-            size="sm"
             variant="outline"
+            className="h-11 w-full"
             disabled={submitPending || session.status !== "DRAFT"}
           >
             Submit
@@ -3015,8 +3778,8 @@ function StockTakeSessionActions({
             />
             <Button
               type="submit"
-              size="sm"
               variant="outline"
+              className="h-11 w-full"
               disabled={reviewPending || session.status !== "SUBMITTED"}
             >
               Review
@@ -3031,8 +3794,8 @@ function StockTakeSessionActions({
             />
             <Button
               type="submit"
-              size="sm"
               variant="destructive"
+              className="h-11 w-full"
               disabled={rejectPending || session.status !== "SUBMITTED"}
             >
               Reject
@@ -3051,7 +3814,7 @@ function StockTakeSessionActions({
             />
             <Button
               type="submit"
-              size="sm"
+              className="h-11 w-full"
               disabled={approvePending || session.status !== "REVIEWED"}
             >
               Approve
@@ -3066,8 +3829,8 @@ function StockTakeSessionActions({
             />
             <Button
               type="submit"
-              size="sm"
               variant="destructive"
+              className="h-11 w-full"
               disabled={rejectPending || session.status !== "REVIEWED"}
             >
               Reject
@@ -3104,26 +3867,74 @@ export function StockTakeWorkbench({
 }) {
   const [selectedSessionId, setSelectedSessionId] = useState(sessions[0]?.id ?? "")
   const [scanBarcode, setScanBarcode] = useState("")
+  const [localScanMessage, setLocalScanMessage] = useState("")
+  const isOnline = useOnlineStatus()
   const scanFormRef = useRef<HTMLFormElement | null>(null)
   const [scanState, scanAction, scanPending] = useActionState(
     scanStockTakeBarcodeAction,
     initialStockActionState
   )
+  const selectedSession = sessions.find(
+    (session) => session.id === selectedSessionId
+  )
+  const selectedSessionLines = lines.filter(
+    (line) => line.sessionId === selectedSessionId
+  )
+  const activeScanSessions = sessions.filter(
+    (session) => session.status === "DRAFT"
+  )
+  const scannedCount = selectedSessionLines.reduce(
+    (sum, line) => sum + line.actualCount,
+    0
+  )
+  const expectedCount = selectedSessionLines.reduce(
+    (sum, line) => sum + line.systemCount,
+    0
+  )
+  const scannedWeightKg = selectedSessionLines.reduce(
+    (sum, line) => sum + line.actualWeightKg,
+    0
+  )
+  const expectedWeightKg = selectedSessionLines.reduce(
+    (sum, line) => sum + line.systemWeightKg,
+    0
+  )
+  const selectedSessionItem = items.find(
+    (item) => item.id === selectedSession?.itemId
+  )
+  const selectedSessionBrand = brands.find(
+    (brand) => brand.id === selectedSession?.brandId
+  )
+  const stockTakeScanBlocked =
+    !isOnline || !selectedSessionId || !scanBarcode.trim()
+  const stockTakeScanBlockMessage = !isOnline
+    ? offlineScanMessage
+    : !selectedSessionId
+      ? "Select stock take session."
+      : !scanBarcode.trim()
+        ? "Scan barcode."
+        : ""
 
   function scanStockTakeBarcode(value: string) {
     setScanBarcode(value)
 
+    if (!isOnline) {
+      setLocalScanMessage(offlineScanMessage)
+      return
+    }
+
+    setLocalScanMessage("")
     window.setTimeout(() => scanFormRef.current?.requestSubmit(), 0)
   }
 
   return (
     <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-      {canManage ? (
+      {canOperate ? (
         <WorkflowCard
           title="Create stock take session"
-          description="Managers open a barcode count for one item and brand at one stock location."
+          description="Choose one location, item, and brand. Then scan only barcodes for that scope."
           action={createStockTakeSessionAction}
-          submitLabel="Create session"
+          submitLabel="Start stock take"
         >
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
@@ -3139,6 +3950,10 @@ export function StockTakeWorkbench({
               <BrandSelect brands={brands} />
             </div>
           </div>
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Stock take is active for this item/brand/location. You can
+            continue, but this movement will be recorded.
+          </div>
         </WorkflowCard>
       ) : (
         <Card>
@@ -3146,7 +3961,7 @@ export function StockTakeWorkbench({
             <CardTitle>Stock take approval</CardTitle>
             <CardDescription>
               Review submitted sessions below. Counting and scan entry are
-              reserved for stock operators.
+              for stock operators.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -3157,11 +3972,66 @@ export function StockTakeWorkbench({
           <CardHeader>
             <CardTitle>Scan stock take barcode</CardTitle>
             <CardDescription>
-              Record a barcode unit against the selected count session.
+              Select a session, then keep scanning. No manual count entry.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form ref={scanFormRef} action={scanAction} className="space-y-4">
+            <form
+              ref={scanFormRef}
+              action={scanAction}
+              className="space-y-4"
+              onSubmit={(event) => {
+                if (stockTakeScanBlocked) {
+                  event.preventDefault()
+                  setLocalScanMessage(stockTakeScanBlockMessage)
+                }
+              }}
+            >
+            {!isOnline ? (
+              <OfflineScanAlert />
+            ) : null}
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Tap active session</div>
+              {activeScanSessions.length > 0 ? (
+                <div className="grid gap-2 min-[390px]:grid-cols-2">
+                  {activeScanSessions.slice(0, 4).map((session) => {
+                    const scopedItem = items.find(
+                      (item) => item.id === session.itemId
+                    )
+                    const scopedBrand = brands.find(
+                      (brand) => brand.id === session.brandId
+                    )
+                    const isSelected = session.id === selectedSessionId
+
+                    return (
+                      <button
+                        key={session.id}
+                        type="button"
+                        onClick={() => setSelectedSessionId(session.id)}
+                        className={[
+                          "min-h-16 rounded-md border px-3 py-2 text-left text-sm transition",
+                          isSelected
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                            : "border-input bg-background hover:bg-muted",
+                        ].join(" ")}
+                      >
+                        <span className="block font-semibold">
+                          {scopedBrand?.name ?? "No brand"}{" "}
+                          {scopedItem?.name ?? "No item"}
+                        </span>
+                        <span className="mt-1 block text-xs text-muted-foreground">
+                          {session.locationName} - {session.sessionNo}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  Start a stock take above, then scan.
+                </div>
+              )}
+            </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="scanSessionId">Session</Label>
@@ -3174,7 +4044,7 @@ export function StockTakeWorkbench({
                   <option value="">Select session</option>
                   {sessions.map((session) => (
                     <option key={session.id} value={session.id}>
-                      {session.sessionNo} - {session.locationName}
+                      {session.sessionNo} - {session.locationName} - {session.status}
                     </option>
                   ))}
                 </NativeSelect>
@@ -3187,11 +4057,74 @@ export function StockTakeWorkbench({
                 onChange={setScanBarcode}
                 onScan={scanStockTakeBarcode}
                 continuousScan
+                disabled={!isOnline}
                 placeholder="EM-BC-000001"
               />
             </div>
+            {selectedSession ? (
+              <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                <div className="font-medium">Counting scope</div>
+                <div className="mt-1 text-muted-foreground">
+                  {selectedSession.locationName} -{" "}
+                  {selectedSessionItem?.name ?? "No item"} -{" "}
+                  {selectedSessionBrand?.name ?? "No brand"}
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-xs uppercase text-muted-foreground">
+                    Barcode progress
+                  </div>
+                  <div className="mt-1 text-2xl font-semibold tabular-nums">
+                    {scannedCount}/{expectedCount || "?"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {selectedSession.sessionNo}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase text-muted-foreground">
+                    Weight progress
+                  </div>
+                  <div className="mt-1 text-2xl font-semibold tabular-nums">
+                    {scannedWeightKg.toFixed(2)}kg/
+                    {expectedWeightKg > 0
+                      ? `${expectedWeightKg.toFixed(2)}kg`
+                      : "?"}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Unknown barcode becomes exception.
+                  </div>
+                </div>
+                </div>
+              </div>
+            ) : null}
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                Barcode-only count.
+              </div>
+              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                Wrong item/brand blocked.
+              </div>
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Unknown barcode is exception.
+              </div>
+            </div>
+            {localScanMessage ? (
+              <div
+                role="alert"
+                className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+              >
+                {localScanMessage}
+              </div>
+            ) : null}
             <ActionMessage state={scanState} />
-            <SubmitButton pending={scanPending}>Record scanned unit</SubmitButton>
+            <SubmitButton
+              pending={scanPending}
+              disabled={stockTakeScanBlocked}
+              className="h-12 w-full"
+            >
+              Record scanned barcode
+            </SubmitButton>
             </form>
           </CardContent>
         </Card>
@@ -3202,15 +4135,14 @@ export function StockTakeWorkbench({
           <CardHeader>
             <CardTitle>Barcode-only count</CardTitle>
             <CardDescription>
-              Stock take count lines are created only by scanning barcode units.
-              Manual count entry is disabled for MVP.
+              Stock take lines are created only by scanning barcode units.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
-              Scan every barcode in the selected session. The system records one
-              count line per barcode and calculates variance after review.
-              Session scope is locked to the selected item and brand. Inbound, outbound, transfer, return, and damage requests for that exact scope will be blocked.
+              Scan every barcode in the selected session. Manual count entry is
+              disabled for MVP. Missing barcode adjustment waits for manager
+              review and director approval.
             </div>
           </CardContent>
         </Card>
@@ -3233,6 +4165,9 @@ export function StockTakeWorkbench({
               (sum, line) => sum + line.varianceWeightKg,
               0
             )
+            const exceptionLines = sessionLines.filter(
+              (line) => line.exceptionType
+            )
             const scopedItem = items.find((item) => item.id === session.itemId)
             const scopedBrand = brands.find((brand) => brand.id === session.brandId)
 
@@ -3253,6 +4188,22 @@ export function StockTakeWorkbench({
                       {sessionLines.length} lines -{" "}
                       {varianceWeight.toFixed(2)} kg variance
                     </div>
+                    {exceptionLines.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {exceptionLines.slice(0, 4).map((line) => (
+                          <Badge key={line.id} variant="secondary">
+                            {line.exceptionType?.replaceAll("_", " ")}:{" "}
+                            {line.barcode ?? "No barcode"} (
+                            {line.exceptionStatus ?? "PENDING"})
+                          </Badge>
+                        ))}
+                        {exceptionLines.length > 4 ? (
+                          <Badge variant="outline">
+                            +{exceptionLines.length - 4} more exceptions
+                          </Badge>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <div className="mt-1 text-xs text-muted-foreground">
                       Manager signature: {session.managerSignature ?? "Pending"} |
                       Director signature: {session.directorSignature ?? "Pending"}

@@ -7,16 +7,42 @@ import type {
   StockDamageRequest,
   StockLocation,
   StockMovement,
+  StockScanLog,
+  StockOutlet,
   StockReturnSupplierRequest,
   StockTakeLine,
   StockTakeSession,
   StockUnit,
 } from "@/lib/stock/types"
 
+export const demoOutlets: StockOutlet[] = [
+  { id: "outlet-jalan-channel", name: "JALAN CHANNEL" },
+  { id: "outlet-sungai-merah", name: "SUNGAI MERAH" },
+  { id: "outlet-director", name: "DIRECTOR" },
+]
+
 export const demoLocations: StockLocation[] = [
-  { id: "loc-jalan-channel", name: "JALAN CHANNEL", active: true },
-  { id: "loc-sungai-merah", name: "SUNGAI MERAH", active: true },
-  { id: "loc-director", name: "DIRECTOR", active: true },
+  {
+    id: "loc-jalan-channel",
+    name: "JALAN CHANNEL",
+    outletId: "outlet-jalan-channel",
+    isDefaultForOutlet: true,
+    active: true,
+  },
+  {
+    id: "loc-sungai-merah",
+    name: "SUNGAI MERAH",
+    outletId: "outlet-sungai-merah",
+    isDefaultForOutlet: true,
+    active: true,
+  },
+  {
+    id: "loc-director",
+    name: "DIRECTOR",
+    outletId: "outlet-director",
+    isDefaultForOutlet: true,
+    active: true,
+  },
 ]
 
 export const demoBrands: Brand[] = [
@@ -301,6 +327,36 @@ export const demoMovements: StockMovement[] = [
   },
 ]
 
+export const demoScanLogs: StockScanLog[] = [
+  {
+    id: "scan-log-001",
+    barcode: "EM-BC-000001",
+    action: "INBOUND",
+    success: true,
+    message: "Barcode inbound saved.",
+    scannedBy: "demo-stock-worker",
+    createdAt: "2026-06-14T09:00:00.000Z",
+  },
+  {
+    id: "scan-log-002",
+    barcode: "EM-BC-000001",
+    action: "INBOUND",
+    success: false,
+    message: "Duplicate barcode warning: this barcode already exists.",
+    scannedBy: "demo-stock-worker",
+    createdAt: "2026-06-14T09:05:00.000Z",
+  },
+  {
+    id: "scan-log-003",
+    barcode: "NO-WEIGHT-DEMO",
+    action: "INBOUND",
+    success: false,
+    message: "Barcode has no confident weight.",
+    scannedBy: "demo-stock-worker",
+    createdAt: "2026-06-14T09:10:00.000Z",
+  },
+]
+
 export const demoStockTakeSessions: StockTakeSession[] = [
   {
     id: "take-001",
@@ -324,6 +380,7 @@ export const demoStockTakeLines: StockTakeLine[] = [
     id: "take-line-001",
     sessionId: "take-001",
     itemId: "item-meat-belly-boneless",
+    brandId: "brand-tican",
     barcode: null,
     itemName: "MEAT / BELLY / BONELESS",
     systemCount: 2,
@@ -332,7 +389,32 @@ export const demoStockTakeLines: StockTakeLine[] = [
     systemWeightKg: 42.2,
     actualWeightKg: 42.1,
     varianceWeightKg: -0.1,
+    exceptionType: null,
+    exceptionStatus: null,
+    exceptionLocationId: null,
+    sourceStockUnitId: null,
+    resolvedStockUnitId: null,
     notes: "Demo counted line",
+  },
+  {
+    id: "take-line-002",
+    sessionId: "take-001",
+    itemId: "item-meat-belly-boneless",
+    brandId: "brand-tican",
+    barcode: "UNKNOWN-ST-DEMO-001",
+    itemName: "MEAT / BELLY / BONELESS",
+    systemCount: 0,
+    actualCount: 1,
+    varianceCount: 1,
+    systemWeightKg: 0,
+    actualWeightKg: 0,
+    varianceWeightKg: 0,
+    exceptionType: "UNKNOWN_BARCODE",
+    exceptionStatus: "PENDING",
+    exceptionLocationId: null,
+    sourceStockUnitId: null,
+    resolvedStockUnitId: null,
+    notes: "Demo unknown barcode exception waiting for approval",
   },
 ]
 

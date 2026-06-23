@@ -7,13 +7,18 @@ export const stockableStatuses: StockUnitStatus[] = [
 ]
 
 export type StockOutboundType = "SALES" | "TRANSFER" | "PROCESSING"
+export type DirectStockOutboundType =
+  | StockOutboundType
+  | "DAMAGE_SPOILAGE"
+  | "RETURN_SUPPLIER"
+  | "SAMPLE_TESTING"
 
 export function activeStockStatus(status: string) {
   return stockableStatuses.includes(status as StockUnitStatus)
 }
 
 export function movementTypeForOutboundType(
-  outboundType: StockOutboundType
+  outboundType: DirectStockOutboundType
 ): StockMovementType {
   if (outboundType === "SALES") {
     return "OUTBOUND_SALES"
@@ -23,5 +28,17 @@ export function movementTypeForOutboundType(
     return "OUTBOUND_TRANSFER"
   }
 
-  return "OUTBOUND_PROCESSING"
+  if (outboundType === "PROCESSING") {
+    return "OUTBOUND_PROCESSING"
+  }
+
+  if (outboundType === "DAMAGE_SPOILAGE") {
+    return "OUTBOUND_SPOILED"
+  }
+
+  if (outboundType === "RETURN_SUPPLIER") {
+    return "OUTBOUND_RETURN_SUPPLIER"
+  }
+
+  return "OUTBOUND_SAMPLE_TESTING"
 }

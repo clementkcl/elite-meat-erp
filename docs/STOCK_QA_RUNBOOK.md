@@ -1,6 +1,6 @@
 # Stock Module QA Runbook
 
-Last updated: 2026-06-12
+Last updated: 2026-06-23
 
 Use this runbook on a fresh Supabase staging project before calling the Stock module complete. Do not run these tests directly on production data.
 
@@ -62,7 +62,7 @@ For each test, capture:
 | 10 | Reports/export work | `/stock/reports` | CSV download, print/PDF-ready view, WhatsApp summary text include balance, inbound age, variance, damage, supplier return; damage/supplier rows include linked barcode weight where available; local regression covers CSV quote escaping and WhatsApp total/alert counts |
 | 11 | Role/outlet isolation works | JC user vs Wonderful user | Cross-location stock units, movements, stock take rows, requests are hidden or rejected |
 | 12 | Mobile scanner works | Phone-width 390px on real phone and laptop | Large scan button, camera permission prompt, rear camera preference on phone, manual fallback, recent scan list, saved scan count/weight, previous scan weight, undo scan before finish, finish-session summary, success vibrate/beep where supported, continuous mode on batch workflows, stream stops on close; local scanner coverage guards these source hooks |
-| 13 | Automated tests exist | Local terminal | `npm.cmd run smoke` runs route checks, barcode regression, stock acceptance coverage, stock state-transition coverage, stock migration safety checks, stock role/scope coverage, stock scanner coverage, stock RLS policy coverage, stock seed coverage, stock security/no-service-role coverage, stock item-master coverage, stock label coverage, stock-take lock coverage, and stock report coverage |
+| 13 | Automated tests exist | Local terminal | `npm.cmd run smoke` runs route checks, barcode regression, stock acceptance coverage, stock state-transition coverage, stock migration safety checks, stock role/scope coverage, stock scanner coverage, stock RLS policy coverage, stock seed coverage, stock security/no-service-role coverage, stock item-master coverage, stock label coverage, stock-take warning coverage, and stock report coverage |
 
 Dashboard KPI and shortcut QA: verify `/stock/dashboard` shows today inbound and today outbound weights from the current day's movement rows, alongside total stock weight, barcode units, pending transfers, legacy no-barcode visibility, variance, negative-stock alerts, and stock-age alerts. Also verify stock operator/admin dashboard shortcuts open inbound, outbound, transfer, receive-transfer, and return; director/view-only users should not see these routine operation shortcuts.
 
@@ -96,6 +96,8 @@ Record every pass/fail result in `docs/STOCK_QA_EVIDENCE.md`. The runbook is the
 ## Phone QA
 
 Test on a real phone, not only browser responsive mode:
+
+Codex note for the current Stock Mobile UX pass: local source guards cover the mobile scanner and worker-flow requirements, but real phone/browser automation was not available in the Windows sandbox. Owner/device QA must still capture evidence for the items below.
 
 1. Open app over HTTPS or localhost tunneling that allows camera permission.
 2. Sign in as a stock operator.

@@ -27,7 +27,11 @@ function migration(fileName) {
 function stockPolicyFiles() {
   return fs
     .readdirSync(migrationsDir)
-    .filter((file) => /^2026061000(09|31|37|38|39|40|41|44)_.*\.sql$/.test(file))
+    .filter(
+      (file) =>
+        /^2026061000(09|31|37|38|39|40|41|44)_.*\.sql$/.test(file) ||
+        /^202606230002_.*\.sql$/.test(file)
+    )
     .sort()
 }
 

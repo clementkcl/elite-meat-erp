@@ -11,10 +11,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { DataTable, type DataTableColumn } from "@/components/stock/data-table"
 import { DeliveryDashboardCharts } from "@/components/delivery/delivery-charts"
+import { DriverDeliveryPage } from "@/components/delivery/driver-delivery-page"
 import {
   DeliveryPaymentForm,
   DeliveryStatusForm,
-  DriverLocationForm,
   NewDeliveryOrderForm,
   ProofUploadForm,
   VehicleForm,
@@ -137,15 +137,6 @@ const vehicleColumns: DataTableColumn<TableRow>[] = [
   { key: "active", header: "Active" },
 ]
 
-const locationColumns: DataTableColumn<TableRow>[] = [
-  { key: "createdAt", header: "Time" },
-  { key: "orderNo", header: "Order" },
-  { key: "driverName", header: "Driver" },
-  { key: "latitude", header: "Lat", align: "right" },
-  { key: "longitude", header: "Lng", align: "right" },
-  { key: "locationNote", header: "Note" },
-]
-
 const paymentColumns: DataTableColumn<TableRow>[] = [
   { key: "createdAt", header: "Time" },
   { key: "orderNo", header: "Order" },
@@ -164,6 +155,30 @@ const customerOrderColumns: DataTableColumn<TableRow>[] = [
   { key: "failedReturnStatus", header: "Return" },
   { key: "outletName", header: "Outlet" },
   { key: "departmentName", header: "Department" },
+]
+
+const reviewColumns: DataTableColumn<TableRow>[] = [
+  { key: "jobNo", header: "Delivery" },
+  { key: "customerName", header: "Customer" },
+  { key: "driverName", header: "Driver" },
+  { key: "status", header: "Status" },
+  { key: "reason", header: "Reason" },
+  { key: "date", header: "Date" },
+]
+
+const driverPerformanceColumns: DataTableColumn<TableRow>[] = [
+  { key: "driverName", header: "Driver" },
+  { key: "total", header: "Jobs", align: "right" },
+  { key: "delivered", header: "Delivered", align: "right" },
+  { key: "failed", header: "Failed", align: "right" },
+  { key: "loaded", header: "Loaded", align: "right" },
+  { key: "outForDelivery", header: "Out", align: "right" },
+]
+
+const driverWeightColumns: DataTableColumn<TableRow>[] = [
+  { key: "driverName", header: "Driver" },
+  { key: "weightKg", header: "Weight kg", align: "right" },
+  { key: "jobs", header: "Jobs", align: "right" },
 ]
 
 function dateText(value: string | null) {
@@ -391,19 +406,6 @@ function vehicleRows(
   }))
 }
 
-function locationRows(
-  data: Awaited<ReturnType<typeof getDeliveryPageData>>
-): TableRow[] {
-  return data.driverLocations.map((location) => ({
-    createdAt: dateText(location.createdAt),
-    orderNo: location.orderNo,
-    driverName: location.driverName,
-    latitude: location.latitude,
-    longitude: location.longitude,
-    locationNote: location.locationNote,
-  }))
-}
-
 function paymentRows(
   data: Awaited<ReturnType<typeof getDeliveryPageData>>
 ): TableRow[] {
@@ -448,6 +450,142 @@ function customerDeliveryRows(
     }))
 }
 
+function todayDate() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function jobDate(job: Awaited<ReturnType<typeof getDeliveryPageData>>["jobs"][number]) {
+  return job.requestedDeliveryDate ?? job.createdAt.slice(0, 10)
+}
+
+function managerReviewRows(
+  data: Awaited<ReturnType<typeof getDeliveryPageData>>
+): TableRow[] {
+  const today = todayDate()
+  const failed = data.jobs
+    .filter((job) => job.status === "FAILED")
+    .map((job) => ({
+      jobNo: job.jobNo,
+      customerName: job.customerName,
+      driverName: job.driverName,
+      status: "Failed",
+      reason: job.failedReason ? job.failedReason.replaceAll("_", " ") : "Review",
+      date: dateText(job.completedAt ?? job.createdAt),
+    }))
+  const gpsUnavailable = data.jobs
+    .filter((job) => job.gpsAvailable === false)
+    .map((job) => ({
+      jobNo: job.jobNo,
+      customerName: job.customerName,
+      driverName: job.driverName,
+      status: "GPS unavailable",
+      reason: "Proof completed without GPS",
+      date: dateText(job.completedAt ?? job.createdAt),
+    }))
+  const addressSuggestions = data.addressSuggestions
+    .filter((suggestion) => suggestion.status === "PENDING")
+    .map((suggestion) => ({
+      jobNo: "-",
+      customerName: suggestion.customerName,
+      driverName: "-",
+      status: "Address suggestion",
+      reason: suggestion.reason,
+      date: dateText(suggestion.createdAt),
+    }))
+  const late = data.jobs
+    .filter(
+      (job) =>
+        jobDate(job) < today &&
+        !["DELIVERED", "FAILED", "CANCELLED"].includes(job.status)
+    )
+    .map((job) => ({
+      jobNo: job.jobNo,
+      customerName: job.customerName,
+      driverName: job.driverName,
+      status: "Late",
+      reason: `Due ${jobDate(job)}`,
+      date: dateText(job.createdAt),
+    }))
+  const slow = data.jobs
+    .filter((job) => {
+      if (!job.startedAt || !job.completedAt) {
+        return false
+      }
+
+      return (
+        new Date(job.completedAt).getTime() - new Date(job.startedAt).getTime() >
+        4 * 60 * 60 * 1000
+      )
+    })
+    .map((job) => ({
+      jobNo: job.jobNo,
+      customerName: job.customerName,
+      driverName: job.driverName,
+      status: "Took too long",
+      reason: "More than 4 hours after start",
+      date: dateText(job.completedAt),
+    }))
+
+  return [...failed, ...gpsUnavailable, ...addressSuggestions, ...late, ...slow]
+}
+
+function driverPerformanceRows(
+  data: Awaited<ReturnType<typeof getDeliveryPageData>>
+): TableRow[] {
+  const rows = new Map<
+    string,
+    {
+      driverName: string
+      total: number
+      delivered: number
+      failed: number
+      loaded: number
+      outForDelivery: number
+      weightKg: number
+    }
+  >()
+
+  for (const job of data.jobs) {
+    const key = job.driverId ?? "unassigned"
+    const current =
+      rows.get(key) ??
+      {
+        driverName: job.driverName === "-" ? "Unassigned" : job.driverName,
+        total: 0,
+        delivered: 0,
+        failed: 0,
+        loaded: 0,
+        outForDelivery: 0,
+        weightKg: 0,
+      }
+
+    current.total += 1
+    current.weightKg += job.totalWeightKg
+    current.delivered += job.status === "DELIVERED" ? 1 : 0
+    current.failed += job.status === "FAILED" ? 1 : 0
+    current.loaded += job.status === "LOADED" ? 1 : 0
+    current.outForDelivery += job.status === "OUT_FOR_DELIVERY" ? 1 : 0
+    rows.set(key, current)
+  }
+
+  return Array.from(rows.values()).map((row) => ({
+    ...row,
+    weightKg: Number(row.weightKg.toFixed(1)),
+  }))
+}
+
+function driverWeightRows(
+  data: Awaited<ReturnType<typeof getDeliveryPageData>>
+): TableRow[] {
+  return driverPerformanceRows(data)
+    .map((row) => ({
+      driverName: row.driverName,
+      weightKg: row.weightKg,
+      jobs: row.total,
+    }))
+    .sort((a, b) => Number(b.weightKg) - Number(a.weightKg))
+}
+
 export async function DeliveryPage({ route }: { route: DeliveryRoute }) {
   const blocked = await moduleAccessBlock("delivery", "Delivery", deliveryRoles)
 
@@ -479,6 +617,18 @@ export async function DeliveryPage({ route }: { route: DeliveryRoute }) {
   ])
   const customerOrders = customerOrderResult.ordersData
 
+  if (route === "driver") {
+    return (
+      <DriverDeliveryPage
+        profile={profile}
+        jobs={data.jobs}
+        expenses={data.expenses}
+        vehicles={data.vehicles}
+        demoMode={data.demoMode}
+      />
+    )
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader route={route} demoMode={data.demoMode} />
@@ -491,6 +641,44 @@ export async function DeliveryPage({ route }: { route: DeliveryRoute }) {
             statusMix={data.dashboard.statusMix}
             paymentMix={data.dashboard.paymentMix}
           />
+          <Card>
+            <CardHeader>
+              <CardTitle>Manager review</CardTitle>
+              <CardDescription>
+                Failed deliveries, GPS unavailable, address suggestions, late
+                deliveries, and routes that took too long.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DataTable columns={reviewColumns} data={managerReviewRows(data)} />
+            </CardContent>
+          </Card>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Driver performance</CardTitle>
+                <CardDescription>Job status counts by driver.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DataTable
+                  columns={driverPerformanceColumns}
+                  data={driverPerformanceRows(data)}
+                />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Delivery weight by driver</CardTitle>
+                <CardDescription>Total assigned delivery weight.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DataTable
+                  columns={driverWeightColumns}
+                  data={driverWeightRows(data)}
+                />
+              </CardContent>
+            </Card>
+          </div>
           <Card>
             <CardHeader>
               <CardTitle>Recent orders</CardTitle>
@@ -605,93 +793,6 @@ export async function DeliveryPage({ route }: { route: DeliveryRoute }) {
             </CardHeader>
             <CardContent>
               <DataTable columns={statusLogColumns} data={statusRows(data)} />
-            </CardContent>
-          </Card>
-        </>
-      ) : null}
-
-      {route === "driver" ? (
-        <>
-          <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-            {canOperateDelivery ? (
-              <DriverLocationForm orders={data.orders} />
-            ) : (
-              <ViewOnlyCard
-                title="Driver updates unavailable"
-                description="Your role can view driver routes, but driver location updates are reserved for delivery users and admin."
-              />
-            )}
-            {customerOrders ? (
-              canOperateDelivery ? (
-                <CustomerOrderDeliveryStatusForm orders={customerOrders.orders} />
-              ) : (
-                <ViewOnlyCard
-                  title="Customer order delivery actions unavailable"
-                  description="Your role can view delivery handoff records, but status updates are reserved for delivery users and admin."
-                />
-              )
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Customer order handoff unavailable</CardTitle>
-                  <CardDescription>
-                    Check that the Orders migrations were applied before using
-                    the driver pickup list.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="text-sm text-destructive">
-                  {customerOrderResult.error ?? "Orders data could not load."}
-                </CardContent>
-              </Card>
-            )}
-          </div>
-          {customerOrders && canOperateDelivery ? (
-            <CustomerOrderProofUploadForm orders={customerOrders.orders} />
-          ) : null}
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer pickup list</CardTitle>
-              <CardDescription>
-                Ready delivery-required customer orders from the Orders module.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {customerOrders ? (
-                <DataTable
-                  columns={customerOrderColumns}
-                  data={customerDeliveryRows(customerOrders)}
-                />
-              ) : (
-                <div className="text-sm text-muted-foreground">
-                  Customer order delivery data is unavailable.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Driver routes</CardTitle>
-              <CardDescription>Assigned and in-progress delivery orders.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DataTable
-                columns={orderColumns}
-                data={orderRows(data).filter(
-                  (row) =>
-                    row.status !== "DELIVERED" &&
-                    row.status !== "CANCELLED" &&
-                    row.status !== "FAILED"
-                )}
-              />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Location log</CardTitle>
-              <CardDescription>Driver position updates.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DataTable columns={locationColumns} data={locationRows(data)} />
             </CardContent>
           </Card>
         </>

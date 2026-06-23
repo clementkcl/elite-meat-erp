@@ -1,14 +1,18 @@
 "use client"
 
-import { Save } from "lucide-react"
+import { Check, Plus, Save, ScanLine, Search, X } from "lucide-react"
 import { useActionState, useMemo, useState, type ReactNode } from "react"
 
 import {
-  addCustomerOrderItemAction,
+  cancelCustomerOrderAction,
   createCustomerOrderAction,
+  createOrderDeliveryAction,
+  editCustomerOrderBeforePickingAction,
+  manualPickWeightAction,
   markCustomerOrderReadyAction,
-  prepareCustomerOrderItemAction,
-  releaseOrderReservationsAction,
+  markPickupCompletedAction,
+  pickOrderBarcodeAction,
+  quickAddCustomerAction,
   updateCustomerOrderDeliveryStatusAction,
   uploadCustomerOrderProofAction,
 } from "@/lib/orders/actions"
@@ -16,13 +20,18 @@ import {
   initialOrdersActionState,
   type OrdersActionState,
 } from "@/lib/orders/action-state"
-import type {
-  CustomerOrder,
-  CustomerOrderItem,
-  OrderStockReservation,
-  OrderScopeOption,
+import {
+  manualPickReasons,
+  type CustomerOption,
+  type CustomerOrder,
+  type CustomerOrderItem,
+  type OrderScopeOption,
+  type OrderStockLocationOption,
+  type OrderUnit,
+  type StockItemOption,
 } from "@/lib/orders/types"
 import type { CurrentProfile } from "@/lib/auth/types"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -39,6 +48,16 @@ type StatefulAction = (
   state: OrdersActionState,
   formData: FormData
 ) => Promise<OrdersActionState>
+
+type DraftLine = {
+  key: string
+  itemId: string
+  orderingUnit: OrderUnit
+  requestedQuantity: string
+  estimatedWeightKg: string
+  processingRequired: boolean
+  remarks: string
+}
 
 function ActionMessage({ state }: { state: OrdersActionState }) {
   if (!state.message) {
@@ -86,7 +105,7 @@ function NativeSelect({
       onChange={(event) => onChange?.(event.target.value)}
       required={required}
       disabled={disabled}
-      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+      className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base shadow-xs transition-colors focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
     >
       {children}
     </select>
@@ -103,7 +122,7 @@ function SubmitButton({
   children: ReactNode
 }) {
   return (
-    <Button type="submit" disabled={pending || disabled}>
+    <Button type="submit" disabled={pending || disabled} className="min-h-11">
       <Save className="size-4" />
       {pending ? "Saving..." : children}
     </Button>
@@ -133,7 +152,7 @@ function WorkflowCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle className="text-lg">{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
@@ -153,349 +172,857 @@ function canChooseOrderScope(profile: CurrentProfile) {
   return profile.roles.includes("admin") || profile.roles.includes("director")
 }
 
-export function NewCustomerOrderForm({
+function nowForInput() {
+  const date = new Date()
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset())
+  return date.toISOString().slice(0, 16)
+}
+
+function emptyLine(stockItems: StockItemOption[]): DraftLine {
+  const first = stockItems[0]
+
+  return lineForItem(first)
+}
+
+function lineForItem(item: StockItemOption | undefined): DraftLine {
+  return {
+    key: crypto.randomUUID(),
+    itemId: item?.id ?? "",
+    orderingUnit: item?.orderUnit ?? "KG",
+    requestedQuantity: "",
+    estimatedWeightKg: "",
+    processingRequired: item?.processingRequiredDefault ?? false,
+    remarks: "",
+  }
+}
+
+function linePayload(lines: DraftLine[]) {
+  return JSON.stringify(
+    lines.map((line) => ({
+      itemId: line.itemId,
+      orderingUnit: line.orderingUnit,
+      requestedQuantity: Number(line.requestedQuantity) || 0,
+      estimatedWeightKg: Number(line.estimatedWeightKg) || 0,
+      processingRequired: line.processingRequired,
+      remarks: line.remarks,
+    }))
+  )
+}
+
+function itemById(items: StockItemOption[], itemId: string) {
+  return items.find((item) => item.id === itemId)
+}
+
+export function CreateOrderForm({
   profile,
+  customers,
+  stockItems,
   scopeOptions,
 }: {
   profile: CurrentProfile
+  customers: CustomerOption[]
+  stockItems: StockItemOption[]
   scopeOptions: {
     outlets: OrderScopeOption[]
     departments: OrderScopeOption[]
+    stockLocations: OrderStockLocationOption[]
   }
 }) {
+  const [state, formAction, pending] = useActionState(
+    createCustomerOrderAction,
+    initialOrdersActionState
+  )
   const canChooseScope = canChooseOrderScope(profile)
-  const submitDisabled = canChooseScope && scopeOptions.outlets.length === 0
+  const [fulfillmentType, setFulfillmentType] =
+    useState<CustomerOrder["fulfillmentType"]>("PICKUP")
+  const [customerSearch, setCustomerSearch] = useState("")
+  const [customerId, setCustomerId] = useState(customers[0]?.id ?? "")
+  const [deliveryAddress, setDeliveryAddress] = useState(customers[0]?.address ?? "")
+  const [customerRemarks, setCustomerRemarks] = useState(customers[0]?.remarks ?? "")
+  const [itemCategory, setItemCategory] = useState("ALL")
+  const [itemSearch, setItemSearch] = useState("")
+  const [lines, setLines] = useState<DraftLine[]>(() => [emptyLine(stockItems)])
+  const selectedCustomer = customers.find((customer) => customer.id === customerId)
+  const categories = Array.from(new Set(stockItems.map((item) => item.category)))
+  const recentItems = stockItems.slice(0, 6)
+  const visibleCustomers = customers.filter((customer) => {
+    const query = customerSearch.trim().toLowerCase()
+
+    return (
+      !query ||
+      customer.name.toLowerCase().includes(query) ||
+      customer.phone.toLowerCase().includes(query)
+    )
+  })
+  const visibleItems = stockItems.filter((item) => {
+    const query = itemSearch.trim().toLowerCase()
+    const matchesCategory = itemCategory === "ALL" || item.category === itemCategory
+    const matchesSearch =
+      !query ||
+      item.label.toLowerCase().includes(query) ||
+      item.itemCode.toLowerCase().includes(query) ||
+      item.name.toLowerCase().includes(query)
+
+    return matchesCategory && matchesSearch
+  })
+  const hasInvalidLine = lines.some(
+    (line) =>
+      !line.itemId ||
+      Number(line.estimatedWeightKg) <= 0 ||
+      (line.orderingUnit !== "KG" && Number(line.requestedQuantity) <= 0)
+  )
+  const submitDisabled =
+    stockItems.length === 0 ||
+    hasInvalidLine ||
+    (fulfillmentType === "DELIVERY" && deliveryAddress.trim().length === 0) ||
+    (canChooseScope && scopeOptions.outlets.length === 0)
+
+  function selectCustomer(nextCustomerId: string) {
+    const nextCustomer = customers.find((customer) => customer.id === nextCustomerId)
+
+    setCustomerId(nextCustomerId)
+    setDeliveryAddress(nextCustomer?.address ?? "")
+    setCustomerRemarks(nextCustomer?.remarks ?? "")
+  }
+
+  function updateLine(key: string, patch: Partial<DraftLine>) {
+    setLines((current) =>
+      current.map((line) => {
+        if (line.key !== key) {
+          return line
+        }
+
+        const next = { ...line, ...patch }
+
+        if (patch.itemId) {
+          const item = itemById(stockItems, patch.itemId)
+          next.orderingUnit = item?.orderUnit ?? next.orderingUnit
+          next.processingRequired =
+            item?.processingRequiredDefault ?? next.processingRequired
+        }
+
+        return next
+      })
+    )
+  }
+
+  function addRecentItem(item: StockItemOption) {
+    setLines((current) => {
+      const firstBlankIndex = current.findIndex(
+        (line) =>
+          !line.itemId &&
+          !line.requestedQuantity &&
+          !line.estimatedWeightKg &&
+          !line.remarks
+      )
+      const nextLine = lineForItem(item)
+
+      if (firstBlankIndex === -1) {
+        return [...current, nextLine]
+      }
+
+      return current.map((line, index) =>
+        index === firstBlankIndex ? nextLine : line
+      )
+    })
+  }
+
+  const requiredDateTimeLabel =
+    fulfillmentType === "PICKUP"
+      ? "Pickup date/time"
+      : fulfillmentType === "DELIVERY"
+        ? "Delivery date/time"
+        : "Required date/time"
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Create order</CardTitle>
+        <CardDescription>Manual ERP source, confirmed on save.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form action={formAction} className="space-y-5">
+          <input type="hidden" name="itemsJson" value={linePayload(lines)} />
+          <input type="hidden" name="customerId" value={customerId} />
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="fulfillmentType">Order type</Label>
+              <NativeSelect
+                id="fulfillmentType"
+                name="fulfillmentType"
+                value={fulfillmentType}
+                onChange={(value) =>
+                  setFulfillmentType(value as CustomerOrder["fulfillmentType"])
+                }
+              >
+                <option value="PICKUP">Pickup</option>
+                <option value="DELIVERY">Delivery</option>
+                <option value="INTERNAL_TRANSFER">Internal transfer</option>
+              </NativeSelect>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="scheduledAt">{requiredDateTimeLabel}</Label>
+              <Input
+                id="scheduledAt"
+                name="scheduledAt"
+                type="datetime-local"
+                defaultValue={nowForInput()}
+                required
+                className="min-h-11 text-base md:text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="totalOrderPrice">Total price</Label>
+              <Input
+                id="totalOrderPrice"
+                name="totalOrderPrice"
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                className="min-h-11 text-base md:text-sm"
+              />
+            </div>
+          </div>
+
+          {canChooseScope ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="outletId">Outlet</Label>
+                <NativeSelect id="outletId" name="outletId">
+                  <option value="">Select outlet</option>
+                  {scopeOptions.outlets.map((outlet) => (
+                    <option key={outlet.id} value={outlet.id}>
+                      {outlet.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="departmentId">Department</Label>
+                <NativeSelect id="departmentId" name="departmentId" required={false}>
+                  <option value="">No department</option>
+                  {scopeOptions.departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </div>
+            </div>
+          ) : (
+            <>
+              <input type="hidden" name="outletId" value={profile.outletId ?? ""} />
+              <input
+                type="hidden"
+                name="departmentId"
+                value={profile.departmentId ?? ""}
+              />
+            </>
+          )}
+
+          {fulfillmentType !== "INTERNAL_TRANSFER" ? (
+            <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+              <div className="space-y-3">
+                <Label htmlFor="customerSearch">Customer</Label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+                  <Input
+                    id="customerSearch"
+                    value={customerSearch}
+                    onChange={(event) => setCustomerSearch(event.target.value)}
+                    placeholder="Search name or phone"
+                    className="min-h-11 pl-9 text-base md:text-sm"
+                  />
+                </div>
+                <NativeSelect
+                  id="customerPicker"
+                  name="customerPicker"
+                  value={customerId}
+                  onChange={selectCustomer}
+                  required={false}
+                >
+                  <option value="">Quick add below</option>
+                  {visibleCustomers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name} - {customer.phone}
+                    </option>
+                  ))}
+                </NativeSelect>
+                {selectedCustomer?.hasOverdueCredit ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    Credit overdue warning. Order is not blocked.
+                  </div>
+                ) : null}
+                {customerSearch && visibleCustomers.length === 0 ? (
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                    No matching customer. Quick add with name and phone.
+                  </div>
+                ) : null}
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="newCustomerName">Quick add name</Label>
+                  <Input
+                    id="newCustomerName"
+                    name="newCustomerName"
+                    required={!customerId}
+                    disabled={Boolean(customerId)}
+                    className="min-h-11 text-base md:text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="newCustomerPhone">Quick add phone</Label>
+                  <Input
+                    id="newCustomerPhone"
+                    name="newCustomerPhone"
+                    required={!customerId}
+                    disabled={Boolean(customerId)}
+                    className="min-h-11 text-base md:text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {fulfillmentType === "PICKUP" ? (
+              <div className="space-y-2">
+                <Label htmlFor="pickupLocationId">Pickup location</Label>
+                <NativeSelect
+                  id="pickupLocationId"
+                  name="pickupLocationId"
+                  defaultValue={profile.stockLocationId ?? ""}
+                >
+                  <option value="">Select pickup location</option>
+                  {scopeOptions.stockLocations.map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </div>
+            ) : null}
+            {fulfillmentType === "DELIVERY" ? (
+              <>
+                <div className="space-y-2 lg:col-span-2">
+                  <Label htmlFor="deliveryAddress">Delivery address</Label>
+                  <Input
+                    id="deliveryAddress"
+                    name="deliveryAddress"
+                    value={deliveryAddress}
+                    onChange={(event) => setDeliveryAddress(event.target.value)}
+                    required
+                    className="min-h-11 text-base md:text-sm"
+                  />
+                </div>
+              </>
+            ) : null}
+            {fulfillmentType === "INTERNAL_TRANSFER" ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="fromLocationId">From location</Label>
+                  <NativeSelect id="fromLocationId" name="fromLocationId">
+                    <option value="">Select source</option>
+                    {scopeOptions.stockLocations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="toLocationId">To location</Label>
+                  <NativeSelect id="toLocationId" name="toLocationId">
+                    <option value="">Select destination</option>
+                    {scopeOptions.stockLocations.map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </div>
+              </>
+            ) : null}
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-base font-semibold">Items</h2>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {recentItems.map((item) => (
+                    <Button
+                      key={item.id}
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => addRecentItem(item)}
+                    >
+                      {item.itemCode || item.name}
+                    </Button>
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {categories.map((category) => (
+                    <Button
+                      key={category}
+                      type="button"
+                      variant={itemCategory === category ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setItemCategory(category)}
+                    >
+                      {category}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant={itemCategory === "ALL" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setItemCategory("ALL")}
+                  >
+                    All
+                  </Button>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11"
+                onClick={() => setLines((current) => [...current, emptyLine(visibleItems)])}
+              >
+                <Plus className="size-4" />
+                Add item
+              </Button>
+            </div>
+
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
+              <Input
+                id="itemSearch"
+                value={itemSearch}
+                onChange={(event) => setItemSearch(event.target.value)}
+                placeholder="Search item code or name"
+                className="min-h-11 pl-9 text-base md:text-sm"
+              />
+            </div>
+
+            <div className="space-y-3">
+              {lines.map((line, index) => {
+                const selectedItem = itemById(stockItems, line.itemId)
+                const selectedItemVisible = visibleItems.some(
+                  (item) => item.id === selectedItem?.id
+                )
+                const unitLabel = line.orderingUnit.replaceAll("_", " ")
+
+                return (
+                  <div key={line.key} className="rounded-md border p-3">
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_1fr_1fr_1fr_auto]">
+                      <div className="space-y-2">
+                        <Label htmlFor={`lineItem${line.key}`}>Item {index + 1}</Label>
+                        <NativeSelect
+                          id={`lineItem${line.key}`}
+                          name={`lineItem${line.key}`}
+                          value={line.itemId}
+                          onChange={(value) => updateLine(line.key, { itemId: value })}
+                        >
+                          <option value="">Select item</option>
+                          {selectedItem && !selectedItemVisible ? (
+                            <option value={selectedItem.id}>
+                              {selectedItem.label}
+                            </option>
+                          ) : null}
+                          {visibleItems.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </NativeSelect>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Unit</Label>
+                        <Input
+                          value={line.orderingUnit.replaceAll("_", " ")}
+                          readOnly
+                          className="min-h-11 text-base md:text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`quantity${line.key}`}>
+                          {line.orderingUnit === "KG" ? "Quantity" : `${unitLabel} quantity`}
+                        </Label>
+                        <Input
+                          id={`quantity${line.key}`}
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          required={line.orderingUnit !== "KG"}
+                          value={line.requestedQuantity}
+                          onChange={(event) =>
+                            updateLine(line.key, {
+                              requestedQuantity: event.target.value,
+                            })
+                          }
+                          className="min-h-11 text-base md:text-sm"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`weight${line.key}`}>Estimated kg</Label>
+                        <Input
+                          id={`weight${line.key}`}
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          required
+                          value={line.estimatedWeightKg}
+                          onChange={(event) =>
+                            updateLine(line.key, {
+                              estimatedWeightKg: event.target.value,
+                            })
+                          }
+                          className="min-h-11 text-base md:text-sm"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="mt-7 min-h-11 min-w-11"
+                        aria-label="Remove item"
+                        onClick={() =>
+                          setLines((current) =>
+                            current.length === 1
+                              ? [emptyLine(stockItems)]
+                              : current.filter((candidate) => candidate.key !== line.key)
+                          )
+                        }
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
+                      <Input
+                        aria-label="Item remarks"
+                        placeholder="Item remarks"
+                        value={line.remarks}
+                        onChange={(event) =>
+                          updateLine(line.key, { remarks: event.target.value })
+                        }
+                        className="min-h-11 text-base md:text-sm"
+                      />
+                      <label className="flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={line.processingRequired}
+                          onChange={(event) =>
+                            updateLine(line.key, {
+                              processingRequired: event.target.checked,
+                            })
+                          }
+                        />
+                        Processing required
+                      </label>
+                    </div>
+                    {selectedItem?.requiresEstimatedKg &&
+                    Number(line.estimatedWeightKg) <= 0 ? (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Estimated kg is needed for stock reservation.
+                      </p>
+                    ) : null}
+                    {line.orderingUnit !== "KG" &&
+                    Number(line.requestedQuantity) <= 0 ? (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Enter quantity plus estimated kg for this unit.
+                      </p>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="customerRemarks">Customer remarks</Label>
+              <Textarea
+                id="customerRemarks"
+                name="customerRemarks"
+                value={customerRemarks}
+                onChange={(event) => setCustomerRemarks(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="remarks">Staff remarks</Label>
+              <Textarea id="remarks" name="remarks" />
+            </div>
+          </div>
+
+          <ActionMessage state={state} />
+          <Button type="submit" disabled={pending || submitDisabled} className="min-h-12 w-full sm:w-auto">
+            <Check className="size-4" />
+            {pending ? "Creating..." : "Create confirmed order"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+export function QuickCustomerForm({
+  profile,
+  outlets,
+}: {
+  profile: CurrentProfile
+  outlets: OrderScopeOption[]
+}) {
+  const canChooseScope = canChooseOrderScope(profile)
 
   return (
     <WorkflowCard
-      title="Create order"
-      description="Create a customer order for pickup or delivery in your assigned scope."
-      action={createCustomerOrderAction}
-      submitLabel="Create order"
-      submitDisabled={submitDisabled}
+      title="Quick add customer"
+      description="Name and phone are required."
+      action={quickAddCustomerAction}
+      submitLabel="Save customer"
     >
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="customerName">Customer</Label>
-          <Input id="customerName" name="customerName" required />
+          <Label htmlFor="customerName">Name</Label>
+          <Input id="customerName" name="name" required className="min-h-11 text-base md:text-sm" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="customerPhone">Phone</Label>
-          <Input id="customerPhone" name="customerPhone" />
+          <Input id="customerPhone" name="phone" required className="min-h-11 text-base md:text-sm" />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="orderDate">Order date</Label>
-          <Input
-            id="orderDate"
-            name="orderDate"
-            type="date"
-            defaultValue={new Date().toISOString().slice(0, 10)}
-            required
-          />
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="customerAddress">Address</Label>
+          <Textarea id="customerAddress" name="address" />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="requiredDate">Required date</Label>
-          <Input id="requiredDate" name="requiredDate" type="date" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="fulfillmentType">Order type</Label>
-          <NativeSelect id="fulfillmentType" name="fulfillmentType">
-            <option value="PICKUP">PICKUP</option>
-            <option value="DELIVERY">DELIVERY</option>
-            <option value="INTERNAL_TRANSFER">INTERNAL TRANSFER</option>
-          </NativeSelect>
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="customerRemarksInput">Remarks</Label>
+          <Textarea id="customerRemarksInput" name="remarks" />
         </div>
         {canChooseScope ? (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="orderOutletId">Outlet</Label>
-              <NativeSelect
-                id="orderOutletId"
-                name="outletId"
-                disabled={scopeOptions.outlets.length === 0}
-              >
-                <option value="">Select outlet</option>
-                {scopeOptions.outlets.map((outlet) => (
-                  <option key={outlet.id} value={outlet.id}>
-                    {outlet.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="orderDepartmentId">Department</Label>
-              <NativeSelect
-                id="orderDepartmentId"
-                name="departmentId"
-                required={false}
-              >
-                <option value="">No department</option>
-                {scopeOptions.departments.map((department) => (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            </div>
-          </>
+          <div className="space-y-2">
+            <Label htmlFor="customerOutletId">Outlet</Label>
+            <NativeSelect id="customerOutletId" name="outletId" required={false}>
+              <option value="">No outlet</option>
+              {outlets.map((outlet) => (
+                <option key={outlet.id} value={outlet.id}>
+                  {outlet.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
         ) : (
-          <>
-            <input type="hidden" name="outletId" value={profile.outletId ?? ""} />
-            <input
-              type="hidden"
-              name="departmentId"
-              value={profile.departmentId ?? ""}
-            />
-          </>
+          <input type="hidden" name="outletId" value={profile.outletId ?? ""} />
         )}
-      </div>
-      {canChooseScope ? (
-        <p className="text-sm text-muted-foreground">
-          Choose the outlet scope so the assigned outlet and delivery team can
-          see this order.
-        </p>
-      ) : null}
-      {submitDisabled ? (
-        <p className="text-sm text-muted-foreground">
-          Add an outlet before creating scoped customer orders.
-        </p>
-      ) : null}
-      <input type="hidden" name="deliveryRequired" value="false" />
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          name="deliveryRequired"
-          value="true"
-          className="size-4 rounded border-input"
-        />
-        Delivery required
-      </label>
-      <div className="space-y-2">
-        <Label htmlFor="remarks">Remarks</Label>
-        <Textarea id="remarks" name="remarks" />
+        <label className="flex min-h-11 items-center gap-2 rounded-md border px-3 text-sm">
+          <input type="checkbox" name="isActive" defaultChecked />
+          Active customer
+        </label>
       </div>
     </WorkflowCard>
   )
 }
 
-export function AddOrderItemForm({
-  orders,
-  stockItems,
-  orderId,
-}: {
-  orders: CustomerOrder[]
-  stockItems: { id: string; label: string }[]
-  orderId?: string
-}) {
-  const editableOrders = orders.filter(
-    (order) => order.status === "NEW" || order.status === "PREPARING"
-  )
-  const selectedOrderId = editableOrders.some((order) => order.id === orderId)
-    ? orderId
-    : undefined
-  const [requestedQuantity, setRequestedQuantity] = useState("")
-  const [requestedWeightKg, setRequestedWeightKg] = useState("")
-  const hasRequestedAmount =
-    Number(requestedQuantity) > 0 || Number(requestedWeightKg) > 0
-  const submitDisabled =
-    editableOrders.length === 0 || stockItems.length === 0 || !hasRequestedAmount
+export function EditOrderBeforePickingForm({ order }: { order: CustomerOrder }) {
+  const disabled = order.status !== "NEW"
 
   return (
     <WorkflowCard
-      title="Add order item"
-      description="Record requested quantity or requested weight. Stock is not reserved until picking starts."
-      action={addCustomerOrderItemAction}
-      submitLabel="Add item"
-      submitDisabled={submitDisabled}
+      title="Edit before picking"
+      description="Allowed only before the first pick."
+      action={editCustomerOrderBeforePickingAction}
+      submitLabel="Save changes"
+      submitDisabled={disabled}
     >
+      <input type="hidden" name="orderId" value={order.id} />
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="orderId">Order</Label>
+          <Label htmlFor="editScheduledAt">Required date/time</Label>
+          <Input
+            id="editScheduledAt"
+            name="scheduledAt"
+            type="datetime-local"
+            defaultValue={(order.requiredAt ?? new Date().toISOString()).slice(0, 16)}
+            disabled={disabled}
+            required
+            className="min-h-11 text-base md:text-sm"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="editTotalOrderPrice">Total price</Label>
+          <Input
+            id="editTotalOrderPrice"
+            name="totalOrderPrice"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={order.totalOrderPrice}
+            disabled={disabled}
+            className="min-h-11 text-base md:text-sm"
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="editDeliveryAddress">Delivery address</Label>
+        <Input
+          id="editDeliveryAddress"
+          name="deliveryAddress"
+          defaultValue={order.deliveryAddress}
+          disabled={disabled}
+          className="min-h-11 text-base md:text-sm"
+        />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="editCustomerRemarks">Customer remarks</Label>
+          <Textarea
+            id="editCustomerRemarks"
+            name="customerRemarks"
+            defaultValue={order.customerRemarks}
+            disabled={disabled}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="editRemarks">Staff remarks</Label>
+          <Textarea
+            id="editRemarks"
+            name="remarks"
+            defaultValue={order.remarks}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+      {disabled ? (
+        <p className="text-sm text-muted-foreground">
+          Picking has started or the order is no longer editable.
+        </p>
+      ) : null}
+    </WorkflowCard>
+  )
+}
+
+export function PickingForms({
+  orders,
+  items,
+  selectedOrderId,
+}: {
+  orders: CustomerOrder[]
+  items: CustomerOrderItem[]
+  selectedOrderId?: string
+}) {
+  const pickingOrders = orders.filter((order) =>
+    ["NEW", "PREPARING"].includes(order.status)
+  )
+  const orderId = selectedOrderId ?? pickingOrders[0]?.id ?? ""
+  const orderItems = items.filter((item) => item.orderId === orderId)
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-2">
+      <WorkflowCard
+        title="Scan barcode"
+        description="Wrong item scans are recorded as mismatches."
+        action={pickOrderBarcodeAction}
+        submitLabel="Save scan"
+        submitDisabled={pickingOrders.length === 0}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="scanOrderId">Order</Label>
           <NativeSelect
-            id="orderId"
+            id="scanOrderId"
             name="orderId"
-            defaultValue={selectedOrderId}
-            disabled={editableOrders.length === 0}
+            defaultValue={orderId}
+            disabled={pickingOrders.length === 0}
           >
             <option value="">Select order</option>
-            {editableOrders.map((order) => (
+            {pickingOrders.map((order) => (
               <option key={order.id} value={order.id}>
                 {order.orderNo} - {order.customerName}
               </option>
             ))}
           </NativeSelect>
-          {editableOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Items can only be added while an order is new or preparing.
-            </p>
-          ) : null}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="itemId">Item</Label>
-          <NativeSelect
-            id="itemId"
-            name="itemId"
-            disabled={stockItems.length === 0}
-          >
-            <option value="">Select item</option>
-            {stockItems.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </NativeSelect>
-          {stockItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Add active stock items before adding order lines.
-            </p>
-          ) : null}
+          <Label htmlFor="barcode">Barcode</Label>
+          <div className="flex gap-2">
+            <Input
+              id="barcode"
+              name="barcode"
+              required
+              className="min-h-11 text-base md:text-sm"
+            />
+            <Button type="button" variant="outline" size="icon" className="min-h-11 min-w-11" aria-label="Scan barcode">
+              <ScanLine className="size-4" />
+            </Button>
+          </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="requestedQuantity">Requested quantity</Label>
-          <Input
-            id="requestedQuantity"
-            name="requestedQuantity"
-            type="number"
-            min="0"
-            step="0.001"
-            value={requestedQuantity}
-            onChange={(event) => setRequestedQuantity(event.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="requestedWeightKg">Requested weight kg</Label>
-          <Input
-            id="requestedWeightKg"
-            name="requestedWeightKg"
-            type="number"
-            min="0"
-            step="0.001"
-            value={requestedWeightKg}
-            onChange={(event) => setRequestedWeightKg(event.target.value)}
-          />
-        </div>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        Enter requested quantity, requested weight, or both.
-      </p>
-      <div className="space-y-2">
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea id="notes" name="notes" />
-      </div>
-    </WorkflowCard>
-  )
-}
+      </WorkflowCard>
 
-export function PrepareOrderItemForm({
-  items,
-}: {
-  items: CustomerOrderItem[]
-}) {
-  const [preparedQuantity, setPreparedQuantity] = useState("")
-  const [preparedWeightKg, setPreparedWeightKg] = useState("")
-  const hasPreparedAmount =
-    Number(preparedQuantity) > 0 || Number(preparedWeightKg) > 0
-
-  return (
-    <WorkflowCard
-      title="Prepare item"
-      description="Start picking, reserve stock, and record prepared quantity, prepared weight, and prepared-by user."
-      action={prepareCustomerOrderItemAction}
-      submitLabel="Save prepared item"
-      submitDisabled={items.length === 0 || !hasPreparedAmount}
-    >
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="orderItemId">Order item</Label>
+      <WorkflowCard
+        title="Manual weight"
+        description="Reason is required when no barcode is used."
+        action={manualPickWeightAction}
+        submitLabel="Save manual weight"
+        submitDisabled={orderItems.length === 0}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="manualOrderItemId">Order item</Label>
           <NativeSelect
-            id="orderItemId"
+            id="manualOrderItemId"
             name="orderItemId"
-            disabled={items.length === 0}
+            disabled={orderItems.length === 0}
           >
             <option value="">Select item</option>
-            {items.map((item) => (
+            {orderItems.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.orderNo} - {item.itemLabel}
               </option>
             ))}
           </NativeSelect>
-          {items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No editable order items are available. Items can only be prepared
-              before the order is marked ready.
-            </p>
-          ) : null}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="pickedQuantity">Picked quantity</Label>
+            <Input id="pickedQuantity" name="pickedQuantity" type="number" min="0" step="0.001" className="min-h-11 text-base md:text-sm" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pickedWeightKg">Picked kg</Label>
+            <Input id="pickedWeightKg" name="pickedWeightKg" type="number" min="0" step="0.001" className="min-h-11 text-base md:text-sm" />
+          </div>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="preparedQuantity">Prepared quantity</Label>
-          <Input
-            id="preparedQuantity"
-            name="preparedQuantity"
-            type="number"
-            min="0"
-            step="0.001"
-            value={preparedQuantity}
-            onChange={(event) => setPreparedQuantity(event.target.value)}
-          />
+          <Label htmlFor="manualReason">Reason</Label>
+          <NativeSelect id="manualReason" name="manualReason">
+            {manualPickReasons.map((reason) => (
+              <option key={reason} value={reason}>
+                {reason.replaceAll("_", " ")}
+              </option>
+            ))}
+          </NativeSelect>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="preparedWeightKg">Prepared weight kg</Label>
-          <Input
-            id="preparedWeightKg"
-            name="preparedWeightKg"
-            type="number"
-            min="0"
-            step="0.001"
-            value={preparedWeightKg}
-            onChange={(event) => setPreparedWeightKg(event.target.value)}
-          />
+          <Label htmlFor="manualNotes">Notes</Label>
+          <Textarea id="manualNotes" name="notes" />
         </div>
-      </div>
-      {!hasPreparedAmount ? (
-        <p className="text-sm text-muted-foreground">
-          Enter prepared quantity, prepared weight, or both before saving and reserving stock.
-        </p>
-      ) : null}
-      <div className="space-y-2">
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea id="notes" name="notes" />
-      </div>
-    </WorkflowCard>
+      </WorkflowCard>
+    </div>
   )
 }
 
-function orderItemsReady(order: CustomerOrder, items: CustomerOrderItem[]) {
-  const orderItems = items.filter((item) => item.orderId === order.id)
-
-  return (
-    orderItems.length > 0 &&
-    orderItems.every(
-      (item) =>
-        item.status === "PREPARED" &&
-        (item.preparedQuantity > 0 || item.preparedWeightKg > 0)
-    )
-  )
-}
-
-export function MarkOrderReadyForm({
+export function MarkReadyForm({
   orders,
-  items = [],
 }: {
   orders: CustomerOrder[]
-  items?: CustomerOrderItem[]
 }) {
-  const readyCandidates = orders.filter(
-    (order) =>
-      (order.status === "NEW" ||
-        order.status === "PREPARING" ||
-        order.status === "READY") &&
-      orderItemsReady(order, items)
+  const readyCandidates = orders.filter((order) =>
+    ["NEW", "PREPARING", "READY"].includes(order.status)
   )
 
   return (
     <WorkflowCard
-      title="Mark order ready"
-      description="Move order to ready-for-pickup or ready-for-delivery and create WhatsApp placeholder event."
+      title="Mark ready"
+      description="Ready delivery orders appear in Delivery."
       action={markCustomerOrderReadyAction}
       submitLabel="Mark ready"
       submitDisabled={readyCandidates.length === 0}
@@ -515,70 +1042,100 @@ export function MarkOrderReadyForm({
           ))}
         </NativeSelect>
       </div>
-      {readyCandidates.length === 0 ? (
+    </WorkflowCard>
+  )
+}
+
+export function CreateOrderDeliveryForm({ order }: { order: CustomerOrder }) {
+  const disabled =
+    !order.deliveryRequired ||
+    order.fulfillmentType === "PICKUP" ||
+    ["DELIVERED", "FAILED", "CANCELLED"].includes(order.status)
+
+  return (
+    <WorkflowCard
+      title="Create delivery"
+      description="Creates or links the Delivery job for this order."
+      action={createOrderDeliveryAction}
+      submitLabel="Create Delivery"
+      submitDisabled={disabled}
+    >
+      <input type="hidden" name="orderId" value={order.id} />
+      <div className="rounded-md border bg-muted/30 p-3 text-sm">
+        <div className="font-medium">{order.orderNo}</div>
+        <div className="text-muted-foreground">
+          {order.customerName} - {order.fulfillmentType.replaceAll("_", " ")}
+        </div>
+      </div>
+      {order.fulfillmentType === "PICKUP" ? (
         <p className="text-sm text-muted-foreground">
-          Prepare every item with quantity or weight before marking an order ready.
+          Customer pickup stays in Orders.
         </p>
       ) : null}
     </WorkflowCard>
   )
 }
 
-export function ReleaseOrderReservationsForm({
-  orders,
-  reservations,
-}: {
-  orders: CustomerOrder[]
-  reservations: OrderStockReservation[]
-}) {
-  const activeReservationOrderIds = new Set(
-    reservations
-      .filter((reservation) => reservation.status === "ACTIVE")
-      .map((reservation) => reservation.orderId)
-  )
-  const releaseCandidates = orders.filter(
-    (order) =>
-      order.status === "CANCELLED" && activeReservationOrderIds.has(order.id)
+export function ReadyOrderActions({ orders }: { orders: CustomerOrder[] }) {
+  const pickupOrders = orders.filter((order) => order.status === "READY_FOR_PICKUP")
+  const cancellableOrders = orders.filter(
+    (order) => !["DELIVERED", "FAILED", "CANCELLED"].includes(order.status)
   )
 
   return (
-    <WorkflowCard
-      title="Release reserved stock"
-      description="Release active reservations only after a customer order is cancelled. Cancellation itself does not release stock."
-      action={releaseOrderReservationsAction}
-      submitLabel="Release reservations"
-      submitDisabled={releaseCandidates.length === 0}
-    >
-      <div className="space-y-2">
-        <Label htmlFor="releaseOrderId">Cancelled order</Label>
-        <NativeSelect
-          id="releaseOrderId"
-          name="orderId"
-          disabled={releaseCandidates.length === 0}
-        >
-          <option value="">Select cancelled order</option>
-          {releaseCandidates.map((order) => (
-            <option key={order.id} value={order.id}>
-              {order.orderNo} - {order.customerName}
-            </option>
-          ))}
-        </NativeSelect>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="releaseReason">Release reason</Label>
-        <Textarea
-          id="releaseReason"
-          name="releaseReason"
-          placeholder="Customer cancelled after picking"
-          required
-        />
-      </div>
-      {releaseCandidates.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No cancelled orders with active reservations are available.
-        </p>
-      ) : null}
-    </WorkflowCard>
+    <div className="grid gap-4 xl:grid-cols-2">
+      <WorkflowCard
+        title="Pickup completed"
+        description="Staff taps this when customer pickup is complete."
+        action={markPickupCompletedAction}
+        submitLabel="Picked up"
+        submitDisabled={pickupOrders.length === 0}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="pickupOrderId">Pickup order</Label>
+          <NativeSelect
+            id="pickupOrderId"
+            name="orderId"
+            disabled={pickupOrders.length === 0}
+          >
+            <option value="">Select pickup order</option>
+            {pickupOrders.map((order) => (
+              <option key={order.id} value={order.id}>
+                {order.orderNo} - {order.customerName}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      </WorkflowCard>
+
+      <WorkflowCard
+        title="Cancel order"
+        description="Cancelling releases active reservations."
+        action={cancelCustomerOrderAction}
+        submitLabel="Cancel order"
+        submitDisabled={cancellableOrders.length === 0}
+      >
+        <div className="space-y-2">
+          <Label htmlFor="cancelOrderId">Order</Label>
+          <NativeSelect
+            id="cancelOrderId"
+            name="orderId"
+            disabled={cancellableOrders.length === 0}
+          >
+            <option value="">Select order</option>
+            {cancellableOrders.map((order) => (
+              <option key={order.id} value={order.id}>
+                {order.orderNo} - {order.customerName} - {order.displayStatus}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="cancellationReason">Reason</Label>
+          <Textarea id="cancellationReason" name="cancellationReason" required />
+        </div>
+      </WorkflowCard>
+    </div>
   )
 }
 
@@ -616,16 +1173,14 @@ export function CustomerOrderDeliveryStatusForm({
             ["CANCELLED", "CANCELLED"],
           ]
         : []
-  const submitDisabled =
-    !selectedOrderId || deliveryOrders.length === 0 || statusOptions.length === 0
 
   return (
     <WorkflowCard
       title="Customer order delivery"
-      description="Move ready customer orders through delivery and create WhatsApp placeholder events."
+      description="Delivery proof is handled by Delivery."
       action={updateCustomerOrderDeliveryStatusAction}
       submitLabel="Update delivery"
-      submitDisabled={submitDisabled}
+      submitDisabled={!selectedOrderId || statusOptions.length === 0}
     >
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
@@ -660,11 +1215,6 @@ export function CustomerOrderDeliveryStatusForm({
           </NativeSelect>
         </div>
       </div>
-      {deliveryOrders.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No customer orders are ready for delivery update.
-        </p>
-      ) : null}
       <div className="space-y-2">
         <Label htmlFor="customerDeliveryNotes">Notes</Label>
         <Textarea id="customerDeliveryNotes" name="notes" />
@@ -685,15 +1235,14 @@ export function CustomerOrderProofUploadForm({
         order.status === "DELIVERED" ||
         order.status === "FAILED")
   )
-  const submitDisabled = deliveryOrders.length === 0
 
   return (
     <WorkflowCard
       title="Customer order proof"
-      description="Upload proof photo, receiver/contact name, and GPS. Successful proof marks delivered; failed proof returns linked barcode stock."
+      description="Proof photo, receiver/contact name, and GPS."
       action={uploadCustomerOrderProofAction}
       submitLabel="Upload proof"
-      submitDisabled={submitDisabled}
+      submitDisabled={deliveryOrders.length === 0}
     >
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
@@ -718,7 +1267,8 @@ export function CustomerOrderProofUploadForm({
             name="proofFile"
             type="file"
             accept="image/*"
-            required={!submitDisabled}
+            required={deliveryOrders.length > 0}
+            className="min-h-11 text-base md:text-sm"
           />
         </div>
         <div className="space-y-2">
@@ -726,7 +1276,7 @@ export function CustomerOrderProofUploadForm({
           <NativeSelect
             id="customerDeliveryOutcome"
             name="deliveryOutcome"
-            disabled={submitDisabled}
+            disabled={deliveryOrders.length === 0}
           >
             <option value="DELIVERED">Delivered</option>
             <option value="FAILED">Failed</option>
@@ -737,8 +1287,9 @@ export function CustomerOrderProofUploadForm({
           <Input
             id="customerProofReceiverName"
             name="receiverName"
-            disabled={submitDisabled}
-            required={!submitDisabled}
+            disabled={deliveryOrders.length === 0}
+            required={deliveryOrders.length > 0}
+            className="min-h-11 text-base md:text-sm"
           />
         </div>
         <div className="space-y-2">
@@ -748,8 +1299,9 @@ export function CustomerOrderProofUploadForm({
             name="latitude"
             type="number"
             step="0.0000001"
-            disabled={submitDisabled}
-            required={!submitDisabled}
+            disabled={deliveryOrders.length === 0}
+            required={deliveryOrders.length > 0}
+            className="min-h-11 text-base md:text-sm"
           />
         </div>
         <div className="space-y-2">
@@ -759,8 +1311,9 @@ export function CustomerOrderProofUploadForm({
             name="longitude"
             type="number"
             step="0.0000001"
-            disabled={submitDisabled}
-            required={!submitDisabled}
+            disabled={deliveryOrders.length === 0}
+            required={deliveryOrders.length > 0}
+            className="min-h-11 text-base md:text-sm"
           />
         </div>
       </div>
@@ -769,16 +1322,13 @@ export function CustomerOrderProofUploadForm({
         <Textarea
           id="customerProofNotes"
           name="notes"
-          disabled={submitDisabled}
-          placeholder="Reason for failed delivery or return notes"
+          disabled={deliveryOrders.length === 0}
         />
       </div>
-      {deliveryOrders.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Proof photos can be uploaded after a customer order is out for
-          delivery, delivered, or failed.
-        </p>
-      ) : null}
     </WorkflowCard>
   )
+}
+
+export function StockWarningBadge({ show }: { show: boolean }) {
+  return show ? <Badge variant="destructive">Stock not enough</Badge> : null
 }

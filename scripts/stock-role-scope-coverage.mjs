@@ -77,8 +77,6 @@ for (const [name, actionText] of [
   ["transferAction", "transfer"],
   ["receiveTransferAction", "receive transfer"],
   ["returnStockAction", "return stock"],
-  ["createDamageRequestAction", "request damage"],
-  ["createReturnSupplierRequestAction", "request return supplier"],
   ["scanStockTakeBarcodeAction", "scan stock take"],
 ]) {
   assertActionUses(actions, name, [
@@ -86,6 +84,30 @@ for (const [name, actionText] of [
     "assertStockLocationAccess(",
     actionText,
   ])
+}
+
+assertActionUses(actions, "createDamageRequestAction", [
+  "runStockAction(formData, stockOperatorRoles",
+  "createDamageRequestForUnit",
+])
+assertActionUses(actions, "createReturnSupplierRequestAction", [
+  "runStockAction(formData, stockOperatorRoles",
+  "createReturnSupplierRequestForUnit",
+])
+
+for (const [helperName, actionText] of [
+  ["createDamageRequestForUnit", "request damage"],
+  ["createReturnSupplierRequestForUnit", "request return supplier"],
+]) {
+  const marker = `async function ${helperName}`
+  const start = actions.indexOf(marker)
+  assert(start >= 0, `Missing stock helper: ${helperName}`)
+  const next = actions.indexOf("\nexport async function ", start + marker.length)
+  const body = actions.slice(start, next === -1 ? actions.length : next)
+
+  for (const fragment of ["assertStockLocationAccess(", actionText]) {
+    assert(body.includes(fragment), `${helperName} missing: ${fragment}`)
+  }
 }
 
 assertActionUses(actions, "releaseInspectionStockAction", [
@@ -97,7 +119,6 @@ assertActionUses(actions, "releaseInspectionStockAction", [
 for (const [name, actionText] of [
   ["reviewDamageRequestAction", "review damage"],
   ["rejectReturnSupplierRequestAction", "reject return supplier"],
-  ["createStockTakeSessionAction", "create stock take"],
 ]) {
   assertActionUses(actions, name, [
     "runStockAction(formData, stockManagerRoles",
@@ -105,6 +126,12 @@ for (const [name, actionText] of [
     actionText,
   ])
 }
+
+assertActionUses(actions, "createStockTakeSessionAction", [
+  "runStockAction(formData, stockOperatorRoles",
+  "assertStockLocationAccess(",
+  "create stock take",
+])
 
 assertActionUses(actions, "approveDamageRequestAction", [
   "runStockAction(formData, stockDirectorApprovalRoles",
@@ -130,14 +157,37 @@ for (const fragment of [
   "const stockOperatorRoles: UserRole[] = stockRoles.filter",
   'role !== "director"',
   "const stockItemMasterRoles: UserRole[]",
+  'const stockAdvancedRoles: UserRole[] = [...stockManagerRoles, "director"]',
   "items: stockItemMasterRoles",
   "inbound: stockOperatorRoles",
   "outbound: stockOperatorRoles",
   "transfer: stockOperatorRoles",
   '"receive-transfer": stockOperatorRoles',
   "return: stockOperatorRoles",
+  "reports: stockAdvancedRoles",
+  "settings: stockAdvancedRoles",
+  "const isWorkerDashboard = route === \"dashboard\" && isGeneralStockWorker",
+  "const showDashboardAlerts = !isWorkerDashboard",
 ]) {
   assert(stockPage.includes(fragment), `Stock page route scope missing: ${fragment}`)
+}
+
+const workerHomeBody =
+  stockPage.match(/function StockWorkerHome\(\) \{[\s\S]*?\n\}/)?.[0] ?? ""
+
+for (const blockedFragment of [
+  "KpiCards",
+  "DataTable",
+  "reports",
+  "settings",
+  "cost",
+  "value",
+  "finance",
+]) {
+  assert(
+    !workerHomeBody.toLowerCase().includes(blockedFragment),
+    `Stock worker dashboard must not expose ${blockedFragment}.`
+  )
 }
 
 assert(

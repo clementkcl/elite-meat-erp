@@ -17,7 +17,10 @@ function assert(condition, message) {
 function stockMigrationFiles() {
   return fs
     .readdirSync(migrationsDir)
-    .filter((file) => /^2026061000(28|31|37|38|39|40|41|42|43|44|45|46|47|48|49|50|51|52|53)_.*\.sql$/.test(file))
+    .filter((file) =>
+      /^2026061000(28|31|37|38|39|40|41|42|43|44|45|46|47|48|49|50|51|52|53|54|55)_.*\.sql$/.test(file) ||
+      /^20260623000(1|2|3|6)_.*\.sql$/.test(file)
+    )
     .sort()
 }
 
@@ -26,6 +29,31 @@ const files = stockMigrationFiles()
 assert(
   files.includes("202606100053_stock_inbound_session_undo_v1.sql"),
   "Stock migration safety must include the latest stock inbound session undo migration."
+)
+
+assert(
+  files.includes("202606100054_stock_outbound_transfer_hardening_v1.sql"),
+  "Stock migration safety must include the stock outbound and transfer hardening migration."
+)
+
+assert(
+  files.includes("202606100055_stock_take_exceptions_v1.sql"),
+  "Stock migration safety must include the stock take exception approval migration."
+)
+
+assert(
+  files.includes("202606230002_stock_mobile_worker_mvp_v1.sql"),
+  "Stock migration safety must include the stock mobile worker MVP migration."
+)
+
+assert(
+  files.includes("202606230003_stock_receive_transfer_wrong_location_block_v1.sql"),
+  "Stock migration safety must include the strict receive-transfer wrong-location block migration."
+)
+
+assert(
+  files.includes("202606230006_stock_transfer_any_location_v1.sql"),
+  "Stock migration safety must include the stock transfer any active location migration."
 )
 
 const destructivePatterns = [

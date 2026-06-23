@@ -51,19 +51,30 @@ const stockItemMasterRoles: UserRole[] = [
   "processing_manager",
   "account",
   "admin",
-  "director",
 ]
 
 const stockOperatorShortcutRoles: UserRole[] = stockRoles.filter(
   (role) => role !== "director"
 )
 
+const stockAdvancedShortcutRoles: UserRole[] = [
+  "retail_manager",
+  "delivery_manager",
+  "processing_manager",
+  "admin",
+  "director",
+]
+
 const orderOperatorShortcutRoles: UserRole[] = [
   "retail_team_general_worker",
   "retail_manager",
+  "delivery_team_general_worker",
+  "delivery_manager",
   "processing_team_general_worker",
   "processing_manager",
+  "account",
   "admin",
+  "director",
 ]
 
 const attendanceRoles: UserRole[] = [
@@ -133,29 +144,29 @@ const shortcuts: Shortcut[] = [
     label: "Stock Reports",
     description: "Print, export, or share stock summaries.",
     moduleKey: "stock",
-    roles: stockRoles,
+    roles: stockAdvancedShortcutRoles,
     icon: BarChart3,
   },
   {
-    href: "/orders/new",
-    label: "Make Order",
-    description: "Create a customer order for pickup or delivery.",
+    href: "/orders",
+    label: "Orders",
+    description: "Review order KPIs, alerts, and current order status.",
     moduleKey: "orders",
     roles: orderOperatorShortcutRoles,
     icon: ClipboardList,
   },
   {
-    href: "/orders",
-    label: "Order List",
-    description: "Prepare, review, and track customer orders.",
+    href: "/orders/create",
+    label: "Create Order",
+    description: "Create a customer order for pickup or delivery.",
     moduleKey: "orders",
-    roles: [...orderOperatorShortcutRoles, "director"],
+    roles: orderOperatorShortcutRoles.filter((role) => role !== "director"),
     icon: ClipboardList,
   },
   {
-    href: "/orders/prepare",
-    label: "Prepare Orders",
-    description: "Record prepared quantity and weight for customer order items.",
+    href: "/orders/picking",
+    label: "Order Picking",
+    description: "Scan or enter picked weight for confirmed orders.",
     moduleKey: "orders",
     roles: orderOperatorShortcutRoles,
     icon: PackageCheck,

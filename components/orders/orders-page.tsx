@@ -2,6 +2,7 @@ import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { StatusBadge } from "@/components/ui/status-badge"
 import {
   Card,
   CardContent,
@@ -9,183 +10,65 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { DataTable, type DataTableColumn } from "@/components/stock/data-table"
 import {
-  AddOrderItemForm,
-  MarkOrderReadyForm,
-  NewCustomerOrderForm,
-  PrepareOrderItemForm,
-  ReleaseOrderReservationsForm,
+  CreateOrderDeliveryForm,
+  CreateOrderForm,
+  EditOrderBeforePickingForm,
+  MarkReadyForm,
+  PickingForms,
+  QuickCustomerForm,
+  ReadyOrderActions,
 } from "@/components/orders/orders-forms"
-import {
-  getOrdersPageData,
-} from "@/lib/orders/data"
+import { OrdersTableClient } from "@/components/orders/orders-table-client"
 import { moduleAccessBlock } from "@/lib/auth/module-guard"
 import { requireCurrentProfile } from "@/lib/auth/session"
+import { getOrdersPageData } from "@/lib/orders/data"
 import type { UserRole } from "@/lib/auth/types"
 import type {
   CustomerOrder,
-  CustomerOrderItem,
-  OrderNotificationEvent,
-  OrderStockReservation,
+  OrderFilters,
+  OrderLinkedDelivery,
 } from "@/lib/orders/types"
 
-export type OrdersRoute = "list" | "new" | "prepare" | "detail"
-
-type TableRow = Record<string, string | number | boolean>
+export type OrdersRoute =
+  | "list"
+  | "create"
+  | "picking"
+  | "ready"
+  | "customers"
+  | "detail"
 
 const orderRoles: UserRole[] = [
   "retail_team_general_worker",
   "retail_manager",
+  "delivery_team_general_worker",
+  "delivery_manager",
   "processing_team_general_worker",
   "processing_manager",
+  "account",
   "admin",
   "director",
 ]
 
-const orderOperatorRoles: UserRole[] = [
-  "retail_team_general_worker",
-  "retail_manager",
-  "processing_team_general_worker",
-  "processing_manager",
-  "admin",
-]
-
-const orderColumns: DataTableColumn<TableRow>[] = [
-  { key: "orderNo", header: "Order" },
-  { key: "customerName", header: "Customer" },
-  { key: "requiredDate", header: "Required" },
-  { key: "fulfillmentType", header: "Type" },
-  { key: "status", header: "Status" },
-  { key: "failedReturnStatus", header: "Failed return" },
-  { key: "outletName", header: "Outlet" },
-  { key: "open", header: "Open" },
-]
-
-const itemColumns: DataTableColumn<TableRow>[] = [
-  { key: "orderNo", header: "Order" },
-  { key: "itemLabel", header: "Item" },
-  { key: "requestedWeightKg", header: "Requested kg", align: "right" },
-  { key: "preparedWeightKg", header: "Prepared kg", align: "right" },
-  { key: "preparedByName", header: "Prepared by" },
-  { key: "status", header: "Status" },
-]
-
-const notificationColumns: DataTableColumn<TableRow>[] = [
-  { key: "orderNo", header: "Order" },
-  { key: "eventType", header: "Event" },
-  { key: "channel", header: "Channel" },
-  { key: "status", header: "Status" },
-  { key: "createdAt", header: "Created" },
-]
-
-const reservationColumns: DataTableColumn<TableRow>[] = [
-  { key: "orderNo", header: "Order" },
-  { key: "itemLabel", header: "Item" },
-  { key: "locationName", header: "Location" },
-  { key: "reservedQuantity", header: "Reserved qty", align: "right" },
-  { key: "reservedWeightKg", header: "Reserved kg", align: "right" },
-  { key: "status", header: "Status" },
-]
-
 function dateText(value: string | null) {
-  return value ?? "-"
+  return value ? value.replace("T", " ").slice(0, 16) : "-"
 }
 
-function failedReturnText(order: CustomerOrder) {
-  if (
-    !order.failedReturnStatus ||
-    order.failedReturnStatus === "NOT_REQUIRED"
-  ) {
-    return "-"
-  }
-
-  if (order.failedReturnStatus === "NO_STOCK_LINK") {
-    return "No linked stock"
-  }
-
-  if (order.failedReturnStatus === "RETURNED") {
-    return `Returned ${order.failedReturnCompletedUnits}/${order.failedReturnRequiredUnits}`
-  }
-
-  if (order.failedReturnStatus === "PENDING_RETURN") {
-    return `Pending ${order.failedReturnCompletedUnits}/${order.failedReturnRequiredUnits}`
-  }
-
-  return order.failedReturnStatus.replaceAll("_", " ")
-}
-
-function orderRows(data: Awaited<ReturnType<typeof getOrdersPageData>>) {
-  return data.orders.map((order) => ({
-    id: order.id,
-    orderNo: order.orderNo,
-    customerName: order.customerName,
-    requiredDate: dateText(order.requiredDate),
-    fulfillmentType: order.fulfillmentType,
-    status: order.status,
-    failedReturnStatus: failedReturnText(order),
-    outletName: order.outletName,
-    open: "View",
-  }))
-}
-
-function itemRows(items: CustomerOrderItem[]) {
-  return items.map((item) => ({
-    orderNo: item.orderNo,
-    itemLabel: item.itemLabel,
-    requestedWeightKg: item.requestedWeightKg,
-    preparedWeightKg: item.preparedWeightKg,
-    preparedByName: item.preparedByName,
-    status: item.status,
-  }))
-}
-
-function notificationRows(
-  notifications: OrderNotificationEvent[]
-) {
-  return notifications.map((event) => ({
-    orderNo: event.orderNo,
-    eventType: event.eventType,
-    channel: event.channel,
-    status: event.status,
-    createdAt: event.createdAt,
-  }))
-}
-
-function reservationRows(reservations: OrderStockReservation[]) {
-  return reservations.map((reservation) => ({
-    orderNo: reservation.orderNo,
-    itemLabel: reservation.itemLabel,
-    locationName: reservation.locationName,
-    reservedQuantity: reservation.reservedQuantity,
-    reservedWeightKg: reservation.reservedWeightKg,
-    status: reservation.status,
-  }))
-}
-
-function editableOrderItems(
-  items: CustomerOrderItem[],
-  orders: CustomerOrder[]
-) {
-  const editableOrderIds = new Set(
-    orders
-      .filter((order) => order.status === "NEW" || order.status === "PREPARING")
-      .map((order) => order.id)
-  )
-
-  return items.filter((item) => editableOrderIds.has(item.orderId))
+function money(value: number) {
+  return `RM ${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
 }
 
 function Header({
   title,
   description,
   demoMode,
-  canOperate,
 }: {
   title: string
   description: string
   demoMode: boolean
-  canOperate: boolean
 }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -198,28 +81,355 @@ function Header({
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        {canOperate ? (
-          <>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/orders/new">New order</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/orders/prepare">Prepare</Link>
-            </Button>
-          </>
-        ) : null}
+        <Button asChild variant="outline" size="sm">
+          <Link href="/orders/create">Create</Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/orders/picking">Picking</Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/orders/ready">Ready</Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/orders/customers">Customers</Link>
+        </Button>
         {demoMode ? <Badge variant="warning">Demo data</Badge> : null}
       </div>
     </div>
   )
 }
 
+function FilterBar({
+  filters,
+  outlets,
+  salespeople,
+}: {
+  filters: OrderFilters
+  outlets: { id: string; name: string }[]
+  salespeople: { id: string; name: string }[]
+}) {
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <input
+            className="min-h-11 rounded-md border bg-background px-3 text-base md:text-sm"
+            type="date"
+            name="date"
+            defaultValue={filters.date ?? ""}
+            aria-label="Date"
+          />
+          <select
+            className="min-h-11 rounded-md border bg-background px-3 text-base md:text-sm"
+            name="outlet"
+            defaultValue={filters.outlet ?? ""}
+            aria-label="Outlet"
+          >
+            <option value="">All outlets</option>
+            {outlets.map((outlet) => (
+              <option key={outlet.id} value={outlet.id}>
+                {outlet.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="min-h-11 rounded-md border bg-background px-3 text-base md:text-sm"
+            name="status"
+            defaultValue={filters.status ?? ""}
+            aria-label="Status"
+          >
+            <option value="">All statuses</option>
+            <option value="CONFIRMED">Confirmed</option>
+            <option value="STOCK_NOT_ENOUGH">Stock not enough</option>
+            <option value="PICKING">Picking</option>
+            <option value="READY">Ready</option>
+            <option value="OUT_FOR_DELIVERY">Out for delivery</option>
+            <option value="PICKED_UP">Picked up</option>
+            <option value="DELIVERED">Delivered</option>
+            <option value="FAILED">Failed</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+          <input
+            className="min-h-11 rounded-md border bg-background px-3 text-base md:text-sm"
+            name="customer"
+            defaultValue={filters.customer ?? ""}
+            placeholder="Customer"
+            aria-label="Customer"
+          />
+          <select
+            className="min-h-11 rounded-md border bg-background px-3 text-base md:text-sm"
+            name="salesperson"
+            defaultValue={filters.salesperson ?? ""}
+            aria-label="Salesperson"
+          >
+            <option value="">All staff</option>
+            {salespeople.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name}
+              </option>
+            ))}
+          </select>
+          <Button type="submit" className="min-h-11 xl:col-start-5">
+            Apply filters
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+function KpiGrid({
+  kpis,
+}: {
+  kpis: { label: string; value: string; detail: string }[]
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {kpis.map((kpi) => (
+        <Card key={kpi.label}>
+          <CardHeader className="pb-2">
+            <CardDescription>{kpi.label}</CardDescription>
+            <CardTitle className="text-2xl">{kpi.value}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {kpi.detail}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+function Alerts({
+  alerts,
+}: {
+  alerts: { id: string; label: string; detail: string; tone: string; href?: string }[]
+}) {
+  if (alerts.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-6 text-sm text-muted-foreground">
+          No order alerts for the current filters.
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      {alerts.slice(0, 10).map((alert) => {
+        const content = (
+          <Card className="h-full">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-base">{alert.label}</CardTitle>
+                <Badge
+                  variant={
+                    alert.tone === "danger"
+                      ? "destructive"
+                      : alert.tone === "warning"
+                        ? "warning"
+                        : "secondary"
+                  }
+                >
+                  {alert.tone}
+                </Badge>
+              </div>
+              <CardDescription>{alert.detail}</CardDescription>
+            </CardHeader>
+          </Card>
+        )
+
+        return alert.href ? (
+          <Link key={alert.id} href={alert.href}>
+            {content}
+          </Link>
+        ) : (
+          <div key={alert.id}>{content}</div>
+        )
+      })}
+    </div>
+  )
+}
+
+function OrderSummary({ order }: { order: CustomerOrder }) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>{order.customerName}</CardTitle>
+            <CardDescription>
+              {order.fulfillmentType.replaceAll("_", " ")} - {order.displayStatus}
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="secondary">{order.sourceType}</Badge>
+            {order.stockNotEnough ? (
+              <Badge variant="destructive">Stock not enough</Badge>
+            ) : null}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <div className="text-muted-foreground">Required</div>
+            <div className="font-medium">{dateText(order.requiredAt ?? order.requiredDate)}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Total</div>
+            <div className="font-medium">{money(order.totalOrderPrice)}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Created by</div>
+            <div className="font-medium">{order.createdByName}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Outlet</div>
+            <div className="font-medium">{order.outletName}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Pickup/from</div>
+            <div className="font-medium">
+              {order.fromLocationName !== "-"
+                ? order.fromLocationName
+                : order.pickupLocationName}
+            </div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">To location</div>
+            <div className="font-medium">{order.toLocationName}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Phone</div>
+            <div className="font-medium">{order.customerPhone || "-"}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Reservation expires</div>
+            <div className="font-medium">{dateText(order.reservationExpiresAt)}</div>
+          </div>
+        </div>
+        {order.customerRemarks || order.remarks || order.deliveryAddress ? (
+          <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+            <div>
+              <div className="text-muted-foreground">Customer remarks</div>
+              <div>{order.customerRemarks || "-"}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Staff remarks</div>
+              <div>{order.remarks || "-"}</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Delivery address</div>
+              <div>{order.deliveryAddress || "-"}</div>
+            </div>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
+function LinkedDeliverySummary({
+  order,
+  linkedDeliveries,
+}: {
+  order: CustomerOrder
+  linkedDeliveries: OrderLinkedDelivery[]
+}) {
+  if (order.fulfillmentType === "PICKUP" || !order.deliveryRequired) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Delivery</CardTitle>
+          <CardDescription>
+            Customer pickup stays inside the Order module.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    )
+  }
+
+  const activeDelivery =
+    linkedDeliveries.find((delivery) => delivery.status !== "CANCELLED") ??
+    linkedDeliveries[0] ??
+    null
+
+  if (!activeDelivery) {
+    return <CreateOrderDeliveryForm order={order} />
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Linked delivery</CardTitle>
+            <CardDescription>
+              Existing delivery is shown here to avoid duplicate creation.
+            </CardDescription>
+          </div>
+          <StatusBadge value={activeDelivery.status} />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <div className="text-muted-foreground">Delivery no</div>
+            <div className="font-medium">{activeDelivery.deliveryNo}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Driver</div>
+            <div className="font-medium">{activeDelivery.driverName}</div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Proof status</div>
+            <div className="font-medium">
+              {activeDelivery.proofStatus === "UPLOADED"
+                ? `Uploaded (${activeDelivery.proofCount})`
+                : "No proof yet"}
+            </div>
+          </div>
+          <div>
+            <div className="text-muted-foreground">Delivery status</div>
+            <div className="font-medium">
+              {activeDelivery.status.replaceAll("_", " ")}
+            </div>
+          </div>
+        </div>
+        <Button asChild className="min-h-11 w-full sm:w-auto">
+          <Link href={activeDelivery.actionHref}>Open Delivery</Link>
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function parseFilters(searchParams: Record<string, string | string[] | undefined>) {
+  const read = (key: string) => {
+    const value = searchParams[key]
+
+    return Array.isArray(value) ? value[0] : value
+  }
+
+  return {
+    date: read("date"),
+    outlet: read("outlet"),
+    status: read("status"),
+    customer: read("customer"),
+    salesperson: read("salesperson"),
+  } satisfies OrderFilters
+}
+
 export async function OrdersPage({
   route,
   orderId,
+  searchParams = {},
 }: {
   route: OrdersRoute
   orderId?: string
+  searchParams?: Record<string, string | string[] | undefined>
 }) {
   const blocked = await moduleAccessBlock("orders", "Orders", orderRoles)
 
@@ -228,10 +438,11 @@ export async function OrdersPage({
   }
 
   const profile = await requireCurrentProfile()
+  const filters = parseFilters(searchParams)
   let data: Awaited<ReturnType<typeof getOrdersPageData>>
 
   try {
-    data = await getOrdersPageData()
+    data = await getOrdersPageData(filters)
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Orders data could not load."
@@ -240,9 +451,8 @@ export async function OrdersPage({
       <div className="space-y-5">
         <Header
           title="Orders"
-          description="Create customer orders, prepare requested item weights, and move ready orders into pickup or delivery."
+          description="Create, reserve, pick, ready, and hand off orders."
           demoMode={false}
-          canOperate={false}
         />
         <Card>
           <CardHeader>
@@ -258,205 +468,149 @@ export async function OrdersPage({
       </div>
     )
   }
-  const canOperateOrders = orderOperatorRoles.some((role) =>
-    profile.roles.includes(role)
-  )
 
-  let detailOrder: CustomerOrder | null = null
-  let detailItems: CustomerOrderItem[] = data.items
-  let detailReservations: OrderStockReservation[] = data.reservations
-  let detailNotifications: OrderNotificationEvent[] = data.notifications
-
-  if (orderId) {
-    detailOrder = data.orders.find((order) => order.id === orderId) ?? null
-    detailItems = data.items.filter((item) => item.orderId === orderId)
-    detailReservations = data.reservations.filter(
-      (reservation) => reservation.orderId === orderId
-    )
-    detailNotifications = data.notifications.filter(
-      (event) => event.orderId === orderId
-    )
-  }
+  const detailOrder = orderId
+    ? data.orders.find((order) => order.id === orderId) ?? null
+    : null
+  const detailItems = orderId
+    ? data.items.filter((item) => item.orderId === orderId)
+    : data.items
+  const detailReservations = orderId
+    ? data.reservations.filter((reservation) => reservation.orderId === orderId)
+    : data.reservations
+  const detailPickingEntries = orderId
+    ? data.pickingEntries.filter((entry) => entry.orderId === orderId)
+    : data.pickingEntries
+  const detailNotifications = orderId
+    ? data.notifications.filter((event) => event.orderId === orderId)
+    : data.notifications
+  const detailLinkedDeliveries = orderId
+    ? data.linkedDeliveries.filter((delivery) => delivery.orderId === orderId)
+    : []
 
   return (
     <div className="space-y-5">
       <Header
         title={
-          route === "new"
-            ? "New Order"
-            : route === "prepare"
-              ? "Prepare Orders"
-              : detailOrder
-                ? detailOrder.orderNo
-                : "Orders"
+          route === "create"
+            ? "Create Order"
+            : route === "picking"
+              ? "Order Picking"
+              : route === "ready"
+                ? "Ready Orders"
+                : route === "customers"
+                  ? "Order Customers"
+                  : detailOrder
+                    ? detailOrder.orderNo
+                    : "Orders"
         }
-        description="Create customer orders, prepare requested item weights, and move ready orders into pickup or delivery."
+        description="Manual ERP order flow from confirmed order to picking, ready, pickup, or delivery handoff."
         demoMode={data.demoMode}
-        canOperate={canOperateOrders}
       />
 
-      {route === "new" && canOperateOrders ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <NewCustomerOrderForm
-            profile={profile}
-            scopeOptions={data.scopeOptions}
+      {route === "list" ? (
+        <>
+          <FilterBar
+            filters={filters}
+            outlets={data.scopeOptions.outlets}
+            salespeople={data.scopeOptions.salespeople}
           />
-          <AddOrderItemForm orders={data.orders} stockItems={data.stockItems} />
-        </div>
-      ) : route === "new" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Order entry unavailable</CardTitle>
-            <CardDescription>
-              Your role can view customer orders, but routine order entry is
-              reserved for retail, processing, and admin users.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+          <KpiGrid kpis={data.dashboard.kpis} />
+          <Alerts alerts={data.dashboard.alerts} />
+        </>
       ) : null}
 
-      {route === "prepare" && canOperateOrders ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <PrepareOrderItemForm
-            items={editableOrderItems(data.items, data.orders)}
-          />
-          <MarkOrderReadyForm orders={data.orders} items={data.items} />
-          <ReleaseOrderReservationsForm
-            orders={data.orders}
-            reservations={data.reservations}
-          />
+      {route === "create" ? (
+        <CreateOrderForm
+          profile={profile}
+          customers={data.customers}
+          stockItems={data.stockItems}
+          scopeOptions={data.scopeOptions}
+        />
+      ) : null}
+
+      {route === "picking" ? (
+        <PickingForms orders={data.orders} items={data.items} />
+      ) : null}
+
+      {route === "ready" ? (
+        <div className="space-y-4">
+          <MarkReadyForm orders={data.orders} />
+          <ReadyOrderActions orders={data.orders} />
         </div>
-      ) : route === "prepare" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Order preparation unavailable</CardTitle>
-            <CardDescription>
-              Your role can view prepared order records, but preparation entry
-              is reserved for retail, processing, and admin users.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+      ) : null}
+
+      {route === "customers" ? (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <QuickCustomerForm profile={profile} outlets={data.scopeOptions.outlets} />
+          <Card>
+            <CardHeader>
+              <CardTitle>Customers</CardTitle>
+              <CardDescription>Searchable during order creation.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {data.customers.map((customer) => (
+                <div key={customer.id} className="rounded-md border p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium">{customer.name}</div>
+                    {customer.hasOverdueCredit ? (
+                      <Badge variant="warning">Credit warning</Badge>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {customer.phone || "-"} - {customer.categoryName}
+                  </div>
+                  <div className="mt-1">{customer.address || "-"}</div>
+                  {customer.remarks ? (
+                    <div className="mt-1 text-muted-foreground">
+                      {customer.remarks}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
       {detailOrder ? (
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>{detailOrder.customerName}</CardTitle>
-              <CardDescription>
-                {detailOrder.fulfillmentType} - {detailOrder.status} -{" "}
-                {detailOrder.outletName}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <div className="text-muted-foreground">Order date</div>
-                  <div className="font-medium">{detailOrder.orderDate}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Required</div>
-                  <div className="font-medium">
-                    {dateText(detailOrder.requiredDate)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Created by</div>
-                  <div className="font-medium">{detailOrder.createdByName}</div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">Department</div>
-                  <div className="font-medium">
-                    {detailOrder.departmentName}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">
-                    Failed delivery return
-                  </div>
-                  <div className="font-medium">
-                    {failedReturnText(detailOrder)}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {canOperateOrders ? (
-            <div className="grid gap-4 xl:grid-cols-3">
-              <AddOrderItemForm
+          <div className="grid gap-4 xl:grid-cols-2">
+            <OrderSummary order={detailOrder} />
+            <LinkedDeliverySummary
+              order={detailOrder}
+              linkedDeliveries={detailLinkedDeliveries}
+            />
+          </div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            <EditOrderBeforePickingForm order={detailOrder} />
+            <div className="space-y-4">
+              <PickingForms
                 orders={[detailOrder]}
-                stockItems={data.stockItems}
-                orderId={detailOrder.id}
+                items={detailItems}
+                selectedOrderId={detailOrder.id}
               />
-              <PrepareOrderItemForm
-                items={editableOrderItems(detailItems, [detailOrder])}
-              />
-              <MarkOrderReadyForm orders={[detailOrder]} items={detailItems} />
-              <ReleaseOrderReservationsForm
-                orders={[detailOrder]}
-                reservations={detailReservations}
-              />
+              <MarkReadyForm orders={[detailOrder]} />
+              <ReadyOrderActions orders={[detailOrder]} />
             </div>
-          ) : null}
+          </div>
         </div>
+      ) : route === "detail" ? (
+        <Card>
+          <CardContent className="py-8 text-sm text-muted-foreground">
+            Order was not found in your current scope.
+          </CardContent>
+        </Card>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Orders</CardTitle>
-          <CardDescription>Scoped customer orders.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            columns={orderColumns}
-            data={orderRows(data)}
-            getRowHref={(row) => `/orders/${row.id}`}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Order items</CardTitle>
-          <CardDescription>
-            Requested and prepared quantity/weight by item.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataTable columns={itemColumns} data={itemRows(detailItems)} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Stock reservations</CardTitle>
-          <CardDescription>
-            Picking-time reservations. Cancelled orders keep active reservations until staff releases them.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            columns={reservationColumns}
-            data={reservationRows(detailReservations)}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Notification hooks</CardTitle>
-          <CardDescription>
-            Placeholder events for future WhatsApp API delivery.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            columns={notificationColumns}
-            data={notificationRows(detailNotifications)}
-          />
-        </CardContent>
-      </Card>
+      <OrdersTableClient
+        orders={detailOrder ? [detailOrder] : data.orders}
+        items={detailItems}
+        reservations={detailReservations}
+        pickingEntries={detailPickingEntries}
+        notifications={detailNotifications}
+        reports={data.dashboard.reports}
+      />
     </div>
   )
 }

@@ -7,6 +7,7 @@ export const stockMovementTypes = [
   "OUTBOUND_PROCESSING",
   "OUTBOUND_SPOILED",
   "OUTBOUND_RETURN_SUPPLIER",
+  "OUTBOUND_SAMPLE_TESTING",
   "INBOUND_VOID",
   "TRANSFER_RECEIVED",
   "RETURN",
@@ -24,6 +25,7 @@ export const stockUnitStatuses = [
   "SOLD",
   "RETURNED",
   "HOLD",
+  "HOLD_RETURN_SUPPLIER",
   "INSPECTION",
   "VOIDED",
   "ADJUSTED_OUT",
@@ -98,7 +100,14 @@ export type Origin = {
 export type StockLocation = {
   id: string
   name: string
+  outletId?: string | null
+  isDefaultForOutlet?: boolean
   active: boolean
+}
+
+export type StockOutlet = {
+  id: string
+  name: string
 }
 
 export type Item = {
@@ -163,6 +172,24 @@ export type StockMovement = {
   weightKg: number
   referenceNo: string
   notes: string
+  createdAt: string
+}
+
+export type StockScanLog = {
+  id: string
+  barcode: string
+  action: string
+  success: boolean
+  message: string
+  scannedBy: string | null
+  createdAt: string
+}
+
+export type StockScanAlert = {
+  id: string
+  barcode: string
+  action: string
+  message: string
   createdAt: string
 }
 
@@ -251,6 +278,7 @@ export type StockTakeLine = {
   id: string
   sessionId: string
   itemId: string
+  brandId: string | null
   barcode: string | null
   itemName: string
   systemCount: number
@@ -259,6 +287,11 @@ export type StockTakeLine = {
   systemWeightKg: number
   actualWeightKg: number
   varianceWeightKg: number
+  exceptionType: "UNKNOWN_BARCODE" | "WRONG_LOCATION" | null
+  exceptionStatus: "PENDING" | "RESOLVED" | null
+  exceptionLocationId: string | null
+  sourceStockUnitId: string | null
+  resolvedStockUnitId: string | null
   notes: string
 }
 
@@ -310,12 +343,14 @@ export type StockPageData = {
   demoMode: boolean
   brands: Brand[]
   origins: Origin[]
+  outlets: StockOutlet[]
   locations: StockLocation[]
   items: Item[]
   units: StockUnit[]
   barcodeWeightRules: BarcodeWeightRule[]
   noBarcodeStock: NoBarcodeStock[]
   movements: StockMovement[]
+  scanLogs: StockScanLog[]
   balances: StockBalanceRow[]
   stockTakeSessions: StockTakeSession[]
   stockTakeLines: StockTakeLine[]
@@ -330,11 +365,20 @@ export type StockPageData = {
     negativeStockAlerts: NegativeStockAlert[]
     stockAgeAlerts: StockAgeAlert[]
     transferPendingAlerts: TransferPendingAlert[]
+    scanAlerts: StockScanAlert[]
   }
 }
 
 export type MovementFilters = {
   q?: string
   type?: string
+  movementType?: string
   location?: string
+  dateFrom?: string
+  dateTo?: string
+  item?: string
+  brand?: string
+  origin?: string
+  status?: string
+  user?: string
 }

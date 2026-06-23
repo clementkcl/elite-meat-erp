@@ -1,6 +1,7 @@
 export type StockActionState = {
   status: "idle" | "success" | "error"
   message: string
+  warning?: string
   itemId?: string
   stockUnitId?: string
   voidedStockUnitId?: string

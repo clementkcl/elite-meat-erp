@@ -62,3 +62,14 @@ export function outboundUnitBlockReason(unit: {
 
   return `Barcode ${unit.barcode} is ${unit.status} and cannot be outbounded.`
 }
+
+export function requireSubstitutionConfirmation(input: {
+  hasSubstitution: boolean
+  confirmed: boolean
+}) {
+  if (input.hasSubstitution && !input.confirmed) {
+    throw new Error(
+      "Confirm substitution before outbounding a barcode item that is not on the order."
+    )
+  }
+}

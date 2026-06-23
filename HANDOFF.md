@@ -6,6 +6,694 @@ This handoff reflects the codebase inspection for the existing frozen pork / mea
 
 The repository already contains a large dirty worktree from previous ERP work. Treat existing modified and untracked app files as in-progress work unless the owner explicitly asks to revert them.
 
+## 2026-06-23 - Delivery Task 10 future truck GPS preparation
+
+Task completed:
+
+- Prepared future truck GPS provider integration without building a live map dashboard.
+- Added delivery GPS provider schema for provider name, API base/reference, active flag, 10-second sync interval, last sync timestamp, and provider metadata.
+- Extended `vehicles` with optional GPS provider reference fields: provider id, provider vehicle ref, enabled flag, and metadata.
+- Extended `truck_gps_snapshots` with provider id/snapshot ref, outlet/team scope, heading, odometer, engine state, battery percent, raw payload, ETA/delay, fuel, sync timestamp, and 3-day expiry indexing.
+- Added `vehicle_current_locations` as the latest-location table for future manager map/customer tracking work.
+- Added RLS for provider/current-location/snapshot reads and writes. Non-manager tracking reads are restricted to linked `OUT_FOR_DELIVERY` deliveries; manager/admin/director follow delivery scope patterns.
+- Added service stubs in `lib/delivery/truck-gps.ts`:
+  - `syncTruckGpsSnapshot()`
+  - `getVehicleCurrentLocation()`
+  - `estimateDeliveryDelay()`
+  - `getTruckGpsTrail()`
+- The stubs do not call a real provider API and do not implement a live map. They are safe placeholders backed by the prepared schema.
+- Existing delivery vehicle queries now expose optional GPS provider metadata.
+
+Files changed in this pass:
+
+- `lib/delivery/types.ts`
+- `lib/delivery/queries.ts`
+- `lib/delivery/truck-gps.ts`
+- `supabase/migrations/202606230014_truck_gps_future_prep_v1.sql`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230014_truck_gps_future_prep_v1.sql`
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `node scripts/smoke-routes.mjs` - passed.
+
+Risks / remaining checks:
+
+- Migration `202606230014` has not been applied to a real Supabase project by Codex.
+- Real provider API credentials, authentication, webhook/polling job, 10-second scheduler, cleanup job for expired trails, and live map/dashboard UI remain future scope.
+- Supabase QA should verify RLS for driver/customer tracking only during `OUT_FOR_DELIVERY`, manager scoped review, admin provider writes, and 3-day trail reads.
+
+## 2026-06-23 - Order Module V1 stock reservation logic follow-up
+
+Task completed:
+
+- Implemented reservation-aware available stock for Orders V1: available stock now equals physical `stock_units` weight minus active, unexpired `order_stock_reservations`.
+- Kept reservation immediate on order creation and weight-first by item/location, without assigning exact barcodes.
+- Refactored order creation to insert order lines first, then reserve each line through shared reservation logic.
+- Stock-short orders still save successfully and mark `stock_not_enough` on the order, lines, and reservation rows.
+- Added server-side helpers/actions for reserving missing order stock, releasing reservations, expiring end-of-day reservations, and recalculating order stock status.
+- Updated cancellation to use the shared release helper in addition to the existing database trigger release safety net.
+- Added forward-only migration `202606230013_order_reservation_logic_v1.sql` with database helper functions for available stock, expiry, release, and recalculation.
+- Removed the old admin/director delete policy on `customer_orders` so app users cancel orders instead of deleting them.
+- Reused existing Stock Module tables: `stock_units`, `customer_order_items`, and `order_stock_reservations`.
+
+Files changed in this pass:
+
+- `lib/orders/actions.ts`
+- `supabase/migrations/202606230013_order_reservation_logic_v1.sql`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230013_order_reservation_logic_v1.sql`
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `node scripts/smoke-routes.mjs` - passed.
+
+Risks / remaining checks:
+
+- Migration `202606230013` has not been applied to a real Supabase project by Codex.
+- Real Supabase QA is still needed for reservation math under RLS with multiple simultaneous orders for the same item/location.
+- Real operations QA should verify end-of-day expiry timing in the Malaysia timezone and confirm whether expired reservations should be re-reserved automatically or manually recalculated the next day.
+
+## 2026-06-23 - Delivery Task 9 expenses submission and review
+
+Task completed:
+
+- Completed the Delivery Expenses V1 workflow for driver submission and manager/admin review.
+- Driver `/delivery/driver` Expenses tab now shows submitted expenses with Pending/Approved/Rejected status, amount, vehicle, receipt link, review note, and rejection reason.
+- Receipt upload remains camera/image-only and is stored in the `delivery-expenses` Supabase Storage bucket through server actions.
+- Added `/delivery/expenses` manager review page with filters for date, driver, vehicle, expense type, and status.
+- Manager/admin review supports approving pending expenses and rejecting pending expenses with a required rejection reason.
+- Review writes `reviewed_by`, `reviewed_at`, `review_note`, `rejected_reason`, and audit log entries.
+- Delivery dashboard now links to Expense Review.
+- Delivery detail expense cards now show signed receipt-photo links plus review/rejection notes.
+- Expense query layer now signs receipt URLs, maps driver/vehicle names, and respects delivery manager outlet/team scope while allowing admin/director global view.
+- Added forward-only migration for expense `outlet_id`, review notes, rejection reason, extra indexes, and updated expense RLS policies using outlet/team scope.
+- Made a minimal compile fix in `components/stock/workflow-forms.tsx` where `stockDamageReasons` was imported type-only but used as a runtime value.
+
+Files changed in this pass:
+
+- `app/(erp)/delivery/expenses/page.tsx`
+- `components/delivery/delivery-expense-review-page.tsx`
+- `components/delivery/driver-mobile-delivery-page.tsx`
+- `components/delivery/delivery-detail-page.tsx`
+- `components/delivery/manager-delivery-dashboard.tsx`
+- `lib/delivery/actions.ts`
+- `lib/delivery/queries.ts`
+- `lib/delivery/types.ts`
+- `components/stock/workflow-forms.tsx`
+- `supabase/migrations/202606230013_delivery_expense_review_v1.sql`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230013_delivery_expense_review_v1.sql`
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed after the unrelated stock import fix.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed; build output includes `/delivery/expenses`.
+- `node scripts/smoke-routes.mjs` - passed.
+
+Risks / remaining checks:
+
+- Migration `202606230013` has not been applied to a real Supabase project by Codex.
+- Real Supabase QA is still needed for manager expense review against outlet/team RLS and signed Storage receipt access.
+- Real phone QA is still needed for driver receipt capture/upload and expense history at phone width.
+
+## 2026-06-23 - Order Module V1 create order flow follow-up
+
+Task completed:
+
+- Finished the `/orders/create` flow in the existing Order Module path.
+- Kept order creation available to order-access staff roles, including general workers through the existing Orders module gate and server-action role list.
+- Kept Manual ERP orders immediately confirmed on save using the existing canonical `customer_orders.status = NEW` plus V1 display/status mapping to `CONFIRMED`.
+- Kept source as Manual ERP and removed delivery-job creation from the create step; delivery handoff remains after Ready.
+- Preserved immediate stock reservation by creating `order_stock_reservations` rows for every order line during order creation.
+- Added server validation that every order line has estimated kg so reservation is weight-first.
+- Added server validation that carton, packet, and quantity orders include quantity plus estimated kg.
+- Added server validation for pickup location fallback, internal transfer from/to locations, and different transfer source/destination.
+- Kept stock-short orders creatable, with `stock_not_enough` warning state on the order, line, and reservation.
+- Improved the create form with recent item buttons, item search, category filters, unit-aware quantity labels, required estimated kg, and clearer pickup/delivery/transfer date-time labels.
+- Kept total order price as the only price entry visible to normal workers.
+- Fixed a Delivery expense data/demo type mismatch needed to restore project typecheck without changing delivery workflow behavior.
+
+Files changed in this pass:
+
+- `components/orders/orders-forms.tsx`
+- `lib/orders/actions.ts`
+- `lib/delivery/data.ts`
+- `lib/delivery/demo-data.ts`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `node scripts/smoke-routes.mjs` - passed.
+
+Risks / remaining checks:
+
+- Real Supabase QA is still needed for RLS-scoped order creation by general workers, especially stock reservation inserts.
+- Real stock QA is still needed to compare available stock calculations against current reservation rows, because V1 currently checks stock-unit availability directly.
+- Phone-width QA is still needed for the recent item buttons and multi-line item entry form around 390px.
+
+## 2026-06-23 - Order Module V1 customer selection and quick customer create follow-up
+
+Task completed:
+
+- Kept staff order creation on the customer master list, with search by customer name and phone.
+- Kept quick customer creation inside `/orders/create`, requiring only name and phone when no existing customer is selected.
+- Added a clearer empty-search state so staff know to quick add when no customer matches.
+- Made delivery address a controlled order field and required it for DELIVERY orders even when the selected customer has no saved address.
+- Added server-side validation so DELIVERY orders cannot be created without a delivery address.
+- Removed Order Module V1 GPS capture from the order creation form; customer GPS remains owned by the Delivery Module.
+- Kept customer overdue credit as a warning only and did not expose outstanding amount.
+- Stored quick-add customer remarks and active status from the customer form.
+- Synced selected customer remarks into the order remarks field so pickers can see them on the order.
+- Passed customer remarks into linked delivery notes for driver visibility during delivery handoff.
+- Expanded order server-action access to match the Orders navigation/module access pattern for retail, delivery, processing, account, and admin roles.
+
+Files changed in this pass:
+
+- `components/orders/orders-forms.tsx`
+- `lib/orders/actions.ts`
+- `supabase/migrations/202606230010_order_delivery_integration_v1.sql`
+- `HANDOFF.md`
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real Supabase QA is still needed after applying the Order Module V1 migrations, especially for quick customer creation under outlet/team RLS.
+- Real phone-width QA is still needed for the customer search, quick-add, and delivery-address-required flow.
+
+## 2026-06-23 - Delivery Task 8 address issue and GPS suggestion approval
+
+Task completed:
+
+- Extended the driver Address Issue workflow on `/delivery/driver` and `/delivery/[id]`.
+- Driver Address Issue now attempts current phone GPS during submit, allows a better address, allows an optional short note, allows an optional photo, and saves only a pending suggestion.
+- Added `Save Current Location as Suggested Customer GPS` button to driver delivery views.
+- Drivers still cannot directly update customer master records.
+- Proof GPS continues to create a pending suggestion only and does not overwrite official customer GPS.
+- Added signed URL loading and photo previews for address/GPS suggestion photos in manager dashboard/detail views.
+- Manager/admin approval now approves or rejects pending suggestions.
+- On approval, official `customers.address`, `customers.latitude`, and `customers.longitude` update only when suggested values exist.
+- On reject, official customer master stays untouched.
+- Approval records `reviewed_by`, `reviewed_at`, and an audit log.
+- Added forward-only migration for optional address suggestion photo metadata.
+
+Files changed in this pass:
+
+- `components/delivery/delivery-detail-page.tsx`
+- `components/delivery/driver-mobile-delivery-page.tsx`
+- `components/delivery/manager-delivery-dashboard.tsx`
+- `lib/delivery/actions.ts`
+- `lib/delivery/queries.ts`
+- `lib/delivery/types.ts`
+- `supabase/migrations/202606230012_delivery_address_suggestion_photo_approval_v1.sql`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230012_delivery_address_suggestion_photo_approval_v1.sql`
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `node scripts/smoke-routes.mjs` - passed.
+
+Risks / remaining checks:
+
+- Migration `202606230012` has not been applied to a real Supabase project by Codex.
+- Real Supabase QA is still needed for manager/admin approval against customer RLS and outlet/team scope.
+- Real phone QA is still needed for Address Issue GPS allowed/denied, optional photo upload, and long-button wrapping at phone width.
+
+## 2026-06-23 - Order Module V1 navigation and dashboard follow-up
+
+Task completed:
+
+- Confirmed Order routes are present for `/orders`, `/orders/create`, `/orders/[id]`, `/orders/picking`, `/orders/ready`, and `/orders/customers`.
+- Kept Orders in the ERP sidebar and aligned the Orders page access gate with the sidebar role/module access pattern, including delivery, retail, processing, account, admin, and director view access where applicable.
+- Updated the mobile/home shortcut so `Orders` opens the Orders dashboard, with a separate `Create Order` shortcut for operators.
+- Updated the `/orders` KPI cards to match the V1 dashboard contract: Today Orders, Pending/Confirmed Orders, Stock Not Enough, Picking, Ready, Out for Delivery, Failed, and Completed/Picked Up.
+- Updated the status filter to use the V1 order status names, including `STOCK_NOT_ENOUGH`, `PICKING`, `READY`, and `PICKED_UP`.
+- Updated the order dashboard table/list to include Order No, Customer, Order Type, Required Date/Time, Outlet, Total Estimated Weight, Total Price, Stock Status, Order Status, Created By, and Actions.
+- Added mobile card rendering for the order list with badges and large action buttons.
+- Kept dashboard alerts for stock not enough, processing overdue, order ready, delivery failed, and credit overdue warning without showing any customer outstanding amount.
+- Did not add print/export to Orders V1.
+
+Files changed in this pass:
+
+- `components/dashboard/home-page.tsx`
+- `components/orders/orders-page.tsx`
+- `components/orders/orders-table-client.tsx`
+- `lib/orders/data.ts`
+- `HANDOFF.md`
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real authenticated phone-width QA is still needed for the `/orders` dashboard cards and filters.
+- Supabase role/module QA should verify Orders route visibility for retail, delivery, processing, account, admin, and director profiles.
+
+## 2026-06-23 - Delivery Task 7 detail page
+
+Task completed:
+
+- Built `/delivery/[id]` as the canonical Delivery detail page.
+- Added reusable `components/delivery/delivery-detail-page.tsx`.
+- Extended canonical delivery detail data to include linked orders, delivery items, proof photos with short-lived signed Storage URLs, address/GPS suggestions, expenses, and status timeline.
+- Added active delivery driver lookup for manager reassignment, scoped to delivery-role profiles.
+- Added manager/admin server actions to change delivery driver, change vehicle, cancel delivery, and approve/reject address/GPS suggestions.
+- Driver detail view is mobile-first and action-based:
+  - Accept Delivery
+  - Loaded
+  - Start Delivery
+  - Upload Delivered Proof
+  - Upload Failed Proof
+  - Address Issue
+  - Google Maps / Call / WhatsApp
+- Manager/admin view shows assignment controls, cancel action, address suggestion review, expenses, failed reason, status logs, and proof photos.
+- Updated manager dashboard Review links to open `/delivery/[id]`.
+- Driver-facing detail avoids price, stock cost/value, customer credit, profit, and accounting data. Expense amounts are shown only to manager/admin users on this detail page.
+- Route access uses the existing delivery module guard, Supabase RLS, and canonical `getDeliveryById`; unavailable/out-of-scope deliveries show a safe unavailable state.
+
+Files changed in this pass:
+
+- `app/(erp)/delivery/[id]/page.tsx`
+- `components/delivery/delivery-detail-page.tsx`
+- `components/delivery/manager-delivery-dashboard.tsx`
+- `lib/delivery/actions.ts`
+- `lib/delivery/queries.ts`
+- `lib/delivery/types.ts`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed; build output includes `/delivery/[id]`.
+- `node scripts/smoke-routes.mjs` - passed.
+
+Risks / remaining checks:
+
+- Real Supabase QA is still needed for driver RLS on available vs own deliveries, manager outlet/team scope, and admin/director visibility.
+- Real phone QA is still needed for camera capture, GPS allowed/denied, watermark readability, signed proof photo display, and action button ergonomics.
+- Address/GPS suggestion approval currently records approval/rejection only; it does not overwrite official customer GPS, as required by Delivery V1.
+
+## 2026-06-23 - Order Module V1 database layer follow-up
+
+Task completed:
+
+- Added forward-only migration `supabase/migrations/202606230011_order_module_v1_database_layer.sql`.
+- Kept the existing canonical order tables (`customer_orders`, `customer_order_items`, `order_stock_reservations`, `order_picking_entries`, `order_notification_events`) and added compatibility views named `orders`, `order_lines`, `order_reservations`, `order_pick_logs`, and `order_notifications`.
+- Added canonical V1 order status support through `customer_orders.order_v1_status` with the requested statuses: `CONFIRMED`, `STOCK_NOT_ENOUGH`, `PICKING`, `READY`, `OUT_FOR_DELIVERY`, `PICKED_UP`, `DELIVERED`, `FAILED`, and `CANCELLED`.
+- Added `order_status_logs` with scoped RLS and automatic insert/update status logging.
+- Added database-side reservation release when an order becomes `CANCELLED`.
+- Added end-of-day reservation expiry defaults and optional barcode/stock-unit assignment fields for later picking.
+- Expanded order-create/manage eligibility to order-access staff roles including retail, delivery, processing, account, and admin while preserving director view-only behavior.
+- Added indexes for order date, outlet, V1 status, customer, salesperson, order number, reservation expiry, reservation assignment, and status-log lookups.
+- Extended `customers` with `remarks` and updated seed customers/orders/items/reservations to populate V1 fields.
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Migration `202606230011` has not been applied to a real Supabase database by Codex.
+- Supabase migration QA should verify RLS behavior for retail, delivery, processing, account, admin, and director profiles.
+- The compatibility views are read-only by design; existing write paths continue using the established canonical tables and server actions.
+- Legacy seed order numbers remain `ORD-SEED-*` for existing demo references; production order creation still uses `next_customer_order_no_v1` for `ORD-YYYYMMDD[OutletCode][RunningNo]`.
+
+## 2026-06-23 - Order Module V1
+
+Task completed:
+
+- Built Order Module V1 on the existing Next.js/Supabase ERP structure.
+- Added `/orders/create`, `/orders/picking`, `/orders/ready`, and `/orders/customers`; kept `/orders/new` and `/orders/prepare` as legacy-compatible entry points.
+- Added dashboard filters for date, outlet, status, customer, and salesperson.
+- Added order KPIs, alerts, and reports for customer/item/staff/status, stock not enough, processing overdue, ready orders, delivery failed, and credit warnings.
+- Added mobile/home shortcut label `Orders` and expanded sidebar order navigation.
+- Added customer search and quick-add customer flow with name + phone.
+- Added Manual ERP confirmed-order creation with item lines, total order price, customer/staff remarks, delivery/internal-transfer fields, and category-filtered item selection.
+- Added immediate stock reservation at order creation by item estimated weight, with stock-not-enough warnings and end-of-day reservation expiry.
+- Added picking by barcode scan or manual weight, manual reason enforcement, duplicate barcode warning, and wrong-item mismatch recording.
+- Added 10kg ready tolerance, ready pickup/delivery handoff, pickup completion, and cancellation that releases active reservations.
+- Updated Delivery handoff trigger so delivery jobs are created only when delivery/internal-transfer orders become `READY_FOR_DELIVERY`.
+- Updated Orders smoke-route coverage from the previous picking-time reservation behavior to Order Module V1.
+
+Files changed in this pass:
+
+- `app/(erp)/orders/page.tsx`
+- `app/(erp)/orders/new/page.tsx`
+- `app/(erp)/orders/prepare/page.tsx`
+- `app/(erp)/orders/create/page.tsx`
+- `app/(erp)/orders/picking/page.tsx`
+- `app/(erp)/orders/ready/page.tsx`
+- `app/(erp)/orders/customers/page.tsx`
+- `components/orders/orders-page.tsx`
+- `components/orders/orders-forms.tsx`
+- `components/orders/orders-table-client.tsx`
+- `components/erp/app-shell.tsx`
+- `components/dashboard/home-page.tsx`
+- `lib/orders/actions.ts`
+- `lib/orders/data.ts`
+- `lib/orders/types.ts`
+- `scripts/smoke-routes.mjs`
+- `docs/BUSINESS_RULES.md`
+- `supabase/migrations/202606230008_order_module_v1.sql`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230008_order_module_v1.sql`
+
+Exact migration order:
+
+- Run all existing migrations in filename order through `supabase/migrations/202606230007_delivery_database_storage_rls_v1.sql`.
+- Then run `supabase/migrations/202606230008_order_module_v1.sql`.
+- Run `supabase/seed.sql` only for safe demo/staging data.
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run smoke` - Orders smoke-route section passed, then the full smoke chain failed in existing Stock coverage: `Acceptance 2 duplicate inbound missing: Remove it before saving.` This appears outside the Order Module V1 change.
+
+Risks / remaining checks:
+
+- Migration `202606230008` has not been applied to a real Supabase database by Codex.
+- Real role/module/outlet QA is still needed for retail, delivery, processing, account, admin, and director users.
+- Real stock availability and reservation behavior must be tested against staged stock units and active reservations.
+- Barcode picking currently records selected barcodes and picked weights for the order; it does not deduct stock or change stock-unit status. Existing outbound/delivery stock workflows still own physical stock deduction.
+- Order creation uses server actions with multiple Supabase writes; if a mid-action write fails, staging QA should verify whether partial records need cleanup before production use.
+- Real phone-width QA around 390px is still needed for create, picking, ready, and customer screens.
+
+## 2026-06-23 - Delivery Task 6 order integration
+
+Task completed:
+
+- Added the database integration function `create_delivery_from_customer_order` to create a canonical `deliveries` job from a customer order or return the existing linked delivery when one already exists.
+- Auto-creates a Delivery job when a new order is created with fulfillment type `DELIVERY` or `INTERNAL_TRANSFER`.
+- Reuses the same create-or-return-existing path when an order is marked ready for delivery, so the ready action does not create duplicate Delivery jobs.
+- Added a manual `Create Delivery` order action for delivery/internal-transfer orders that have no linked delivery yet.
+- Pickup orders are explicitly kept inside Orders and are blocked from Delivery job creation.
+- Added linked Delivery visibility to the Orders data loader and order detail page:
+  - delivery no
+  - delivery status
+  - driver
+  - proof status/count
+  - Delivery dashboard link
+- Order detail hides duplicate creation once a linked non-cancelled delivery exists.
+- Tightened routine order action/page access so delivery worker roles do not get general Orders access where price/order details are shown, and pending SQL no longer re-opens routine order management to delivery/account roles.
+- Delivery completion and failed proof status updates continue to flow through the Delivery service layer, which updates linked customer orders to `DELIVERED` or `FAILED` and does not deduct stock.
+- Fixed the narrow existing Orders typing issue for order status/manual pick reason mapping that previously blocked typecheck/build.
+
+Files changed in this pass:
+
+- `components/orders/orders-page.tsx`
+- `components/orders/orders-forms.tsx`
+- `lib/orders/actions.ts`
+- `lib/orders/data.ts`
+- `lib/orders/types.ts`
+- `lib/delivery/actions.ts`
+- `supabase/migrations/202606230008_order_module_v1.sql`
+- `supabase/migrations/202606230010_order_delivery_integration_v1.sql`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230010_order_delivery_integration_v1.sql`
+
+Exact migration order:
+
+- `202606230007_delivery_database_storage_rls_v1.sql`
+- `202606230008_order_module_v1.sql`
+- `202606230009_delivery_proof_uploaded_at_v1.sql`
+- `202606230010_order_delivery_integration_v1.sql`
+
+Commands run and results:
+
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run smoke` - Orders smoke checks passed, then the broader suite failed later on unrelated Stock acceptance coverage: `Acceptance 2 duplicate inbound missing: Remove it before saving.`
+
+Risks / remaining checks:
+
+- Migration `202606230010` has not been applied to a real Supabase project by Codex.
+- Real Supabase QA is still needed for delivery/internal-transfer order creation, manual duplicate prevention, ready action reuse, driver proof completion, failed proof completion, and role/outlet/team isolation.
+- Stock deduction remains intentionally outside delivery completion and must continue to be validated through the Stock outbound/loading flow.
+
+## 2026-06-23 - Delivery Task 5 manager delivery dashboard
+
+Task completed:
+
+- Rebuilt `/delivery` and `/delivery/dashboard` as a canonical manager Delivery dashboard.
+- Added manager/admin/director-only route access using the existing module guard; normal drivers should use `/delivery/driver`.
+- Added simple KPI cards for:
+  - Today Deliveries
+  - Pending / Available
+  - Loaded
+  - Out for Delivery
+  - Delivered Today
+  - Failed Today
+  - Overdue
+  - Total Weight Today
+  - Driver Performance
+  - Delivery Weight by Driver
+- Added GET filters for date, driver, status, customer, outlet, and team.
+- Added dashboard delivery list showing delivery no, customer, address, driver, status, total weight, item count, requested date, and a review action.
+- Added manager review sections for failed deliveries, GPS unavailable, address/GPS suggestions, late deliveries, and driver took too long.
+- Kept V1 scope explicit: no dispatch board was added.
+- Extended canonical Delivery dashboard query data with review queues, pending address/GPS suggestions, loaded/out-for-delivery driver metrics, and slow-delivery detection.
+- Dashboard access and data scope rely on existing auth/module checks plus Supabase RLS from Delivery Task 1:
+  - delivery manager sees own outlet/team through RLS
+  - admin/director follow the existing global ERP permission pattern
+  - driver role is not allowed into this manager dashboard route
+
+Files changed in this pass:
+
+- `app/(erp)/delivery/page.tsx`
+- `app/(erp)/delivery/dashboard/page.tsx`
+- `components/delivery/manager-delivery-dashboard.tsx`
+- `lib/delivery/queries.ts`
+- `lib/delivery/types.ts`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run lint` - passed, with one pre-existing/unrelated warning in `lib/orders/data.ts`: `closedStatuses` is assigned a value but never used.
+- `npm.cmd run typecheck` - failed on unrelated existing dirty Orders files:
+  - `lib/orders/data.ts(216,5): Type 'string' is not assignable to type CustomerOrderStatus.`
+  - `lib/orders/data.ts(217,34): Argument of type 'string' is not assignable to parameter of type CustomerOrderStatus.`
+  - `lib/orders/data.ts(354,34): manualReason may be null but is passed where ManualPickReason is required.`
+- `npm.cmd run build` - failed during TypeScript on the same unrelated `lib/orders/data.ts(216,5)` error.
+- Existing dev server returned HTTP 200 for `/delivery`.
+- Existing dev server returned HTTP 200 for `/delivery/dashboard`.
+
+Risks / remaining checks:
+
+- Typecheck/build are blocked by unrelated dirty Orders type errors; Delivery dashboard files were not the failing files.
+- Real Supabase role QA is still needed for delivery manager, admin, director, and driver access.
+- Outlet/team filter labels currently use IDs where scoped names are not loaded into the canonical Delivery DTO; future polish can add friendly outlet/team names.
+
+## 2026-06-23 - Delivery Task 4 proof photo, camera, GPS, and watermark
+
+Task completed:
+
+- Tightened the `/delivery/driver` proof workflow for canonical `deliveries`.
+- Delivered proof flow now opens the camera from the `Upload Delivered Proof` button, attempts phone GPS, watermarks the image, uploads it, and calls the canonical Delivered completion action.
+- Failed proof flow now shows big failed-reason buttons first, then opens the camera from `Upload Failed Proof`, attempts phone GPS, watermarks the image, uploads it, and calls the canonical Failed completion action.
+- Failed reasons are:
+  - Customer not available
+  - Wrong address
+  - Customer rejected
+  - Goods issue
+  - Vehicle issue
+  - Other
+- `Other` requires a remark in the UI and in server action validation.
+- V1 proof flow does not collect customer signature or receiver name.
+- Watermark now includes delivery no, customer name, driver name, date/time, and GPS coordinates or `GPS unavailable`.
+- Server action proof validation confirms a photo file exists, Failed has a failed reason, `Other` has remarks, delivery has started, and closed deliveries cannot be changed.
+- Canonical proof upload stores metadata in `delivery_proofs`: delivery id, proof kind, file path/object path, uploader, upload timestamp, latitude, longitude, GPS unavailable flag, and failed reason where applicable.
+- Added forward-only migration `202606230008_delivery_proof_uploaded_at_v1.sql` to add `delivery_proofs.uploaded_at`.
+- GPS failure or denied permission still allows completion and records `gps_unavailable`.
+- Linked customer order status continues to update to Delivered or Failed through the canonical service action.
+
+Files changed in this pass:
+
+- `app/(erp)/delivery/driver/page.tsx`
+- `components/delivery/driver-mobile-delivery-page.tsx`
+- `lib/delivery/actions.ts`
+- `lib/delivery/queries.ts`
+- `lib/delivery/types.ts`
+- `supabase/migrations/202606230008_delivery_proof_uploaded_at_v1.sql`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230008_delivery_proof_uploaded_at_v1.sql`
+
+Exact migration order:
+
+- Run all pending migrations in filename order.
+- `202606230008_delivery_proof_uploaded_at_v1.sql` must run after `202606230007_delivery_database_storage_rls_v1.sql`.
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- Existing dev server at `http://localhost:3000` returned HTTP 200 for `/delivery/driver`.
+
+Risks / remaining checks:
+
+- Migration `202606230008` has not been applied to a real Supabase project by Codex.
+- Real phone QA is still required for camera-only behavior, GPS allowed, GPS denied, watermark readability, Delivered proof, Failed proof, `Other` remark blocking, Storage upload, and linked order status updates.
+- Browser automation screenshot QA remains unavailable in this Windows sandbox.
+
+## 2026-06-23 - Delivery Task 3 driver mobile UI
+
+Task completed:
+
+- Rebuilt `/delivery/driver` as the main mobile-first driver page using canonical Task 2 Delivery services.
+- Added `components/delivery/driver-mobile-delivery-page.tsx` with big tabs and cards only; no dense tables.
+- Added driver tabs:
+  - Available
+  - My Deliveries
+  - Completed
+  - Failed
+  - Expenses
+- Available deliveries show today/unscheduled available canonical deliveries allowed by RLS; drivers can tap `Accept Delivery` with no typing.
+- Added optional `Change Vehicle` control before accept; default vehicle is still applied automatically when no override is chosen.
+- My Deliveries cards show customer name, delivery note, address, phone, total weight, item count, and status badge.
+- Driver cards intentionally do not render price, customer credit, stock cost, stock value, profit, finance, or accounting fields.
+- Added big card actions for Google Maps, Call, WhatsApp, Loaded, Start Delivery, Upload Delivered Proof, Upload Failed Proof, and Address Issue.
+- Google Maps opens coordinates when available, otherwise falls back to address search.
+- Proof upload uses camera file input, attempts phone GPS, watermarks the photo client-side, and calls the canonical Delivered/Failed completion actions.
+- Failed proof includes one-tap failed reason and remarks field for `Other`.
+- Completed and Failed tabs show proof/status summary cards.
+- Expenses tab uses big expense type buttons for Petrol, Parking, Toll, Vehicle Repair, and Other, plus amount, receipt photo, optional remark, and submit.
+- Added query helpers for active delivery vehicles and today driver expenses.
+
+Files changed in this pass:
+
+- `app/(erp)/delivery/driver/page.tsx`
+- `components/delivery/driver-mobile-delivery-page.tsx`
+- `lib/delivery/actions.ts`
+- `lib/delivery/queries.ts`
+- `lib/delivery/types.ts`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- Existing dev server at `http://localhost:3000` returned HTTP 200 for `/delivery/driver`.
+
+Risks / remaining checks:
+
+- Browser automation screenshot QA could not run because the local Node REPL/browser automation kernel was blocked by the Windows sandbox.
+- Real phone QA is still needed at around 390px width for camera capture, GPS allowed/denied, Google Maps, Call, WhatsApp, proof upload, failed proof, address issue, and expense receipt upload.
+- Real Supabase role/storage QA is still needed after the pending Delivery migrations are applied.
+
+## 2026-06-23 - Delivery Task 2 service layer and server actions
+
+Task completed:
+
+- Added canonical Delivery service/read layer for the Task 1 `deliveries` foundation.
+- Added `lib/delivery/queries.ts` as a server-only data access layer returning delivery-safe DTOs for available jobs, driver jobs, dashboard data, and delivery detail.
+- Extended `lib/delivery/types.ts` with canonical delivery, proof, linked-order, item, dashboard, GPS, manual-delivery, address-issue, and expense payload/result types.
+- Added server actions in `lib/delivery/actions.ts`:
+  - `createDeliveryFromOrder(orderId)`
+  - `createManualDelivery(payload)`
+  - `getAvailableDeliveries()`
+  - `getTodayDriverDeliveries()`
+  - `acceptDelivery(deliveryId)`
+  - `markDeliveryLoaded(deliveryId)`
+  - `startDelivery(deliveryId)`
+  - `uploadDeliveredProofAndComplete(deliveryId, file, gps)`
+  - `uploadFailedProofAndComplete(deliveryId, file, gps, failedReason, remarks)`
+  - `reportAddressIssue(deliveryId, payload)`
+  - `saveSuggestedCustomerGps(deliveryId, gps)`
+  - `createDeliveryExpense(payload)`
+  - `getDeliveryDashboard(filters)`
+  - `getDeliveryById(deliveryId)`
+- Added validation so delivery completion requires proof, failed completion requires failed reason, `Other` requires remarks, completion requires `OUT_FOR_DELIVERY`, and closed/cancelled deliveries cannot be updated by drivers.
+- Completion updates canonical `deliveries`, linked `delivery_orders`, and linked `customer_orders`; it does not touch Stock tables or stock deduction workflows.
+- Proof upload writes to `delivery-proofs`; expense upload writes to `delivery-expenses`.
+- GPS unavailable is allowed, recorded on proof/delivery rows, and audit-logged.
+- Captured proof GPS and manual GPS/address reports create `delivery_address_suggestions` only; official customer GPS is not overwritten.
+- Every canonical status transition writes `delivery_status_logs`.
+
+Files changed in this pass:
+
+- `lib/delivery/actions.ts`
+- `lib/delivery/queries.ts`
+- `lib/delivery/types.ts`
+- `HANDOFF.md`
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Service actions have not been exercised against a real Supabase project because Task 1 migrations are still pending in the shared migration queue.
+- Real role/outlet/team QA is still needed with driver, delivery manager, admin, and director users.
+- Real proof and expense upload QA is still needed to validate Storage RLS with the new buckets.
+- Delivery-from-order currently uses the customer order's existing customer name/phone/remarks/date fields; customer master address/GPS enrichment is left for the UI/integration pass.
+
 ## What Already Exists
 
 - Next.js App Router project with Supabase Auth and Supabase PostgreSQL.
@@ -4786,3 +5474,2195 @@ Remaining issues:
 Next recommended task:
 
 - In Supabase SQL Editor for `https://aikfqnbsshflbtuakwrz.supabase.co`, follow `docs/SUPABASE_MIGRATION_HANDOFF.md`, then test `/stock/inbound` on Vercel.
+
+## 2026-06-13 - Supabase CLI local setup attempt
+
+Task completed:
+
+- Checked Node version: `v24.16.0`, which satisfies the Node 20+ requirement.
+- Installed Supabase CLI as a local dev dependency with `npm.cmd install supabase --save-dev`.
+- Confirmed local CLI version with `npx.cmd supabase --version`: `2.106.0`.
+- Ran `npx.cmd supabase init` because `supabase/config.toml` was missing.
+- Confirmed target project ref before link attempt: `aikfqnbsshflbtuakwrz`.
+- Attempted link only to the confirmed target: `npx.cmd supabase link --project-ref aikfqnbsshflbtuakwrz`.
+- Link did not complete because the CLI needs authentication.
+- Did not run `supabase db push`.
+- Did not run `supabase db seed`.
+
+Files changed:
+
+- `package.json`
+- `package-lock.json`
+- `supabase/config.toml`
+- `supabase/.gitignore`
+- `docs/SUPABASE_MIGRATION_HANDOFF.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Exact migration order:
+
+- Still run every migration in filename order through `supabase/migrations/202606100053_stock_inbound_session_undo_v1.sql`.
+- Then run `supabase/seed.sql` only for safe demo/staging data.
+
+Commands run and results:
+
+- `node --version` - passed, `v24.16.0`.
+- `npm.cmd install supabase --save-dev` - passed after rerun with registry/cache access.
+- `npx.cmd supabase --version` - passed, `2.106.0`.
+- `npx.cmd supabase init` - passed.
+- `npx.cmd supabase link --project-ref aikfqnbsshflbtuakwrz` - stopped with `Access token not provided`.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issues:
+
+- Supabase login/access token is required before the project can be linked and migration status can be checked.
+- Migration `053` still has not been applied to the target project.
+
+Next exact command:
+
+- `npx.cmd supabase login`
+- Then `npx.cmd supabase link --project-ref aikfqnbsshflbtuakwrz`
+- Then `npx.cmd supabase migration list`
+
+## 2026-06-14 - Safe Stock Module QA preparation while Supabase login is blocked
+
+Task completed:
+
+- Prepared owner-facing Stock Module manual QA documents for later Vercel and local testing.
+- Added a Stock migration checklist for migration `053` and the Supabase CLI login/link gate.
+- Added a smoke coverage script that verifies the new owner QA docs, Stock Inbound undo migration expectations, label printing coverage, migration safety coverage, and no service-role frontend guard coverage.
+- Did not run live Supabase migrations.
+- Did not run `supabase db push`.
+- Did not run seed data.
+- Did not deploy production.
+
+Files changed:
+
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_MIGRATION_CHECKLIST.md`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `package.json`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Exact migration order:
+
+- No new migration was created in this pass.
+- Existing migration order remains every migration in filename order through `supabase/migrations/202606100053_stock_inbound_session_undo_v1.sql`.
+- Then run `supabase/seed.sql` only for a safe demo/staging reseed.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issues:
+
+- Supabase CLI still needs owner login with `npx.cmd supabase login`.
+- Remote migration history still cannot be checked until CLI login/link succeeds.
+- Migration `053` still needs to be applied to the target Supabase project before Stock Inbound undo works against that database.
+- Real phone camera QA still needs to be performed by the owner from the Vercel app.
+
+Next exact commands when owner regains access:
+
+- `npx.cmd supabase login`
+- `npx.cmd supabase link --project-ref aikfqnbsshflbtuakwrz`
+- `npx.cmd supabase migration list`
+- Only after confirming the link points to `aikfqnbsshflbtuakwrz`, run `npx.cmd supabase db push` if you are ready to apply pending migrations.
+
+## 2026-06-14 - Stock outbound, direct outbound, transfer hardening
+
+Task completed:
+
+- Improved Stock outbound by order with an order item checklist showing required quantity/weight versus scanned quantity/weight.
+- Added explicit substitution confirmation before order outbound can be confirmed with scanned items that are not on the order.
+- Kept original ordered items intact while scanned/substituted items continue to be recorded in outbound batch lines.
+- Expanded direct outbound UI and server schema for `PROCESSING`, `DAMAGE_SPOILAGE`, `RETURN_SUPPLIER`, `TRANSFER`, and `SAMPLE_TESTING`.
+- Made direct outbound remarks required.
+- Added direct damage/spoilage request creation from scanned barcodes with reason and photo path required; stock remains `IN_STOCK` but open damage requests block normal outbound.
+- Added direct return-supplier request creation from scanned barcodes with supplier name required; stock moves to `HOLD_RETURN_SUPPLIER` until manager approval or rejection.
+- Added sample/testing direct outbound support through `OUTBOUND_SAMPLE_TESTING`.
+- Updated transfer labels so workers select a destination outlet/default stock location.
+- Updated receive-transfer server action and RPC so wrong receiving location is allowed but logged as a wrong-location exception.
+- Added source and regression coverage for substitution confirmation, direct outbound hardening, return-supplier hold status, sample/testing movement type, migration safety, stock-take lock helper refactors, and role/scope helper refactors.
+
+Files changed:
+
+- `components/stock/workflow-forms.tsx`
+- `lib/stock/actions.ts`
+- `lib/stock/data.ts`
+- `lib/stock/demo-data.ts`
+- `lib/stock/outbound-rules.ts`
+- `lib/stock/types.ts`
+- `lib/stock/unit-status-rules.ts`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-migration-safety.mjs`
+- `scripts/stock-role-scope-coverage.mjs`
+- `scripts/stock-take-lock-coverage.mjs`
+- `scripts/stock-workflow-regression.mjs`
+- `docs/BUSINESS_RULES.md`
+- `docs/DATA_MODEL.md`
+- `docs/MODULE_STATUS.md`
+- `docs/STOCK_MIGRATION_CHECKLIST.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/SUPABASE_MIGRATION_HANDOFF.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606100054_stock_outbound_transfer_hardening_v1.sql`
+
+Exact migration order:
+
+- Run every migration in filename order through `supabase/migrations/202606100054_stock_outbound_transfer_hardening_v1.sql`.
+- Migration `054` must run after `053`.
+- Then run `supabase/seed.sql` only for safe demo/staging data.
+- No live migration, seed, db push, or production deploy was run by Codex.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issues:
+
+- Migration `054` has not been applied to the target Supabase project.
+- Return-supplier batch request creation still performs one request per barcode from the server action; each stock hold is RPC-protected, but a future fully atomic multi-line request RPC would be stronger for very large batches.
+- Order outbound's app/server action enforces substitution confirmation and open-request blocking before calling the order outbound RPC; direct database calls to older RPCs should still be validated during real RLS/RPC QA.
+- Destination outlet behavior depends on `stock_locations.outlet_id` being backfilled by matching stock location names to outlet names. Sites with multiple stock locations per outlet still need an explicit default-location model later.
+- Real Supabase RLS, phone camera, and Vercel QA remain required.
+
+First manual Vercel tests:
+
+- `/stock/outbound`: ready order, scan matching item, confirm checklist totals.
+- `/stock/outbound`: scan item not on order, confirm submit is blocked until substitution checkbox is ticked.
+- `/stock/outbound`: direct `PROCESSING` without remarks, confirm blocked; add remarks and confirm.
+- `/stock/outbound`: direct `SAMPLE/TESTING`, confirm `OUTBOUND_SAMPLE_TESTING` movement after migration `054`.
+- `/stock/outbound`: direct `DAMAGE/SPOILAGE`, confirm reason/photo are required and stock is not deducted immediately.
+- `/stock/outbound`: direct `RETURN_SUPPLIER`, confirm supplier is required and unit becomes `HOLD_RETURN_SUPPLIER`.
+- `/stock/transfer`: transfer one barcode and confirm status becomes `TRANSFER_PENDING`.
+- `/stock/receive-transfer`: receive at expected location and confirm normal receive.
+- `/stock/receive-transfer`: receive at wrong allowed location and confirm wrong-location exception is recorded.
+
+## 2026-06-14 - Transfer destination outlet-default completion
+
+Task completed:
+
+- Completed the remaining transfer destination gap from the Stock outbound/transfer goal.
+- Stock data now loads outlets alongside stock locations.
+- Stock locations now carry optional `outletId` and `isDefaultForOutlet`.
+- Transfer, receive-transfer, and transfer outbound screens now show a destination/receiving outlet selector and submit the resolved default stock location behind the scenes.
+- Server actions now check that transfer and receive-transfer locations are the selected outlet's default stock location.
+- Migration `054` now adds `stock_locations.is_default_for_outlet`, backfills one default stock location per outlet, adds a unique one-default-per-outlet index, adds `public.is_default_outlet_stock_location(uuid)`, and adds a trigger that blocks `TRANSFER_PENDING` destinations that are not an outlet default stock location.
+- The same stock-unit trigger now also blocks outbound/transfer status changes when a barcode has an open damage or return-supplier request, keeping the app-side request guard backed by database enforcement.
+- Receive-transfer RPC also rejects non-default receiving locations while still allowing wrong-location exceptions when the receiver chooses the wrong outlet's default stock location.
+- Transfer overdue alerts now explicitly call out sender outlet manager, receiver outlet manager, and admin.
+
+Files changed:
+
+- `components/stock/stock-page.tsx`
+- `components/stock/workflow-forms.tsx`
+- `lib/stock/actions.ts`
+- `lib/stock/data.ts`
+- `lib/stock/demo-data.ts`
+- `lib/stock/types.ts`
+- `scripts/smoke-routes.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `supabase/migrations/202606100054_stock_outbound_transfer_hardening_v1.sql`
+- `docs/BUSINESS_RULES.md`
+- `docs/DATA_MODEL.md`
+- `docs/MODULE_STATUS.md`
+- `docs/STOCK_MIGRATION_CHECKLIST.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/SUPABASE_MIGRATION_HANDOFF.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- No additional migration file was added in this continuation.
+- Existing un-applied migration `supabase/migrations/202606100054_stock_outbound_transfer_hardening_v1.sql` was expanded before application.
+
+Exact migration order:
+
+- Run every migration in filename order through `supabase/migrations/202606100054_stock_outbound_transfer_hardening_v1.sql`.
+- Migration `054` must run after `053`.
+- Then run `supabase/seed.sql` only for safe demo/staging data.
+- No live migration, seed, db push, or production deploy was run by Codex.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issues:
+
+- Migration `054` has not been applied to the target Supabase project.
+- Real Supabase RLS/RPC QA is still required to prove default transfer destination blocking and wrong-location receive exceptions with authenticated users.
+- The default stock location is automatically selected/backfilled by outlet name or first active stock location. If the business wants a different default for an outlet with multiple locations, update `stock_locations.is_default_for_outlet` after migration.
+
+First manual Vercel tests:
+
+- `/stock/transfer`: confirm destination dropdown shows outlets and displays the default stock location.
+- `/stock/transfer`: transfer to an outlet and verify the barcode becomes `TRANSFER_PENDING` with `transfer_to_location_id` set to that outlet's default stock location.
+- `/stock/receive-transfer`: receive at the expected outlet default stock location and confirm normal receive.
+- `/stock/receive-transfer`: receive at a different allowed outlet default stock location and confirm wrong-location exception is logged.
+- `/stock/dashboard`: force/inspect a transfer pending more than 3 days and confirm the alert names sender manager, receiver manager, and admin.
+
+## 2026-06-15 - Stock take exceptions and report/dashboard completion
+
+Task completed:
+
+- Added stock-take exception handling for unknown barcodes and wrong-location barcodes.
+- Unknown stock-take barcodes are recorded as pending `UNKNOWN_BARCODE` exceptions during counting and only create stock units after manager review and director approval.
+- Wrong-location stock-take barcodes are recorded as pending `WRONG_LOCATION` exceptions and only move to the counted location after director approval.
+- Migration `055` adds stock-take exception columns and replaces `public.approve_stock_take_session` so exception resolution, `STOCK_TAKE_ADJUSTMENT` movement creation, scan logs, and audit metadata happen in the director approval transaction.
+- Stock-take session cards now show pending/resolved exception badges.
+- Stock reports now include formal rows for stock balance, movement history, inbound, outbound, transfer pending, old stock 6 months, stock take variance, damage/spoilage, return supplier, and barcode scan errors.
+- Reports page now includes filters for date range, outlet/location, item, brand, origin, status, user, and movement type.
+- Dashboard KPIs now include pending damage approval, pending stock-take approval, duplicate scan attempts, and barcode decode errors, with a recent barcode scan alerts card.
+- Documented that stock-unit fields should not be directly edited after inbound; corrections must flow through movement/adjustment/void/return/stock-take workflows.
+
+Files changed:
+
+- `app/(erp)/stock/reports/page.tsx`
+- `components/stock/stock-page.tsx`
+- `components/stock/workflow-forms.tsx`
+- `lib/stock/actions.ts`
+- `lib/stock/data.ts`
+- `lib/stock/demo-data.ts`
+- `lib/stock/types.ts`
+- `scripts/smoke-routes.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-migration-safety.mjs`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `scripts/stock-report-coverage.mjs`
+- `scripts/stock-take-lock-coverage.mjs`
+- `supabase/migrations/202606100055_stock_take_exceptions_v1.sql`
+- `docs/BUSINESS_RULES.md`
+- `docs/DATA_MODEL.md`
+- `docs/MODULE_STATUS.md`
+- `docs/STOCK_MIGRATION_CHECKLIST.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/SUPABASE_MIGRATION_HANDOFF.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606100055_stock_take_exceptions_v1.sql`
+
+Exact migration order:
+
+- Run every migration in filename order through `supabase/migrations/202606100055_stock_take_exceptions_v1.sql`.
+- Migration `055` must run after `054`.
+- Run `supabase/seed.sql` only for safe demo/staging data.
+- No live migration, seed, db push, or production deploy was run by Codex.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed after fixing stock-age report field names.
+- `npm.cmd run build` - passed.
+
+Remaining issues:
+
+- Migrations `053`, `054`, and `055` have not been applied to the target Supabase project from this session.
+- Real Supabase RLS/RPC QA is still required for stock-take unknown/wrong-location exceptions with real authenticated manager/director users.
+- Unknown stock-take barcodes currently create zero-weight stock units unless a counted weight is captured later; this is acceptable for exception tracking but should be reviewed before production stock valuation.
+- Report filters are text/date filters over the current stock report row data; a richer dedicated reports table/query layer can be added later.
+
+First manual Vercel tests:
+
+- `/stock/stock-take`: scan an unknown barcode and confirm an `UNKNOWN BARCODE` exception badge appears without creating a stock unit immediately.
+- `/stock/stock-take`: scan a same item+brand barcode from another location and confirm a `WRONG LOCATION` exception badge appears.
+- `/stock/stock-take`: submit, manager review, and director approve; verify unknown barcode stock is created and wrong-location stock moves only after approval.
+- `/stock/reports`: confirm report rows include movement history, inbound, outbound, transfer pending, old stock, stock take variance, damage/spoilage, return supplier, and barcode scan errors.
+- `/stock/reports`: test date range, location, item, brand, origin, status, user, and movement type filters; export CSV and print/save PDF.
+- `/stock/dashboard`: confirm duplicate scan/decode-error and pending approval KPI cards appear when matching scan/request data exists.
+
+## 2026-06-23 - Orders runtime client-boundary fix
+
+Task completed:
+
+- Fixed the Orders page runtime error caused by passing `getRowHref={(row) => ...}` from the server-rendered Orders page into the client `DataTable`.
+- Added a nearby `OrdersTableClient` wrapper with `"use client"` for Orders table columns, row formatting, and row navigation callback.
+- Kept `components/orders/orders-page.tsx` as the server-side data loading/composition component.
+- Preserved the existing Orders cards, table labels, row navigation behavior, and detail filtering.
+
+Files changed:
+
+- `components/orders/orders-page.tsx`
+- `components/orders/orders-table-client.tsx`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issues:
+
+- Browser verification of `/orders` and `/orders/[id]` row click navigation was not run in this pass.
+
+## 2026-06-23 - Stock unit table client-boundary fix
+
+Task completed:
+
+- Fixed the Stock balance page runtime risk caused by passing `getRowHref={(row) => ...}` from server-rendered `StockPage` into the client `DataTable`.
+- Confirmed `components/stock/data-table.tsx` already starts with `"use client"` and owns row click, keyboard navigation, `tabIndex`, and router push behavior.
+- Added a nearby `StockUnitsTableClient` wrapper with `"use client"` for barcode stock-unit table columns and row navigation.
+- Kept `components/stock/stock-page.tsx` as the server-side data loading/composition component.
+- Preserved the existing Stock balance UI and stock-unit row navigation to `/stock/units/[id]`.
+
+Files changed:
+
+- `components/stock/stock-page.tsx`
+- `components/stock/stock-units-table-client.tsx`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issues:
+
+- Browser verification of `/stock/balance` row click navigation to `/stock/units/[id]` was not run in this pass.
+
+## 2026-06-23 - Stock schema repair migration for missing request tables
+
+Task completed:
+
+- Added a forward-only idempotent repair migration for Stock deployments that missed `stock_damage_requests` or related Stock workflow schema.
+- Did not edit old migration files.
+- The repair migration safely ensures current Stock code dependencies exist for:
+  - `stock_damage_requests`
+  - `stock_return_supplier_requests`
+  - `stock_take_sessions`
+  - `stock_take_lines`
+  - `stock_movements`
+  - `barcode_scan_logs`
+- The migration adds missing enum values, table columns, indexes, RLS policies, update triggers, and the Stock approval/hold RPCs needed by current `lib/stock/data.ts` and `lib/stock/actions.ts`.
+- Updated smoke coverage so client-wrapper table row links in Orders and Stock are checked in their new boundary-safe files.
+
+Files changed:
+
+- `supabase/migrations/202606230001_stock_schema_repair_v1.sql`
+- `scripts/smoke-routes.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230001_stock_schema_repair_v1.sql`
+
+Exact migration order:
+
+- Run all existing migrations in filename order through `supabase/migrations/202606100055_stock_take_exceptions_v1.sql`.
+- Then run `supabase/migrations/202606230001_stock_schema_repair_v1.sql`.
+- This repair migration is idempotent and uses non-destructive `create table if not exists`, `alter table add column if not exists`, indexes, policies, and `create or replace function`.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issues:
+
+- The repair migration was not applied to the live Supabase project in this pass.
+- After applying it, refresh PostgREST schema cache or restart/redeploy if the app still reports stale schema metadata.
+
+## 2026-06-23 - Stock mobile-first worker UX pass
+
+Task completed:
+
+- Improved only Stock-module worker UX and directly related Stock server/migration/test/docs surfaces.
+- Added a general-worker Stock dashboard mode that shows six big action buttons only: Inbound, Outbound, Transfer, Receive, Return / Damage, and Stock Take.
+- Restricted Stock reports/settings routes to manager/admin/director roles while keeping routine stock operation routes available to stock operators.
+- Hardened continuous inbound for mobile workers:
+  - session setup locks product, brand, origin, location, and source after the first saved scan;
+  - offline scanning/saving is blocked with short worker-facing messages;
+  - duplicate barcode and no-weight barcode blocks remain immediate and red;
+  - generated internal numeric label barcodes now auto-submit/save the stock unit, then guide the worker to print/attach the label;
+  - current-session count, weight, previous scan, undo, and finish-summary behavior remains intact.
+- Added direct `SALES` as a direct outbound option while keeping damage/spoilage and return-supplier as request/approval workflows.
+- Changed receive-transfer MVP behavior so wrong receiving locations are blocked instead of accepted as wrong-location exceptions.
+- Changed active stock-take item+brand/location behavior to warning-only audit logging in app actions instead of hard-blocking routine stock operations.
+- Let stock operators create scoped draft stock-take sessions while preserving manager review and director final approval gates.
+- Added stock-take scan progress display with barcode count and total scanned weight.
+- Added forward migration `202606230002_stock_mobile_worker_mvp_v1.sql` for the stock-take create RLS policy and receive-transfer RPC hardening.
+- Updated Stock QA docs and smoke/static coverage scripts for the new mobile MVP rules.
+
+Files changed in this pass:
+
+- `components/stock/stock-page.tsx`
+- `components/stock/workflow-forms.tsx`
+- `lib/stock/actions.ts`
+- `supabase/migrations/202606230002_stock_mobile_worker_mvp_v1.sql`
+- `scripts/smoke-routes.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-label-coverage.mjs`
+- `scripts/stock-migration-safety.mjs`
+- `scripts/stock-report-coverage.mjs`
+- `scripts/stock-rls-policy-coverage.mjs`
+- `scripts/stock-role-scope-coverage.mjs`
+- `scripts/stock-take-lock-coverage.mjs`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `docs/BUSINESS_RULES.md`
+- `docs/DATA_MODEL.md`
+- `docs/MODULE_STATUS.md`
+- `docs/STOCK_COMPLETION_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_QA_RUNBOOK.md`
+- `docs/STOCK_MIGRATION_CHECKLIST.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230002_stock_mobile_worker_mvp_v1.sql`
+
+Exact migration order:
+
+- Run all existing migrations in filename order through `supabase/migrations/202606100055_stock_take_exceptions_v1.sql`.
+- Run `supabase/migrations/202606230001_stock_schema_repair_v1.sql`.
+- Run `supabase/migrations/202606230002_stock_mobile_worker_mvp_v1.sql`.
+- Do not run live migrations until Supabase CLI is logged in and linked to the confirmed project.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issues and risks:
+
+- Migration `202606230002_stock_mobile_worker_mvp_v1.sql` was not applied to live Supabase in this pass.
+- The transfer UI still uses the existing outlet-default stock-location selector internally, even though labels now say destination stock location. This preserves current database constraints but should be revisited if non-default destination locations are required.
+- Bluetooth label printing still relies on browser/OS print/download flow; real phone + Bluetooth printer QA is still required.
+- Real phone camera QA at about 390px width is still required for inbound, outbound, transfer, receive-transfer, return/damage, and stock-take scanning.
+- Existing dirty worktree files from earlier tasks were left untouched unless they were Stock/mobile coverage files needed for this pass.
+
+Next recommended task:
+
+- Apply migrations through `202606230002` in a confirmed Supabase project, then run Vercel/mobile QA starting with `/stock`, `/stock/inbound`, `/stock/outbound`, `/stock/transfer`, `/stock/receive-transfer`, and `/stock/stock-take`.
+
+## 2026-06-23 - Stock mobile UX audit only
+
+Task completed:
+
+- Audited the current Stock module only against the active Stock Mobile UX goal.
+- Did not implement new workflow changes in this pass.
+- Verified current code paths for:
+  - Stock home/dashboard
+  - Inbound
+  - Outbound
+  - Transfer
+  - Receive-transfer
+  - Return/Damage
+  - Stock Take
+  - Label print/reprint
+  - Scanner component
+  - Worker role visibility
+
+Already implemented:
+
+- Stock worker dashboard mode exists and shows six large shortcut buttons: Inbound, Outbound, Transfer, Receive, Return / Damage, and Stock Take.
+- Stock route guards restrict `/stock/reports` and `/stock/settings` to advanced roles in `components/stock/stock-page.tsx`.
+- Inbound has recent templates, product search, quick item create, required brand/origin controls, default/editable location, auto batch number, continuous camera scan, duplicate blocking, no-weight blocking, saved count/weight, previous saved scan, finish summary, current-session undo, and PDF/print label output.
+- Inbound locks item/brand/origin/location/source after the first saved scan until the worker finishes the session.
+- Inbound blocks scan/save/generate label when offline with short non-technical messages.
+- Generated internal label barcode submits the inbound form immediately and then shows the saved label for print/export.
+- Outbound supports order-based and direct modes. Direct options include `SALES`, `PROCESSING`, `DAMAGE_SPOILAGE`, `RETURN_SUPPLIER`, `TRANSFER`, and `SAMPLE_TESTING`.
+- Order outbound has checklist, scan batch, missing/blocked barcode warnings, substitution warning/confirmation checkbox, and allowed weight difference warning.
+- Damage/spoilage requires a photo path and creates a request for manager/director approval instead of immediate deduction.
+- Receive-transfer server action and migration `202606230002_stock_mobile_worker_mvp_v1.sql` block wrong receiving locations.
+- Stock take can be created by stock operators, scan is barcode-only, wrong item/brand remains server-blocked, unknown barcode is recorded as exception, progress count/weight is shown, and manager/director signatures are required for review/approval.
+- Scanner component uses `@zxing/browser`, prefers rear camera, stops stream on close/unmount, shows camera/permission guidance, keeps manual fallback, recent scans, and success vibration/beep where supported.
+- Stock unit detail page supports mobile-accessible label reprint/export without requiring a reason.
+
+Missing or incomplete:
+
+- Sidebar and ERP Home still expose Stock Reports to all stock roles, even though the Stock page route guard blocks workers. This conflicts with "hide advanced reports/settings from workers" and creates confusing worker navigation.
+- Transfer and receive-transfer labels say "stock location", but the control is still `DestinationOutletSelect` and submits the destination outlet's default stock location. This does not fully satisfy "select destination stock location" if non-default locations are required.
+- Bluetooth label printer flow is not implemented as an explicit primary path. Current behavior is browser `window.print()` / PDF fallback.
+- Inbound still exposes many typing-heavy setup fields on the main worker screen: weight rule positions, fixed kg, batch no, reference no, notes, and quick item create. It works, but is not yet the minimal worker flow.
+- Previous saved scan summary shows weight and barcode, but not the previous successful item name in the dedicated previous-scan banner.
+- Stock take create still requires selecting item/brand/location from full dropdowns; no recent/simple worker buttons yet.
+- Transfer/receive/return pages still use generic form cards and smaller submit controls; not fully optimized for one-handed mobile scanning.
+- Real 390px browser/device QA was not run in this pass.
+- Real phone camera and Bluetooth/PDF label printer QA remain unverified.
+- Migration `202606230002_stock_mobile_worker_mvp_v1.sql` has not been applied to the live Supabase project.
+
+Files that need likely next changes:
+
+- `components/erp/app-shell.tsx` - hide Stock Reports from worker sidebar roles and optionally simplify worker Stock nav labels.
+- `components/dashboard/home-page.tsx` - hide Stock Reports home shortcut from workers.
+- `components/stock/workflow-forms.tsx` - simplify mobile inbound setup, add previous item name to previous-scan banner, improve transfer/receive/return scan-first layout, and add explicit label printer/PDF fallback wording.
+- `components/stock/stock-page.tsx` - keep worker dashboard minimal and consider hiding advanced table panels on worker operation pages.
+- `components/stock/barcode-scanner.tsx` - real-device QA and possible small mobile scanner affordance improvements.
+- `components/stock/stock-unit-detail.tsx` - label reprint QA and possible printer-friendly mobile copy.
+- `lib/stock/actions.ts` - no immediate safety conflict found, but keep server-side validation checks when UX is simplified.
+- `docs/STOCK_REMOTE_QA_VERCEL.md` and `docs/STOCK_TEST_LIST_FOR_OWNER.md` - add explicit 390px, camera, and printer QA evidence steps after the next UX pass.
+
+Business rule conflicts found:
+
+- Worker report visibility is inconsistent: `/stock/reports` route is advanced-role guarded, but sidebar and home shortcuts still advertise Stock Reports to general workers.
+- Transfer destination UX is not fully aligned with "select destination stock location"; current implementation is destination outlet/default stock location.
+- Bluetooth label printer being primary is not actually implemented; only browser print/PDF is present.
+- Inbound does not fully meet "avoid typing as much as possible" because advanced fields are visible during normal worker scanning.
+- Dedicated previous scan display does not include product name.
+
+Recommended implementation order:
+
+1. Fix worker visibility only: hide Stock Reports from sidebar and Home shortcuts for general workers while preserving manager/admin/director access.
+2. Simplify inbound mobile worker screen: keep recent templates/search/scanner/summary prominent, move advanced weight-rule/batch/reference/notes fields behind a compact settings area, and add product name to previous-scan banner.
+3. Improve label print UX copy and controls: make "Print label" primary, explain Bluetooth printer/browser print, keep PDF/export fallback, and test reprint from stock unit detail.
+4. Decide transfer destination model: either rename honestly to outlet/default location or implement true stock-location destination selection with matching server/RLS/RPC support.
+5. Tighten transfer/receive/return/stock-take mobile layouts: larger primary scan/submit actions, less typing, clearer success/error panels.
+6. Run real 390px browser QA and phone camera/label-printer QA, then update Stock QA docs with evidence.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issues:
+
+- No code changes were made for the audit findings in this pass.
+- Existing dirty worktree files from prior Stock/ERP work remain; this pass only appended the audit to `HANDOFF.md`.
+
+## 2026-06-23 - Stock mobile home worker visibility
+
+Task completed:
+
+- Improved the Stock mobile home only, plus directly related worker navigation visibility.
+- General worker `/stock/dashboard` now renders only the six large Stock action buttons:
+  - Inbound
+  - Outbound
+  - Transfer
+  - Receive
+  - Return / Damage
+  - Stock Take
+- Removed the Stock dashboard page header and alert/KPI/report surfaces from the general-worker Stock dashboard path so workers do not see value/cost/finance/report-style content there.
+- Kept manager/admin/director dashboard behavior intact, including existing KPI/report access where roles allow it.
+- Hid Stock Reports from general-worker sidebar navigation by changing its nav roles to manager/admin/director roles.
+- Added explicit route-access entries for `/stock/reports` and `/stock/settings` in the app shell before the generic `/stock` rule.
+- Hid Stock Reports from general-worker ERP Home shortcuts while preserving manager/admin/director visibility.
+- Updated Stock QA docs to include 390px worker-home checks and report/settings visibility checks.
+
+Files changed in this pass:
+
+- `components/stock/stock-page.tsx`
+- `components/erp/app-shell.tsx`
+- `components/dashboard/home-page.tsx`
+- `docs/MODULE_STATUS.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Remaining issues:
+
+- Real 390px browser/phone verification was not run in this pass.
+- Transfer destination UX, inbound field simplification, Bluetooth label-printer flow, and previous-scan product-name display remain open Stock Mobile UX follow-ups.
+
+## 2026-06-23 - Stock inbound mobile UX simplification
+
+Task completed:
+
+- Improved Stock Inbound mobile UX only.
+- Kept recent inbound templates and product search as the first worker setup path.
+- Kept brand and origin required before scanning/saving.
+- Kept location defaulting to the worker stock location while editable before the first saved scan.
+- Kept one inbound session locked to item + brand + origin + location after the first saved scan until `Finish Inbound Session`.
+- Made camera-decoded successful scans submit continuously without requiring a separate auto-save checkbox.
+- Moved quick product creation behind a compact `New product` panel.
+- Moved inbound source, weight rule, batch number, reference, notes, and save-rule controls under `Weight rule and notes`.
+- Added a clearer `Previous scan` card that shows product name, weight, and barcode.
+- Kept saved scan count and saved total weight visible near the scan controls.
+- Shortened duplicate and label-weight messages for workers.
+- Updated Stock owner/remote QA docs for 390px inbound testing, previous product/weight display, short duplicate warning, and advanced-field placement.
+- Updated smoke coverage to check the new inbound labels.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/smoke-routes.mjs`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera testing was not performed in this pass.
+- Browser print/Bluetooth label-printer behavior still needs real device QA.
+- Current inbound page is simpler, but `components/stock/workflow-forms.tsx` remains a large file and should only be split after critical workflow tests are stable.
+
+## 2026-06-23 - Stock label generation and reprint mobile UX
+
+Task completed:
+
+- Improved Stock label generation and reprint UX only.
+- Added a reusable Stock label component for preview, print actions, print note, and print-only label output.
+- Kept current label size at `50mm x 30mm` and structured the component with a `stockLabelSizes` map so more sizes can be added later.
+- Kept generated internal label behavior aligned with the current inbound flow: worker enters weight, taps `Generate internal label`, and the generated numeric barcode saves stock immediately through the inbound action.
+- Changed label actions to make `Print label` the primary worker action and `PDF fallback` the secondary action.
+- Added worker-facing copy explaining that phone/browser print should be used for a Bluetooth label printer when supported, and PDF should be used if Bluetooth printing is unavailable or unreliable.
+- Reused the same label preview/print path for old stock-unit label reprint.
+- Confirmed old-label reprint does not ask workers for a reason.
+- Updated Stock QA docs with phone-width generated-label, Bluetooth print sheet, PDF fallback, and old-label reprint checks.
+- Updated label smoke/coverage scripts for the shared label component and new worker copy.
+
+Files changed in this pass:
+
+- `components/stock/stock-label.tsx`
+- `components/stock/workflow-forms.tsx`
+- `components/stock/stock-unit-detail.tsx`
+- `scripts/smoke-routes.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-label-coverage.mjs`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Browser Bluetooth printing support is device/browser dependent; the app now documents this and keeps PDF fallback.
+- The printed barcode visual remains the existing simple numeric/readable label presentation. A true barcode-rendering dependency can be considered later if physical scanner readability requires it.
+- Real phone, Bluetooth printer, and PDF-save QA were not performed in this pass.
+
+## 2026-06-23 - Stock outbound mobile UX
+
+Task completed:
+
+- Improved Stock Outbound mobile UX only.
+- Removed automatic fallback to the first ready order; order outbound now requires the worker to select a ready order first.
+- Replaced outbound mode/type dropdown-first flow with large mobile-friendly buttons for:
+  - Order outbound
+  - Direct outbound
+  - Sales
+  - Processing
+  - Transfer
+  - Sample/Testing
+  - Damage/Spoilage
+  - Return Supplier
+- Kept server-side validation and existing outbound actions unchanged.
+- Kept direct outbound available for general stock workers.
+- Added short worker-facing hints:
+  - Sales: no customer name
+  - Sample/Testing: no photo
+  - Damage/Spoilage: photo required
+- Kept damage/spoilage as approval request only; the UI now says stock goes to approval.
+- Kept substitution as warning/confirmation only and removed any need for a typed substitution reason.
+- Kept meat weight differences warning-only with short copy.
+- Shortened blocked/invalid outbound messages for mobile workers.
+- Made manual `Add barcode` button larger for phone use.
+- Updated Stock QA docs for mobile outbound, direct outbound, substitution, weight difference, damage photo, and approval-only behavior.
+- Updated smoke/coverage scripts to guard the new worker-facing outbound copy.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/smoke-routes.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone-width QA at 390px was not performed in this pass.
+- Direct damage photo still uses the current photo reference/path input; actual camera/file upload remains a broader Storage/upload workflow.
+- Server-side direct outbound remarks remain required.
+
+## 2026-06-23 - Stock transfer and receive-transfer mobile UX
+
+Task completed:
+
+- Updated Stock transfer and receive-transfer only.
+- Changed the destination selector wording so workers choose a stock location first, with outlet shown as supporting context.
+- Reworked `/stock/transfer` into a simple mobile flow:
+  - choose destination stock location
+  - scan barcode
+  - tap `Send transfer`
+- Reworked `/stock/receive-transfer` into a simple mobile flow:
+  - choose receiving stock location
+  - scan barcode
+  - tap `Receive barcode`
+- Moved reference number and notes behind a compact `Reference and notes` panel.
+- Added large full-width final action buttons for phone use.
+- Kept server-side action validation and access checks intact.
+- Updated the server action wrong-location message to include the expected destination location:
+  - `Wrong location. This barcode must be received at [destination location].`
+- Added forward-only migration `202606230003_stock_receive_transfer_wrong_location_block_v1.sql` to replace the receive-transfer RPC and block wrong-location receive at the database layer.
+- Confirmed the new migration keeps `wrongLocationException` as `false` in audit metadata and does not create a wrong-location receive exception path.
+- Updated Stock QA docs and migration checklists through migration `202606230003`.
+- Updated smoke/coverage scripts for the new strict wrong-location receive behavior.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `lib/stock/actions.ts`
+- `supabase/migrations/202606230003_stock_receive_transfer_wrong_location_block_v1.sql`
+- `scripts/stock-migration-safety.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_MIGRATION_CHECKLIST.md`
+- `docs/SUPABASE_MIGRATION_HANDOFF.md`
+- `docs/DATA_MODEL.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230003_stock_receive_transfer_wrong_location_block_v1.sql`
+
+Exact migration order:
+
+- Run every migration in filename order through `supabase/migrations/202606230003_stock_receive_transfer_wrong_location_block_v1.sql`.
+- Migration `202606230003` must run after `202606230002`.
+- Run `supabase/seed.sql` only for safe demo/staging data.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Migration `202606230003` has not been applied to the target Supabase project by Codex.
+- Real 390px phone QA was not performed in this pass.
+- Transfer destination choices are presented as stock locations, while existing database validation still requires outlet-default stock locations where outlet defaults are configured.
+
+Latest re-check:
+
+- Re-verified this transfer/receive-transfer slice after the Stock Mobile UX request.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+- No additional app behavior changes were needed during the re-check.
+
+## 2026-06-23 - Stock take mobile UX
+
+Task completed:
+
+- Improved Stock Take mobile UX only.
+- Kept server-side stock-take validation and approval gates intact.
+- Added shared online/offline status handling to the reusable barcode scanner field and Stock Take scan form.
+- Stock Take scanning now blocks while offline with a short red message.
+- Stock Take create copy now tells workers to choose one location, item, and brand, then scan only barcodes for that scope.
+- Added warning copy that other stock operations warn only for the selected item + brand + location.
+- Stock Take scan form now shows:
+  - selected counting scope
+  - barcode count progress
+  - weight progress
+  - barcode-only count
+  - wrong item/brand blocked
+  - unknown barcode exception
+- Stock Take scan submit button is full-width and mobile-friendly.
+- Stock Take approval action buttons are easier to tap on mobile.
+- Manual count guidance now says missing barcode adjustment waits for manager review and director approval.
+- Updated Stock QA docs for 390px stock-take testing, offline block, wrong item/brand block, unknown exception, progress, and approval gates.
+- Updated smoke/coverage checks for the new stock-take worker wording.
+
+Files changed in this pass:
+
+- `components/stock/barcode-scanner.tsx`
+- `components/stock/workflow-forms.tsx`
+- `scripts/smoke-routes.mjs`
+- `scripts/stock-take-lock-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real 390px phone QA was not performed in this pass.
+- Stock Take still uses dropdowns for session/location/item/brand selection; a future pass could add recent/common session shortcuts if needed.
+
+Latest Stock Take follow-up:
+
+- Kept the scope to Stock Take mobile UX and approval rules.
+- Added a `warning` field to stock action results so matching stock movements during an active stock take can succeed while showing a yellow worker warning.
+- Updated `warnIfStockTakeOpen` to keep audit logging and return the exact worker warning:
+  - `Stock take is active for this item/brand/location. You can continue, but this movement will be recorded.`
+- The warning remains non-blocking; stock operations continue and the audit log records `STOCK_TAKE_OPERATION_WARNING`.
+- Stock Take scan rules remain barcode-only, wrong item/brand blocked, unknown barcode as exception, and manager review before director final approval.
+
+Files changed in latest follow-up:
+
+- `lib/stock/action-state.ts`
+- `lib/stock/actions.ts`
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-take-lock-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Latest follow-up commands:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+## 2026-06-23 - Stock return and damage mobile UX
+
+Task completed:
+
+- Improved `/stock/return` worker-facing UX only.
+- Reworked normal stock return into a scan-first mobile flow:
+  - scan barcode
+  - choose return location
+  - tap `Save return`
+- Moved normal return reference number and notes into an optional `Reference and notes` panel.
+- Added short return guidance that customer returns may need inspection before normal outbound.
+- Made manager inspection release scanner-capable and gave it a full-width mobile action button.
+- Reworked damage/spoilage request into a scan-first mobile flow with reason, photo reference, optional notes, and a full-width `Submit damage request` button.
+- Kept the server-side damage rule intact: photo is required, the staff request does not deduct stock, manager review and director approval are still required.
+- Reworked return-supplier request into a scan-first mobile flow with supplier name, optional notes, and a full-width `Submit return supplier` button.
+- Kept the server-side return-supplier rule intact: stock goes to supplier hold and is deducted only after manager approval.
+- Enlarged damage and return-supplier approval buttons for mobile manager/admin/director use.
+- Updated Stock QA docs for 390px return/damage/return-supplier testing.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/smoke-routes.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real 390px phone QA was not performed in this pass.
+- Damage photo capture/upload still uses the existing photo reference/path input; actual camera/storage upload remains a broader storage workflow.
+
+## 2026-06-23 - Stock mobile UX source coverage
+
+Task completed:
+
+- Added a stock-only source regression guard for the active Stock Mobile UX goal.
+- New script `scripts/stock-mobile-ux-coverage.mjs` checks:
+  - the worker Stock home remains six large shortcut buttons,
+  - worker Stock home does not render dashboard/table/report/settings/value/cost/finance content,
+  - Stock worker forms keep scan-first/mobile wording for inbound, outbound, transfer, receive-transfer, return/damage, and stock take,
+  - scanner copy still includes large Scan Barcode, manual fallback, permission guidance, continuous mode, and feedback hooks,
+  - stock-unit label reprint keeps mobile print/PDF fallback copy,
+  - Stock QA docs still tell the owner to test at 390px and capture the key phone/printer paths.
+- Wired the script into `npm.cmd run smoke`.
+
+Files changed in this pass:
+
+- `package.json`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts/stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- This is source-level coverage only. Real phone camera, printer, and no-horizontal-scroll QA still need to be performed on a device or authenticated browser session.
+
+Latest 390px browser QA attempt:
+
+- Started a local Next dev server and confirmed the local app responded at `/stock`.
+- Attempted to connect to the in-app browser automation for 390px Stock route verification.
+- Browser automation could not launch in this Windows sandbox; the runtime reported `CreateProcessAsUserW failed: 5`.
+- Plain Node REPL execution also failed with the same sandbox launch error, so browser automation was not available in this session.
+- Updated `docs/STOCK_QA_EVIDENCE.md` with this attempted verification and the remaining manual phone QA steps.
+- No live Supabase SQL, seed, deployment, or production data action was performed.
+
+## 2026-06-23 - Stock scanner online-only blocking
+
+Task completed:
+
+- Improved Stock worker online-only behavior across scan-heavy forms.
+- Added shared worker message:
+  - `No internet connection. Reconnect, then scan again.`
+- Kept existing inbound and stock-take offline blocking.
+- Added offline scan/save blocking to:
+  - `/stock/outbound`
+  - `/stock/transfer`
+  - `/stock/receive-transfer`
+  - `/stock/return`
+  - damage/spoilage request
+  - return-supplier request
+  - inspected-return release
+- Offline states use red blocked/error styling.
+- Server-side validation and RLS were not changed.
+- Updated Stock QA docs so phone QA checks offline blocking across all main scanner flows.
+- Updated source coverage so `npm.cmd run smoke` checks the online-only worker pattern.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts/stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real offline behavior still needs device/browser QA with authenticated Stock user sessions.
+
+## 2026-06-23 - Stock worker-friendly error messages
+
+Task completed:
+
+- Improved Stock action error handling for normal worker screens.
+- Added `friendlyStockErrorMessage` in `lib/stock/actions.ts`.
+- Common database/RLS/system messages such as duplicate-key, row-level-security, permission, schema, column, relation, JSON, syntax, and fetch errors now show:
+  - `Action could not be saved. Check the details and try again.`
+- Explicit business-rule messages still pass through unchanged, such as duplicate barcode, wrong location, wrong status, or missing profile scope.
+- Updated Stock mobile source coverage and QA docs to check that blocked saves show short non-technical messages.
+- No RLS, server-side validation, database schema, or business workflow logic was weakened.
+
+Files changed in this pass:
+
+- `lib/stock/actions.ts`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts/stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real Supabase/RLS QA is still needed to confirm all blocked database paths return the intended friendly message in deployed environments.
+
+## 2026-06-23 - Stock worker advanced access guard coverage
+
+Task completed:
+
+- Audited Stock worker visibility for advanced report/settings surfaces.
+- Confirmed the Stock worker home remains action-only with six big buttons and no KPI, report, settings, value, cost, or finance content.
+- Confirmed Stock Reports and Stock Settings are role-gated away from general workers in navigation and route access.
+- Added smoke coverage so future edits fail if worker Stock home exposes advanced content or if Stock route role guards for reports/settings are removed.
+- Updated Stock QA docs to include direct URL checks for `/stock/reports` and `/stock/settings` as a general worker.
+- No Stock business logic, RLS, server validation, or database schema was changed.
+
+Files changed in this pass:
+
+- `scripts/stock-role-scope-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed. Note: an earlier parallel typecheck attempt failed before `.next/types` had been regenerated; the final ordered run passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real authenticated worker/manager/director browser QA is still needed to prove deployed route blocking and mobile layout at 390px.
+
+## 2026-06-23 - Stock online-only scanner safety wording
+
+Task completed:
+
+- Standardized Stock worker offline scanner/save blocking to the approved short message:
+  - `Connection lost. Please reconnect before scanning.`
+- Applied the shared message across Stock scan-heavy workflows:
+  - inbound
+  - outbound
+  - transfer
+  - receive-transfer
+  - return/damage
+  - return supplier
+  - inspection release
+  - stock take
+- Kept online-only MVP behavior; no offline mode was added.
+- Kept duplicate prevention, server validation, and RLS/security logic unchanged.
+- Updated Stock QA docs so phone/Vercel tests check the exact offline scanner message.
+- Strengthened Stock mobile source coverage so `npm.cmd run smoke` fails if old technical wording returns or if scan forms stop using the shared online-status guard.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts/stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone/browser QA is still needed to confirm browser online/offline events fire consistently on Vercel and that every scanner screen blocks as expected while disconnected.
+
+## 2026-06-23 - Stock mobile QA preparation pass
+
+Task completed:
+
+- Prepared the Stock mobile QA evidence/checklist docs for the requested 390px worker flows.
+- Attempted to use local browser automation, but the Windows sandbox browser/node runner failed with `CreateProcessAsUserW failed: 5`.
+- Confirmed local app was already responding on port `3000`, but authenticated rendered 390px QA could not be completed from this environment.
+- Updated `docs/STOCK_QA_EVIDENCE.md` with a Stock Mobile QA Preparation matrix for:
+  - Stock home buttons
+  - inbound session
+  - continuous scanning UI
+  - duplicate warning
+  - no-weight warning
+  - label generation
+  - label reprint
+  - outbound by order
+  - direct outbound
+  - damage/spoilage request
+  - transfer
+  - receive-transfer wrong-location block
+  - stock take progress
+  - unknown barcode exception
+  - online-only connection message
+- Added first-pass 390px mobile QA steps to owner and Vercel Stock QA docs.
+- Updated `docs/MODULE_STATUS.md` to reflect prepared mobile QA docs and the remaining need for real phone camera, Bluetooth/PDF label printer, authenticated 390px browser, and RLS QA evidence.
+- No app behavior, RLS, server validation, or database schema was changed.
+
+Files changed in this pass:
+
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera scanning and Bluetooth label printer testing cannot be proven from this Codex environment.
+- Owner should run the first 390px mobile QA pass from `docs/STOCK_REMOTE_QA_VERCEL.md` on Vercel and record results in `docs/STOCK_QA_EVIDENCE.md`.
+
+## 2026-06-23 - Stock transfer mobile stock-location wording
+
+Task completed:
+
+- Tightened Stock transfer worker copy so the mobile flow consistently says destination stock location, not destination outlet.
+- Updated the order/direct outbound transfer destination label to `Destination stock location`.
+- Updated transfer blocked copy to:
+  - `Choose destination stock location.`
+  - `Choose destination stock location and scan barcode.`
+- Added a friendly server-action message for current destination validation:
+  - `Choose an allowed stock location.`
+- Kept existing transfer/receive-transfer server validation and RLS/security unchanged.
+- Updated Stock mobile coverage and QA docs so the stock-location wording and short rejection message are checked.
+- Removed an unreachable `/delivery/driver` render block and stale Delivery smoke expectation after TypeScript flagged it during the required checks. This was compile/lint cleanup only; `/delivery/driver` already returns `DriverDeliveryPage` earlier in the component.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `components/delivery/delivery-page.tsx`
+- `lib/stock/actions.ts`
+- `scripts/smoke-routes.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts/stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run typecheck` - passed. Note: an earlier parallel typecheck attempt failed before `.next/types` had been regenerated; the final ordered run passed after build.
+
+Risks / remaining checks:
+
+- Existing database/RPC validation may still restrict some destinations depending on configured stock locations. This pass improves the worker-facing UX/error message without changing transfer schema rules.
+
+## 2026-06-23 - Delivery Module V1
+
+Task completed:
+
+- Built Delivery Module V1 foundations and UI.
+- Added Delivery Jobs as the driver-facing workflow layer for customer delivery, internal transfer delivery, and return collection.
+- Added auto-created delivery jobs for delivery-required customer orders and standalone/manual delivery orders.
+- Added `/delivery/driver` as a mobile-first, big-button driver workflow with tabs:
+  - Available
+  - My Deliveries
+  - Completed
+  - Failed
+  - Expenses
+- Driver cards show customer, note, address, phone actions, Google Maps, total weight, item count, order count, vehicle, driver, and status.
+- Driver actions now support Accept Delivery, Loaded, Start Delivery, delivered proof upload, failed proof upload, goods issue reporting, address issue suggestion, and expenses.
+- Proof upload uses camera-only file inputs, browser-side photo watermarking, phone GPS attempt, and completion allowed when GPS is unavailable.
+- Failed proof requires one-tap failed reason; `Other` requires a remark.
+- Goods issue supports Item missing, Wrong item, Weight mismatch, Packaging damaged, Not ready, and Other; `Other` requires a remark.
+- Driver expenses support Petrol, Parking, Toll, Vehicle Repair, and Other with receipt photo and Pending/Approved/Rejected status.
+- Updated manager `/delivery` dashboard with operational KPIs, manager review queue, driver performance, and delivery weight by driver.
+- Added address suggestions for manager review and stopped the delivered-proof RPC from overwriting official customer GPS directly.
+- Added future-ready truck GPS current-location and 3-day trail tables for later provider sync, ETA/delay, and fuel data.
+- Added Delivery navigation entries for manager dashboard and driver delivery.
+
+Files changed in this pass:
+
+- `components/delivery/delivery-page.tsx`
+- `components/delivery/driver-delivery-page.tsx`
+- `components/erp/app-shell.tsx`
+- `lib/delivery/actions.ts`
+- `lib/delivery/data.ts`
+- `lib/delivery/demo-data.ts`
+- `lib/delivery/types.ts`
+- `supabase/migrations/202606230004_delivery_module_v1.sql`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230004_delivery_module_v1.sql`
+
+Exact migration order:
+
+- Run all existing migrations in filename order through `supabase/migrations/202606230003_stock_receive_transfer_wrong_location_block_v1.sql`.
+- Then run `supabase/migrations/202606230004_delivery_module_v1.sql`.
+- Run `supabase/seed.sql` only for safe demo/staging data.
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - first attempt was blocked by an existing Next build lock; retry after waiting passed.
+- `npm.cmd run smoke` - passed.
+
+Risks / remaining checks:
+
+- Migration `202606230004` has not been applied to a real Supabase project by Codex.
+- Real Supabase Storage bucket policy validation is still required for delivery proof, goods issue, receipt, and address-suggestion uploads.
+- Real phone QA is still required for camera capture, GPS denied/unavailable, GPS allowed, Google Maps, Call, WhatsApp, and 390px layout.
+- The V1 UI supports one job containing multiple linked orders through schema/data shape, but no manager dispatch board is included by design.
+- Truck GPS tables are prepared only; provider sync, 10-second polling, customer tracking map, ETA/delay calculation, and fuel monitoring UI are future work.
+
+## 2026-06-23 - Delivery Task 1 database, storage, and RLS
+
+Task completed:
+
+- Added canonical Delivery database/storage/RLS foundation only.
+- Added idempotent migration `202606230007_delivery_database_storage_rls_v1.sql`.
+- Added/ensured database foundation for:
+  - `deliveries`
+  - `delivery_orders`
+  - `delivery_items`
+  - `delivery_proofs`
+  - `delivery_status_logs`
+  - `delivery_address_suggestions`
+  - `delivery_expenses`
+  - `vehicles`
+  - `truck_gps_snapshots`
+- Added support columns for delivery no, delivery type, status, outlet/team, driver, default vehicle, vehicle, customer, address, phone, delivery note, total weight, item count, completed GPS, GPS unavailable, failed reason, remarks, timestamps, and created/updated users.
+- Added storage buckets:
+  - `delivery-proofs`
+  - `delivery-expenses`
+- Added indexes for date/status, driver/status, customer, outlet/team, delivery no, proof lookup, expense lookup, and truck GPS snapshots.
+- Added RLS helper functions:
+  - `public.can_access_delivery_scope(...)`
+  - `public.can_review_delivery_scope(...)`
+  - `public.can_access_delivery(...)`
+  - `public.can_mutate_delivery(...)`
+  - `public.can_access_delivery_job(...)`
+  - `public.can_access_delivery_order_record(...)`
+  - `public.can_access_delivery_storage_object(...)`
+- Added RLS so drivers can see available deliveries in their allowed scope and their own accepted/completed/failed deliveries.
+- Added RLS so delivery managers see their own outlet/team, while admin/director follow global access.
+- Added scoped RLS for proof rows, status logs, items, address suggestions, expenses, storage objects, and truck GPS snapshots.
+- Tightened older `delivery_orders`, `delivery_order_items`, and `delivery_status_logs` policies so previous broad scoped policies do not widen access beyond the new driver/manager rules.
+- Updated the new driver job proof/goods-issue uploads to use `delivery-proofs`.
+- Updated the new delivery expense receipt upload to use `delivery-expenses`.
+
+Files changed in this pass:
+
+- `lib/delivery/actions.ts`
+- `supabase/migrations/202606230007_delivery_database_storage_rls_v1.sql`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230007_delivery_database_storage_rls_v1.sql`
+
+Exact migration order:
+
+- Remote migration status is applied through `202606100055`.
+- Local pending migrations currently are:
+  - `202606230001_stock_schema_repair_v1.sql`
+  - `202606230002_stock_mobile_worker_mvp_v1.sql`
+  - `202606230003_stock_receive_transfer_wrong_location_block_v1.sql`
+  - `202606230004_delivery_module_v1.sql`
+  - `202606230006_stock_transfer_any_location_v1.sql`
+  - `202606230007_delivery_database_storage_rls_v1.sql`
+- `202606230007` must run after `202606230004`.
+
+Commands run and results:
+
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npx.cmd supabase migration list` - passed after escalation for Supabase CLI user-profile access.
+- `npx.cmd supabase db push --dry-run` - passed and listed the pending migrations; no remote changes were applied.
+- `npx.cmd supabase status` - failed because Docker Desktop is unable to start, so local Supabase migration execution was unavailable.
+- `npm.cmd run smoke` - failed on an existing Stock guard expectation: `Stock action missing: Transfer destination was not found or is inactive.`
+
+Why migrations were not pushed:
+
+- A normal `supabase db push` would apply all pending migrations in order, including unrelated pending Stock migrations `202606230001`, `202606230002`, `202606230003`, and `202606230006`.
+- This task was Delivery-only, so Codex did not apply unrelated Stock migrations to the remote database automatically.
+- Local migration execution could not be used because Docker Desktop was unavailable.
+
+Risks / remaining checks:
+
+- `202606230007` has not been executed against a real database yet.
+- SQL should be applied on a staging database in full migration order, then proof and expense Storage policies should be tested with real delivery driver, delivery manager, admin, and director users.
+- Driver proof/expense uploads now target the new buckets for the new driver job flow; older standalone proof upload still uses `erp-files` for compatibility until the UI is fully moved to canonical `deliveries`.
+
+## 2026-06-23 - Stock transfer active stock-location support
+
+Task completed:
+
+- Added a forward-only Stock migration so transfers can target any active/scoped stock location instead of only outlet-default locations.
+- Kept receive-transfer wrong-location blocking for the mobile MVP with the worker-safe message:
+  - `Wrong location. This barcode must be received at [destination location].`
+- Updated Stock server-action destination validation to check active stock locations while preserving source-location access and existing duplicate/open-request/stock-take guards.
+- Kept transfer location changes deferred until receive-transfer scan.
+- Updated Stock coverage scripts and owner QA docs so the active stock-location transfer rule and migration order are checked.
+- Renamed the Stock migration to `202606230006` so it has a unique migration version and runs before the later Delivery database/storage/RLS migration.
+- No live Supabase migration, seed, db push, production deploy, or service-role-key use was performed.
+
+Files changed in this pass:
+
+- `lib/stock/actions.ts`
+- `scripts/smoke-routes.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-migration-safety.mjs`
+- `docs/STOCK_MIGRATION_CHECKLIST.md`
+- `docs/SUPABASE_MIGRATION_HANDOFF.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/MODULE_STATUS.md`
+- `supabase/migrations/202606230006_stock_transfer_any_location_v1.sql`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606230006_stock_transfer_any_location_v1.sql`
+
+Exact migration order:
+
+- Run all existing migrations in filename order through `supabase/migrations/202606230003_stock_receive_transfer_wrong_location_block_v1.sql`.
+- Run `supabase/migrations/202606230004_delivery_module_v1.sql`.
+- Run `supabase/migrations/202606230006_stock_transfer_any_location_v1.sql`.
+- Run `supabase/migrations/202606230007_delivery_database_storage_rls_v1.sql`.
+- Run `supabase/seed.sql` only for safe demo/staging data.
+
+Commands run and results:
+
+- `node scripts/stock-migration-safety.mjs` - passed.
+- `node scripts/stock-acceptance-coverage.mjs` - passed.
+- `node scripts/stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Migration `202606230006` has not been applied to a real Supabase project by Codex.
+- Real authenticated 390px browser QA is still needed for transfer, receive-transfer wrong-location blocking, and Stock mobile flows.
+- Real phone camera scanning and Bluetooth/PDF label printer QA remain owner/manual checks.
+
+## 2026-06-23 - Stock transfer business-rule alignment
+
+Task completed:
+
+- Updated the Stock business rules to match the mobile MVP transfer flow:
+  - Workers select a destination stock location.
+  - The destination must be active and allowed by stock scope.
+  - Receive-transfer still changes the real location only after the destination receive scan.
+- Added owner QA doc coverage so smoke now checks the stock-location transfer rule, migration `202606230006`, and the `transferDestinationAnyActiveLocation` audit marker.
+- Added a guard so stale outlet-default transfer wording fails coverage if it is reintroduced into `docs/BUSINESS_RULES.md`.
+- No app behavior, database schema, RLS, or server validation changed in this pass.
+
+Files changed in this pass:
+
+- `docs/BUSINESS_RULES.md`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts/stock-owner-qa-doc-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real authenticated 390px browser QA is still needed for transfer and receive-transfer.
+- Migration `202606230006` still needs to be applied to the target Supabase project before remote QA can prove active stock-location transfers against live data.
+
+## 2026-06-23 - Stock worker form touch targets
+
+Task completed:
+
+- Increased shared Stock workflow select controls to mobile-friendly touch height and text sizing.
+- Increased default Stock workflow submit buttons to at least `min-h-11` with clearer icon/text spacing.
+- This applies across Stock worker forms that reuse `NativeSelect` and `SubmitButton`, including inbound, outbound, transfer, receive-transfer, return/damage, and stock take surfaces.
+- Added Stock mobile UX coverage so smoke checks the larger touch-target classes.
+- Updated Stock QA evidence to include the larger touch target guard.
+- No business logic, database schema, RLS, or server validation changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts/stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed after rerun; an earlier parallel run with `build` hit a transient missing `.next/types` race while Next regenerated route types.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real 390px authenticated browser QA is still needed to visually confirm every Stock worker form has no horizontal scrolling and the larger controls fit comfortably.
+
+## 2026-06-23 - Stock scanner phone-width touch targets
+
+Task completed:
+
+- Improved the reusable Stock barcode scanner field for phone-width worker use.
+- The `Scan Barcode` camera button now stays full-width on phone layouts and uses a taller `min-h-12` touch target before switching to auto width on larger screens.
+- The manual barcode fallback input now uses a taller `min-h-11` touch target and mobile-readable text size.
+- Updated Stock mobile UX coverage so smoke checks the full-width scan button and larger manual fallback input.
+- Updated Stock QA evidence to note the stronger source guard for scanner touch targets.
+- No business logic, database schema, RLS, or server validation changed.
+
+Files changed in this pass:
+
+- `components/stock/barcode-scanner.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts/stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed after updating `scripts/stock-scanner-coverage.mjs` to expect the new phone-width full-width scanner button.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera QA is still needed to confirm camera permission, rear camera selection, scanner close behavior, vibration/beep, and no horizontal scrolling around 390px width.
+
+## 2026-06-23 - Stock scanner worker-friendly camera errors
+
+Task completed:
+
+- Replaced raw browser camera scanner errors with short worker-friendly messages in the reusable Stock barcode scanner.
+- Added scanner messages for blocked camera permission, missing camera, busy camera, insecure browser page, and generic camera-start failure.
+- Added coverage so scanner checks fail if `scanError.message` is shown directly to workers again.
+- Updated Stock acceptance coverage and Stock QA evidence for the worker-friendly camera error behavior.
+- No business logic, database schema, RLS, or server validation changed.
+
+Files changed in this pass:
+
+- `components/stock/barcode-scanner.tsx`
+- `scripts/stock-scanner-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts/stock-scanner-coverage.mjs` - passed.
+- `node scripts/stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone/laptop camera QA is still needed to confirm each browser permission state maps to the expected short message.
+
+## 2026-06-23 - Stock scanner modal close touch targets
+
+Task completed:
+
+- Improved scanner modal close controls for phone-width Stock worker use.
+- The top `Close scanner` icon button now has at least `min-h-11 min-w-11`.
+- The bottom `Close` button now stays full-width on phone layouts and switches to auto width on larger screens.
+- Updated Stock scanner and Stock mobile UX coverage so smoke guards the larger close controls.
+- Updated Stock QA evidence to include large scanner close buttons.
+- No business logic, database schema, RLS, or server validation changed.
+
+Files changed in this pass:
+
+- `components/stock/barcode-scanner.tsx`
+- `scripts/stock-scanner-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts/stock-scanner-coverage.mjs` - passed.
+- `node scripts/stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone QA is still needed to confirm scanner modal close controls are comfortable at about 390px width and camera stream stops after closing.
+
+## 2026-06-23 - Stock scanner long barcode wrapping
+
+Task completed:
+
+- Improved scanner modal handling for long barcode values on phone-width layouts.
+- The scanner `Last scan` value now renders as a wrapped monospace block instead of inline text, reducing horizontal overflow risk for long supplier/GS1 barcodes.
+- Updated Stock scanner and Stock mobile UX coverage so smoke guards the wrapped last-scan display.
+- Updated Stock QA evidence to include wrapped long barcode display.
+- No business logic, database schema, RLS, or server validation changed.
+
+Files changed in this pass:
+
+- `components/stock/barcode-scanner.tsx`
+- `scripts/stock-scanner-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts/stock-scanner-coverage.mjs` - passed.
+- `node scripts/stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone QA is still needed to scan a long barcode and confirm the scanner modal does not horizontally scroll around 390px width.
+
+## 2026-06-23 - Stock mobile QA preparation re-run
+
+Task completed:
+
+- Prepared the requested Stock Mobile UX QA pass without changing app behavior.
+- Confirmed the local `/stock` route responds.
+- Attempted authenticated 390px browser QA, but the browser automation runtime could not launch in the Windows sandbox and returned `CreateProcessAsUserW failed: 5`.
+- Updated Stock QA evidence, Vercel remote QA checklist, owner test list, Stock QA runbook, and module status to separate local source coverage from real phone/printer/Supabase evidence.
+- No live Supabase migration, seed, production data change, deploy, camera permission approval, or printer action was performed.
+
+Files changed in this pass:
+
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_QA_RUNBOOK.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - failed in `lib/orders/data.ts`; order data mapping/demo records are missing fields required by the current order TypeScript types.
+- `npm.cmd run build` - compiled successfully, then failed during TypeScript for the same `lib/orders/data.ts` issue.
+
+Risks / remaining checks:
+
+- This Stock QA pass did not run real authenticated 390px browser tests because browser automation is blocked by the Windows sandbox.
+- Real phone camera, laptop camera, Bluetooth label printer, PDF label output, live Supabase RLS, and stock workflow evidence still need owner/manual QA.
+- The unrelated Orders TypeScript mismatch blocks a clean full typecheck/build and should be fixed in an Orders-focused pass before handoff/deploy.
+
+## 2026-06-23 - Stock scanner accessible feedback pass
+
+Task completed:
+
+- Improved the reusable Stock barcode scanner feedback without changing Stock business logic.
+- Added explicit accessible labels to the large `Scan Barcode` button and scanner close controls.
+- Added `role="alert"` to scanner error messages so blocked camera/error states are announced.
+- Added `aria-live="polite"` to the `Last scan` success block so continuous scan feedback is easier to follow.
+- Updated Stock scanner/mobile coverage so future changes must keep the announced success/error feedback.
+- Updated Stock QA evidence and module status with the latest command results.
+- No database schema, RLS, server validation, migration, Supabase data, deployment, camera permission approval, or printer action was changed.
+
+Files changed in this pass:
+
+- `components/stock/barcode-scanner.tsx`
+- `scripts/stock-scanner-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - failed before the Stock chain on an Orders smoke assertion: `Order data must expose scope options and only offer active stock items for new order lines`.
+- `npm.cmd run lint` - passed with existing non-Stock warnings in `components/delivery/manager-delivery-dashboard.tsx` and `lib/orders/data.ts`.
+- `npm.cmd run typecheck` - failed in `lib/orders/data.ts` on order status/manual-reason typing.
+- `npm.cmd run build` - compiled successfully, then failed during TypeScript for the same `lib/orders/data.ts` status typing issue.
+
+Risks / remaining checks:
+
+- Real 390px authenticated browser QA still could not be completed because browser automation is blocked by the Windows sandbox.
+- Real phone camera, laptop camera, Bluetooth label printer, PDF label output, live Supabase RLS, and Stock workflow evidence remain owner/manual QA.
+- A separate Orders-focused fix is needed before the required full `smoke`, `typecheck`, and `build` gates can pass again.
+
+## 2026-06-23 - Stock inbound duplicate blocked-state pass
+
+Task completed:
+
+- Improved Stock Inbound duplicate feedback for mobile workers.
+- Changed the auto-scan duplicate message from the softer `Duplicate barcode. Remove it before saving.` to the immediate blocked message `Duplicate barcode. Inbound is blocked.`.
+- Changed the current-session duplicate/error list from amber warning styling to red blocked/error styling.
+- Added `role="alert"` to the current-session blocked/error list so duplicate and save-blocking feedback is announced.
+- Updated Stock mobile UX coverage to reject the old duplicate wording and require the blocked/error session list.
+- Updated Stock QA evidence and module status with the latest command results.
+- No database schema, RLS, server validation, migration, Supabase data, deployment, camera permission approval, or printer action was changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `npm.cmd run smoke` - failed before the Stock chain on an Orders smoke assertion: `Order data must expose scope options and only offer active stock items for new order lines`.
+- `npm.cmd run lint` - passed with an existing non-Stock warning in `lib/orders/data.ts`.
+- `npm.cmd run typecheck` - failed in `lib/orders/data.ts` on order status/manual-reason typing.
+- `npm.cmd run build` - failed before typecheck on an Orders syntax error in `lib/orders/actions.ts`: `Nullish coalescing operator(??) requires parens when mixing with logical operators`.
+
+Risks / remaining checks:
+
+- Real 390px authenticated browser QA still could not be completed because browser automation is blocked by the Windows sandbox.
+- Real phone camera, laptop camera, Bluetooth label printer, PDF label output, live Supabase RLS, and Stock workflow evidence remain owner/manual QA.
+- A separate Orders-focused fix is needed before the required full `smoke`, `typecheck`, and `build` gates can pass again.
+
+## 2026-06-23 - Stock form feedback announcement pass
+
+Task completed:
+
+- Improved Stock form feedback for mobile workers without changing business logic.
+- `ActionMessage` success/error/warning panels now use `role` and `aria-live` so saved, blocked, and warning states are announced.
+- The inbound `Previous scan` success panel now uses `aria-live="polite"` so successful continuous scans are easier to follow.
+- The inbound decode feedback panel now uses `role="alert"` with assertive live announcements for blocked/error states and `role="status"` for success/warning states.
+- Updated Stock mobile UX coverage to guard these announced feedback states.
+- Updated Stock QA evidence and module status with the latest command results.
+- No database schema, RLS, server validation, migration, Supabase data, deployment, camera permission approval, or printer action was changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `npm.cmd run smoke` - failed before the Stock chain on an Orders assertion: `Order action missing: addCustomerOrderItemAction`.
+- `npm.cmd run lint` - passed with an existing non-Stock warning in `lib/orders/data.ts`.
+- `npm.cmd run typecheck` - failed in Orders files because exported order actions are missing, `??` is mixed with `||` in `lib/orders/actions.ts`, and `lib/orders/data.ts` has status/manual-reason typing errors.
+- `npm.cmd run build` - failed before typecheck on an Orders syntax error in `lib/orders/actions.ts`: `Nullish coalescing operator(??) requires parens when mixing with logical operators`.
+
+Risks / remaining checks:
+
+- Real 390px authenticated browser QA still could not be completed because browser automation is blocked by the Windows sandbox.
+- Real phone camera, laptop camera, Bluetooth label printer, PDF label output, live Supabase RLS, and Stock workflow evidence remain owner/manual QA.
+- A separate Orders-focused fix is needed before the required full `smoke`, `typecheck`, and `build` gates can pass again.
+
+## 2026-06-23 - Stock shared offline alert pass
+
+Task completed:
+
+- Improved Stock online-only scan feedback without changing business logic.
+- Added a shared `OfflineScanAlert` inside `components/stock/workflow-forms.tsx`.
+- Replaced repeated connection-loss red blocks across Stock Inbound, Outbound, Transfer, Receive Transfer, Return, Inspection Release, Damage/Spoilage, Return Supplier, and Stock Take scan forms.
+- The shared alert uses `role="alert"` and the required worker message: `Connection lost. Please reconnect before scanning.`
+- Updated Stock mobile UX coverage to guard the shared offline alert and its usage across worker scan forms.
+- Updated Stock QA evidence and module status with the latest command results.
+- No database schema, RLS, server validation, migration, Supabase data, deployment, camera permission approval, or printer action was changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - failed before the Stock chain on an Orders assertion: `Order action missing: addCustomerOrderItemAction`.
+- `npm.cmd run lint` - passed with existing non-Stock warnings in `lib/delivery/actions.ts`.
+- `npm.cmd run typecheck` - failed in non-Stock files: `lib/orders/actions.ts` mixes `??` with `||`, and `lib/orders/data.ts` has linked-delivery proof-status typing errors.
+- `npm.cmd run build` - failed before typecheck on an Orders syntax error in `lib/orders/actions.ts`: `Nullish coalescing operator(??) requires parens when mixing with logical operators`.
+
+Risks / remaining checks:
+
+- Real 390px authenticated browser QA still could not be completed because browser automation is blocked by the Windows sandbox.
+- Real phone camera, laptop camera, Bluetooth label printer, PDF label output, live Supabase RLS, and Stock workflow evidence remain owner/manual QA.
+- A separate Orders-focused fix is needed before the required full `smoke`, `typecheck`, and `build` gates can pass again.
+
+## 2026-06-23 - Stock outbound blocked-alert pass
+
+Task completed:
+
+- Improved Stock Outbound and Stock Take blocked scan feedback without changing business logic.
+- Added `role="alert"` to outbound scan error, barcode-not-found, blocked-barcode, and wrong-destination panels.
+- Added `role="alert"` to the Stock Take local blocked scan message panel.
+- Updated Stock mobile UX coverage to guard outbound blocked states: `Barcode not found`, `Blocked barcode`, and `Wrong destination`.
+- Updated Stock QA evidence and module status with the latest command results.
+- No database schema, RLS, server validation, migration, Supabase data, deployment, camera permission approval, or printer action was changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `npm.cmd run smoke` - failed before the Stock chain on a non-Stock Orders assertion: `Orders data loader must only use demo fallback when Supabase is not configured and surface real query errors`.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real 390px authenticated browser QA still could not be completed because browser automation is blocked by the Windows sandbox.
+- Real phone camera, laptop camera, Bluetooth label printer, PDF label output, live Supabase RLS, and Stock workflow evidence remain owner/manual QA.
+- A separate Orders-focused smoke fix is needed before the required full `smoke` gate can pass again.
+
+## 2026-06-23 - Stock workflow input touch-target pass
+
+Task completed:
+
+- Improved Stock workflow form touch targets without changing business logic.
+- Added a Stock-only `Input` wrapper in `components/stock/workflow-forms.tsx` that keeps existing form behavior but applies `min-h-11 text-base sm:text-sm`.
+- This improves mobile typing targets across Stock worker forms such as inbound, outbound, transfer, receive-transfer, return/damage, return supplier, and stock take without changing global app inputs.
+- Updated Stock mobile UX coverage to guard the Stock-only input wrapper.
+- Updated stale Stock coverage checks to match the current blocked duplicate/session wording:
+  - `Duplicate barcode. Inbound is blocked.`
+  - `Blocked/error scans this session`
+- Updated Stock QA evidence and module status with the latest command results.
+- No database schema, RLS, server validation, migration, Supabase data, deployment, camera permission approval, or printer action was changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-label-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real 390px authenticated browser QA still could not be completed because browser automation is blocked by the Windows sandbox.
+- Real phone camera, laptop camera, Bluetooth label printer, PDF label output, live Supabase RLS, and Stock workflow evidence remain owner/manual QA.
+
+## 2026-06-23 - Stock 390px browser QA attempt
+
+Task completed:
+
+- Rechecked local Stock route reachability.
+- Local `/stock` returned HTTP 200.
+- Attempted to connect the in-app browser for 390px visual QA.
+- Browser automation could not launch in this Windows sandbox and returned `CreateProcessAsUserW failed: 5`.
+- Updated Stock QA evidence with the current browser-attempt result.
+- No app code, database schema, RLS, server validation, migration, Supabase data, deployment, camera permission approval, or printer action was changed.
+
+Files changed in this pass:
+
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- Local `/stock` HTTP check - passed, returned `200`.
+- In-app browser automation - failed with Windows sandbox permission error `CreateProcessAsUserW failed: 5`.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real authenticated 390px browser QA remains manual.
+- Real phone camera, laptop camera, Bluetooth label printer, PDF label output, live Supabase RLS, and Stock workflow evidence remain owner/manual QA.
+
+## 2026-06-23 - Stock label mobile print controls pass
+
+Task completed:
+
+- Improved the reusable Stock label print/reprint controls without changing label generation, business logic, server validation, RLS, or schema.
+- Made `Print label` and `PDF fallback` explicit full-width phone touch targets.
+- Added accessible labels clarifying that `Print label` opens the phone print sheet/Bluetooth-printer path and `PDF fallback` opens the save-as-PDF fallback.
+- Extended Stock label coverage so future changes must keep the mobile print/PDF labels and touch-target classes.
+- Updated Stock QA evidence and module status with the latest Stock label/mobile pass.
+
+Files changed in this pass:
+
+- `components/stock/stock-label.tsx`
+- `scripts/stock-label-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone Bluetooth print-sheet and PDF-save QA still need owner/device evidence.
+- Real authenticated 390px browser QA still could not be completed because browser automation is blocked by the Windows sandbox.
+- Real phone camera, laptop camera, live Supabase RLS, and Stock workflow evidence remain owner/manual QA.
+
+## 2026-06-23 - Stock label Code 128 rendering pass
+
+Task completed:
+
+- Improved Stock label generation/reprint output so labels render machine-readable Code 128 SVG bars instead of decorative placeholder stripes.
+- Added `lib/stock/code128.ts`, a small dependency-free encoder with Code Set C for even numeric barcodes and Code Set B fallback for printable supplier/reprint barcode values.
+- Updated the reusable 50mm x 30mm Stock label preview/print component to use the Code 128 renderer for inbound generated labels and stock-unit reprints.
+- Kept the human-readable barcode number under the bars for worker checking.
+- Updated Stock label coverage so future changes must keep the Code 128 encoder, SVG bar rendering, print/PDF surface, and no decorative stripe fallback.
+- Updated Stock business rules and QA docs so owner testing includes scanning the printed/reprinted label.
+
+Files changed in this pass:
+
+- `lib/stock/code128.ts`
+- `components/stock/stock-label.tsx`
+- `scripts/stock-label-coverage.mjs`
+- `docs/BUSINESS_RULES.md`
+- `docs/MODULE_STATUS.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `npx.cmd tsc --noEmit --pretty false` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real printed-label scanner readability still needs owner/device QA with the actual Bluetooth label printer, PDF output, phone camera, and/or handheld scanner.
+
+## 2026-06-23 - Stock take active-session mobile shortcut pass
+
+Task completed:
+
+- Improved Stock Take mobile worker flow without changing stock-take business logic, RLS, approval rules, or schema.
+- Added large `Tap active session` buttons before the stock-take session dropdown so workers can quickly choose an active draft count on a phone.
+- Kept the existing dropdown as a fallback for longer session lists.
+- Added a short empty state: `Start a stock take above, then scan.`
+- Preserved barcode-only counting, wrong item/brand blocking, unknown/wrong-location exceptions, online-only scan blocking, manager review, director final approval, and warning-only active stock-take behavior.
+- Updated Stock mobile UX coverage and owner/Vercel QA docs to verify the active-session tap flow.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/MODULE_STATUS.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-take-lock-coverage.mjs` - passed.
+- Initial `npm.cmd run typecheck` after the Stock component edit - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed with two existing non-Stock Delivery warnings:
+  - `lib/delivery/actions.ts`: unused `DeliveryExpenseStatus`.
+  - `lib/delivery/actions.ts`: unused `managerExpenseReviewSchema`.
+- Final `npm.cmd run typecheck` - failed in non-Stock Delivery files:
+  - `lib/delivery/data.ts`: mapped expense object is missing required `DeliveryExpense` fields such as `deliveryId`, `outletId`, `deliveryTeamId`, and `bucketId`.
+  - `lib/delivery/demo-data.ts`: demo expense object is missing the same required `DeliveryExpense` fields.
+- `npm.cmd run build` - failed during TypeScript on the same non-Stock Delivery `DeliveryExpense` mismatch after compilation succeeded.
+
+Risks / remaining checks:
+
+- Real authenticated 390px phone/browser QA is still needed to confirm the active-session buttons fit without horizontal scrolling.
+- A Delivery-focused pass is needed to repair the current `DeliveryExpense` type/data mismatch before full typecheck/build can pass again. This Stock-only pass did not edit Delivery files.
+
+## 2026-06-23 - Stock damage reason mobile buttons pass
+
+Task completed:
+
+- Improved Stock damage/spoilage worker UX without changing server validation, approval flow, RLS, or schema.
+- Replaced small damage reason dropdowns with large tap buttons in:
+  - direct outbound damage/spoilage request path,
+  - standalone damage/spoilage request path on `/stock/return`.
+- Kept the same hidden form field names and values (`damageReason` and `reason`) so existing server actions continue to validate and store the same business data.
+- Preserved the photo-required approval-only rule: damage/spoilage creates a pending approval request and does not deduct stock immediately.
+- Updated Stock mobile UX coverage and QA docs to check the large reason-button flow.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/MODULE_STATUS.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real 390px phone/browser QA is still needed to confirm the reason buttons fit comfortably and do not cause horizontal scrolling.
+
+## 2026-06-23 - Stock mobile QA refresh
+
+Task completed:
+
+- Prepared and revalidated the Stock mobile QA evidence for the requested worker flows without changing app behavior.
+- Confirmed the existing Stock source/coverage checks cover:
+  - Stock home buttons,
+  - inbound session and continuous scanning UI,
+  - duplicate and no-weight barcode warnings,
+  - label generation and label reprint,
+  - outbound by order and direct outbound,
+  - damage/spoilage request copy,
+  - transfer and receive-transfer wrong-location block copy,
+  - stock-take progress and unknown-barcode exception copy,
+  - online-only scanner blocking message.
+- Updated Stock QA evidence and module status with the latest passing command results.
+- Did not run live Supabase SQL, seed data, migrations, deployment, camera permission, Bluetooth printer, or production data actions.
+
+Files changed in this pass:
+
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real authenticated 390px phone/browser QA still needs owner/device evidence.
+- Real phone camera, laptop camera, Bluetooth label printer, PDF label output, live Supabase RLS, and real Stock workflow evidence remain owner/manual QA.
+- Use `docs/STOCK_TEST_LIST_FOR_OWNER.md`, `docs/STOCK_REMOTE_QA_VERCEL.md`, and `docs/STOCK_QA_EVIDENCE.md` for the first owner testing pass.

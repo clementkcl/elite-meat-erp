@@ -18,11 +18,13 @@ type BarcodeFieldProps = {
   continuousScan?: boolean
   inputRef?: Ref<HTMLInputElement>
   placeholder?: string
+  disabled?: boolean
 }
 
 type BarcodeScannerButtonProps = {
   onDetected: (value: string) => void
   continuous?: boolean
+  disabled?: boolean
 }
 
 export function BarcodeField({
@@ -35,6 +37,7 @@ export function BarcodeField({
   continuousScan = false,
   inputRef,
   placeholder,
+  disabled = false,
 }: BarcodeFieldProps) {
   const [recentScans, setRecentScans] = useState<string[]>([])
   const handleDetected = (detectedValue: string) => {
@@ -54,6 +57,7 @@ export function BarcodeField({
         <BarcodeScanner
           onDetected={handleDetected}
           continuous={continuousScan}
+          disabled={disabled}
         />
       </div>
       <Input
@@ -64,6 +68,8 @@ export function BarcodeField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         autoComplete="off"
+        disabled={disabled}
+        className="min-h-11 text-base sm:text-sm"
       />
       <div className="flex flex-col gap-1 text-xs text-muted-foreground min-[390px]:flex-row min-[390px]:items-center min-[390px]:justify-between">
         <span>Manual fallback: type or paste the barcode here.</span>
@@ -117,9 +123,34 @@ function playSuccessFeedback() {
   })
 }
 
+function cameraErrorMessage(scanError: unknown) {
+  if (!(scanError instanceof Error)) {
+    return "Camera could not start. Type barcode manually."
+  }
+
+  if (scanError.name === "NotAllowedError") {
+    return "Camera blocked. Allow camera permission or type barcode."
+  }
+
+  if (scanError.name === "NotFoundError") {
+    return "No camera found. Type barcode manually."
+  }
+
+  if (scanError.name === "NotReadableError") {
+    return "Camera is busy. Close other camera apps and try again."
+  }
+
+  if (scanError.name === "SecurityError") {
+    return "Camera needs a secure browser page. Type barcode manually."
+  }
+
+  return "Camera could not start. Type barcode manually."
+}
+
 export function BarcodeScanner({
   onDetected,
   continuous = false,
+  disabled = false,
 }: BarcodeScannerButtonProps) {
   const [open, setOpen] = useState(false)
   const [starting, setStarting] = useState(false)
@@ -207,11 +238,7 @@ export function BarcodeScanner({
         controlsRef.current = controls
       } catch (scanError) {
         if (!cancelled) {
-          setError(
-            scanError instanceof Error
-              ? scanError.message
-              : "Unable to start the camera scanner."
-          )
+          setError(cameraErrorMessage(scanError))
         }
       } finally {
         if (!cancelled) {
@@ -243,9 +270,11 @@ export function BarcodeScanner({
         type="button"
         variant="outline"
         size="lg"
-        className="min-h-11 w-full gap-2 min-[390px]:w-auto"
+        className="min-h-12 w-full gap-2 text-base sm:w-auto sm:text-sm"
         onClick={() => setOpen(true)}
+        disabled={disabled}
         title="Scan barcode with camera"
+        aria-label="Scan barcode with camera"
       >
         <ScanBarcode className="size-4" />
         Scan Barcode
@@ -263,8 +292,10 @@ export function BarcodeScanner({
                 type="button"
                 variant="ghost"
                 size="icon-sm"
+                className="min-h-11 min-w-11"
                 onClick={() => setOpen(false)}
                 title="Close scanner"
+                aria-label="Close scanner"
               >
                 <X className="size-4" />
               </Button>
@@ -298,14 +329,23 @@ export function BarcodeScanner({
               </div>
 
               {error ? (
-                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div
+                  role="alert"
+                  className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+                >
                   {error}
                 </div>
               ) : null}
 
               {lastValue ? (
-                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  Last scan: {lastValue}
+                <div
+                  aria-live="polite"
+                  className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+                >
+                  <div className="font-medium">Last scan</div>
+                  <div className="mt-1 break-all font-mono text-xs">
+                    {lastValue}
+                  </div>
                 </div>
               ) : null}
 
@@ -313,7 +353,9 @@ export function BarcodeScanner({
                 <Button
                   type="button"
                   variant="outline"
+                  className="min-h-11 w-full sm:w-auto"
                   onClick={() => setOpen(false)}
+                  aria-label="Close scanner"
                 >
                   Close
                 </Button>

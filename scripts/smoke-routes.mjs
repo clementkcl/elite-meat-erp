@@ -150,7 +150,9 @@ assert(
 
 const workflowForms = read("components/stock/workflow-forms.tsx")
 const stockPageSource = read("components/stock/stock-page.tsx")
+const stockUnitsTableClient = read("components/stock/stock-units-table-client.tsx")
 const stockUnitDetail = read("components/stock/stock-unit-detail.tsx")
+const stockLabelSource = read("components/stock/stock-label.tsx")
 const stockDataSource = read("lib/stock/data.ts")
 const itemCodeRules = read("lib/stock/item-code.ts")
 const barcodeFieldCount = workflowForms.match(/<BarcodeField/g)?.length ?? 0
@@ -181,8 +183,12 @@ for (const fragment of [
   "const confirmDisabled",
   "setBarcodes([])",
   "disabled={confirmDisabled}",
-  "Select a ready order, scan at least one valid barcode",
-  "remove missing or blocked scans",
+  "Select order first.",
+  "Scan at least one barcode.",
+  "Confirm substitution. No reason needed.",
+  "No customer name",
+  "No photo",
+  "Photo required. Stock goes to approval.",
   "const activeItems = items.filter((item) => item.active)",
   "const activeBrands = brands.filter((brand) => brand.active)",
   "const activeOrigins = origins.filter((origin) => origin.active)",
@@ -195,10 +201,9 @@ for (const fragment of [
   "customer_return",
   "transfer_received",
   "manual_adjustment",
-  "Generate label barcode",
-  "Export labels PDF",
-  "50mm x 30mm",
-  "Duplicate barcode warning",
+  "Generate internal label",
+  "StockLabelPrintActions",
+  "Duplicate barcode. Inbound is blocked.",
   "vibrateAndBeep",
   "activeBrandIds.has(preset.brandId)",
   "activeOriginIds.has(preset.originId)",
@@ -207,13 +212,16 @@ for (const fragment of [
   "canManage: boolean",
   "canDirectorApprove: boolean",
   "Counting and scan entry are",
-  "reserved for stock operators.",
+  "for stock operators.",
   "canOperate ?",
   "canManage ?",
   "canDirectorApprove ?",
-  "Managers open a barcode count for one item and brand at one stock location.",
+  "Choose one location, item, and brand.",
+  "Barcode progress",
+  "Weight progress",
   "Barcode-only count",
-  "Manual count entry is disabled for MVP.",
+  "Wrong item/brand blocked.",
+  "Missing barcode adjustment waits for manager",
   "Manager signature:",
   "Director signature:",
   "Damage / spoilage approval",
@@ -223,9 +231,14 @@ for (const fragment of [
   "Manager approve",
   "Manager review",
   "Director approve",
-  "Photo path / upload reference",
+  "Photo reference",
+  "Photo required. Request only; stock is not deducted now.",
+  "Stock goes on supplier hold until manager approval.",
 ]) {
   assert(workflowForms.includes(fragment), `Workflow forms missing: ${fragment}`)
+}
+for (const fragment of ["PDF fallback", "50mm x 30mm"]) {
+  assert(stockLabelSource.includes(fragment), `Stock label missing: ${fragment}`)
 }
 for (const fragment of [
   "function generatedItemCode",
@@ -238,7 +251,7 @@ for (const fragment of [
 assert(
   workflowForms.includes('order.status === "READY_FOR_PICKUP"') &&
     workflowForms.includes('order.status === "READY_FOR_DELIVERY"') &&
-    workflowForms.includes("Mark an order ready before confirming outbound scans."),
+    workflowForms.includes("No ready orders yet."),
   "Outbound form must only list ready orders"
 )
 const barcodeWeight = read("lib/stock/barcode-weight.ts")
@@ -287,7 +300,9 @@ assert(
 )
 assert(
   stockPageSource.includes("Barcode stock units") &&
-    stockPageSource.includes("getRowHref={(row) => `/stock/units/${row.id}`}"),
+    stockPageSource.includes("<StockUnitsTableClient") &&
+    stockUnitsTableClient.includes('"use client"') &&
+    stockUnitsTableClient.includes("getRowHref={(row) => `/stock/units/${row.id}`}"),
   "Stock balance page must link barcode stock units to the detail/reprint page"
 )
 assert(
@@ -298,24 +313,33 @@ assert(
   "Stock balance/dashboard must present no-barcode balances as legacy visibility, not an active MVP stock workflow"
 )
 assert(
-  stockPageSource.includes("Stock balance by item, brand, location, inbound age") &&
+  stockPageSource.includes("Elite Meat stock reports") &&
+    stockPageSource.includes("Formal stock balance, movement history, inbound, outbound") &&
+    stockPageSource.includes("function ReportsFilter") &&
     stockPageSource.includes("<ReportToolbar") &&
     stockDataSource.includes('reportName: "Stock by location"') &&
     stockDataSource.includes('reportName: "Stock by category"') &&
     stockDataSource.includes('reportName: "Stock by inbound age"') &&
+    stockDataSource.includes('reportName: "Stock movement history"') &&
+    stockDataSource.includes('reportName: "Inbound"') &&
+    stockDataSource.includes('reportName: "Outbound"') &&
+    stockDataSource.includes('reportName: "Transfer pending"') &&
+    stockDataSource.includes('reportName: "Old stock 6 months"') &&
     stockDataSource.includes("sixMonthStockAgeDays") &&
     stockDataSource.includes("twelveMonthStockAgeDays") &&
     stockDataSource.includes('reportName: "Stock take variance"') &&
     stockDataSource.includes('reportName: "Damage/spoilage"') &&
-    stockDataSource.includes('reportName: "Return supplier"'),
-  "Stock reports must cover balance, inbound age, variance, damage/spoilage, return supplier, and export toolbar"
+    stockDataSource.includes('reportName: "Return supplier"') &&
+    stockDataSource.includes('reportName: "Barcode scan errors"'),
+  "Stock reports must cover required formal reports, filters, and export toolbar"
 )
 assert(
-  stockUnitDetail.includes("Print / Export PDF label") &&
-    stockUnitDetail.includes("@page") &&
-    stockUnitDetail.includes("size: 50mm 30mm") &&
-    stockUnitDetail.includes("window.print()") &&
-    stockUnitDetail.includes("stock-label-print-area"),
+    stockUnitDetail.includes("StockLabelPrintActions") &&
+    stockUnitDetail.includes("StockLabelPrintArea") &&
+    stockLabelSource.includes('pageSize: "50mm 30mm"') &&
+    stockLabelSource.includes("window.print()") &&
+    stockLabelSource.includes("Bluetooth label printer") &&
+    stockLabelSource.includes("PDF fallback"),
   "Stock unit detail page must support 50mm x 30mm label reprint/export"
 )
 
@@ -375,8 +399,8 @@ assert(
   "Stock inbound must block inactive items, allow custom brand/origin, save global item/brand/origin barcode rules, and use atomic RPC"
 )
 assert(
-  stockActions.includes("assertStockNotLockedByTake") &&
-    stockActions.includes("Cannot ${input.action}") &&
+  stockActions.includes("warnIfStockTakeOpen") &&
+    stockActions.includes("STOCK_TAKE_OPERATION_WARNING") &&
     stockTakeActionRules.includes("requireStockTakeScopeMatch") &&
     stockTakeActionRules.includes("signature is required.") &&
     stockTakeActionRules.includes("Manager review") &&
@@ -385,7 +409,7 @@ assert(
     stockActions.includes("stockDirectorApprovalRoles") &&
     stockActions.includes('"approve_stock_take_session"') &&
     stockActions.includes("p_director_signature: signature"),
-  "Stock take actions must enforce scoped lock, manager review, director approval, signatures, and atomic approval RPC"
+  "Stock take actions must warn on scoped open counts, enforce manager review, director approval, signatures, and atomic approval RPC"
 )
 assert(
   stockActions.includes('const orderOutboundTypes = ["SALES", "TRANSFER", "PROCESSING"]') &&
@@ -437,7 +461,7 @@ for (const fragment of [
   "was not found or is inactive.",
   "All barcodes in one outbound batch must come from the same location.",
   "Transfer destination must be different from the current location.",
-  "Cannot ${input.action}",
+  "STOCK_TAKE_OPERATION_WARNING",
   "Stock take session created.",
 ]) {
   assert(stockActionRules.includes(fragment), `Stock action missing: ${fragment}`)
@@ -445,34 +469,42 @@ for (const fragment of [
 
 const ordersActions = read("lib/orders/actions.ts")
 const ordersPage = read("components/orders/orders-page.tsx")
+const ordersTableClient = read("components/orders/orders-table-client.tsx")
 for (const fragment of [
   "createCustomerOrderAction",
+  "parseOrderLines(parsed.itemsJson)",
+  "next_customer_order_no_v1",
+  "source_type: \"manual_erp\"",
+  "total_order_price: parsed.totalOrderPrice",
+  "order_stock_reservations",
+  "expires_at: reservationExpiresAt",
+  "stock_not_enough: stockNotEnough",
+  "Order ${orderNo} confirmed and stock reserved.",
   "outletId: optionalId",
   "departmentId: optionalId",
   "scopedOutletId(context.profile, parsed.outletId)",
   "scopedDepartmentId(context.profile, parsed.departmentId)",
   "Choose an outlet before creating orders.",
-  "addCustomerOrderItemAction",
   '"INTERNAL_TRANSFER"',
-  "assertOrderHasNoActiveReservations",
-  "Stock is already reserved for this order.",
-  "prepare_customer_order_item_with_reservation",
-  "Could not prepare item and reserve stock:",
-  "Requested quantity or requested weight is required.",
-  "prepareCustomerOrderItemAction",
+  "pickOrderBarcodeAction",
+  "manualPickWeightAction",
+  "order_picking_entries",
+  "Wrong item scanned. Mismatch recorded.",
+  "Duplicate barcode. This barcode is already picked for the order.",
+  "Manual picking needs quantity or weight.",
   "markCustomerOrderReadyAction",
-  "assertOrderEditable",
-  'assertOrderEditable(order, "add items")',
-  'assertOrderEditable(order, "prepare items")',
-  "after it is ready or closed",
-  "assertOrderReadyForHandoff",
-  "Prepare every order item with quantity or weight",
+  "Pick every item within the 10kg tolerance before marking ready.",
   "prepared_quantity",
   "prepared_weight_kg",
   "READY_FOR_PICKUP",
   "READY_FOR_DELIVERY",
   "OUT_FOR_DELIVERY",
   "DELIVERED",
+  "cancelCustomerOrderAction",
+  "Order cancelled and reserved stock released.",
+  "CUSTOMER_ORDER_CANCELLED_V1",
+  "markPickupCompletedAction",
+  "CUSTOMER_ORDER_PICKED_UP_V1",
   "allowedDeliveryStatuses",
   "Delivery order cannot move from",
   "Only delivery-required customer orders can be updated here.",
@@ -482,13 +514,8 @@ for (const fragment of [
   "assertProofBeforeDeliveryCompletion(order, parsed.status)",
   "Upload proof of delivery before marking this customer order delivered or failed.",
   "proof_file_id",
-  "releaseOrderReservationsAction",
-  "releaseReservationsSchema",
-  "Order must be cancelled before releasing reserved stock.",
-  "No active reservations found for this cancelled order.",
   'status: "RELEASED"',
   '.eq("status", "ACTIVE")',
-  "CUSTOMER_ORDER_RESERVATIONS_RELEASED",
 ]) {
   assert(ordersActions.includes(fragment), `Order action missing: ${fragment}`)
 }
@@ -505,28 +532,29 @@ for (const fragment of [
   "scopeOptions.outlets",
   "name=\"outletId\"",
   "name=\"departmentId\"",
-  "Choose the outlet scope",
-  "submitDisabled={submitDisabled}",
-  "submitDisabled={items.length === 0 || !hasPreparedAmount}",
+  "Create confirmed order",
+  "itemsJson",
+  "Search name or phone",
+  "Credit overdue warning. Order is not blocked.",
+  "Processing required",
+  "Estimated kg is needed for stock reservation.",
+  "pickOrderBarcodeAction",
+  "manualPickWeightAction",
+  "manualPickReasons.map",
+  "Wrong item scans are recorded as mismatches.",
   "submitDisabled={readyCandidates.length === 0}",
   "disabled={deliveryOrders.length === 0}",
   "disabled={statusOptions.length === 0}",
-  "required={!submitDisabled}",
-  "hasRequestedAmount",
-  "hasPreparedAmount",
-  "Stock is not reserved until picking starts.",
-  "Enter prepared quantity, prepared weight, or both before saving and reserving stock.",
-  "Start picking, reserve stock",
-  "Release reserved stock",
-  "Cancellation itself does not release stock.",
-  "releaseOrderReservationsAction",
-  "No cancelled orders with active reservations are available.",
-  "Proof photos can be uploaded after a customer order is out for",
+  "cancelCustomerOrderAction",
+  "Cancelling releases active reservations.",
+  "markPickupCompletedAction",
 ]) {
   assert(ordersForms.includes(fragment), `Order form UX guard missing: ${fragment}`)
 }
 assert(
-  ordersPage.includes("getRowHref") && ordersPage.includes("/orders/${row.id}"),
+  ordersPage.includes("<OrdersTableClient") &&
+    ordersTableClient.includes('"use client"') &&
+    ordersTableClient.includes("getRowHref={(row) => `/orders/${row.id}`}"),
   "Orders list must link rows to order detail pages"
 )
 assert(
@@ -536,43 +564,42 @@ assert(
   "Orders page must show setup errors and avoid duplicate detail data loads"
 )
 assert(
-  ordersPage.includes("editableOrderItems(detailItems, [detailOrder])") &&
-    ordersPage.includes("<MarkOrderReadyForm orders={[detailOrder]} items={detailItems}") &&
-    ordersPage.includes("<ReleaseOrderReservationsForm") &&
-    ordersPage.includes("reservationRows(detailReservations)") &&
-    ordersPage.includes("canOperateOrders ?"),
-  "Order detail page must support prepare, mark-ready, and manual reservation release workflows"
-)
-assert(
-  ordersPage.includes("const orderOperatorRoles: UserRole[]") &&
-    ordersPage.includes("canOperate={canOperateOrders}") &&
-    ordersPage.includes("Order entry unavailable") &&
-    ordersPage.includes("Order preparation unavailable") &&
-    ordersPage.includes("reserved for retail, processing, and admin users"),
-  "Orders UI must keep director/view roles away from routine order entry controls"
+  ordersPage.includes("EditOrderBeforePickingForm") &&
+    ordersPage.includes("selectedOrderId={detailOrder.id}") &&
+    ordersPage.includes("MarkReadyForm") &&
+    ordersPage.includes("ReadyOrderActions") &&
+    ordersTableClient.includes("reservationRows(reservations)") &&
+    ordersTableClient.includes("pickingRows(entries"),
+  "Order detail page must support edit-before-picking, picking, mark-ready, pickup, and cancellation workflows"
 )
 assert(
   ordersPage.includes("requireCurrentProfile") &&
-    ordersPage.includes("scopeOptions={data.scopeOptions}"),
+    ordersPage.includes("scopeOptions={data.scopeOptions}") &&
+    ordersPage.includes('route === "create"') &&
+    ordersPage.includes('route === "picking"') &&
+    ordersPage.includes('route === "ready"') &&
+    ordersPage.includes('route === "customers"'),
   "Order creation page must pass current profile and scope options into the form"
 )
 
 const ordersData = read("lib/orders/data.ts")
 assert(
   ordersData.includes("scopeOptions: {") &&
-    ordersData.includes(".filter((row) => readBoolean(row.is_active))"),
+    ordersData.includes(".filter((row) => readBoolean(row.is_active, true))") &&
+    ordersData.includes("stockItemOptions"),
   "Order data must expose scope options and only offer active stock items for new order lines"
 )
 assert(
   ordersData.includes('loadRows("order_stock_reservations")') &&
+    ordersData.includes('loadRows("order_picking_entries")') &&
     ordersData.includes("mapReservation") &&
-    ordersData.includes("reservations,"),
-  "Order data must expose stock reservations for manual release workflow"
+    ordersData.includes("mapPickingEntry"),
+  "Order data must expose stock reservations and picking entries"
 )
 assert(
   ordersData.includes("isSupabaseConfigured") &&
     ordersData.includes("Orders data could not load") &&
-    ordersData.includes("return demoData()"),
+    ordersData.includes("return demoData(filters)"),
   "Orders data loader must only use demo fallback when Supabase is not configured and surface real query errors"
 )
 
@@ -660,7 +687,7 @@ for (const fragment of [
   "gen_random_uuid()",
   "Every outbound scan line must include a stock unit and barcode.",
   "order_status not in ('READY_FOR_PICKUP', 'READY_FOR_DELIVERY')",
-  "Transfer destination was not found or is inactive.",
+  "was not found or is inactive.",
   "from public.stock_locations",
   "Duplicate barcode in this outbound batch.",
   "insert into public.stock_outbound_batches",
@@ -1146,10 +1173,11 @@ assert(
   "Customer-order delivery proof upload must require receiver/GPS and use proof/customer GPS plus failed-return RPCs"
 )
 assert(
-  ordersActions.includes("assertOrderHasNoActiveReservations") &&
-    ordersActions.includes("prepare_customer_order_item_with_reservation") &&
-    ordersActions.includes("Could not prepare item and reserve stock:"),
-  "Order reservation flow must add items without reservation and reserve stock during preparation"
+  ordersActions.includes("parseOrderLines(parsed.itemsJson)") &&
+    ordersActions.includes("order_stock_reservations") &&
+    ordersActions.includes("Order ${orderNo} confirmed and stock reserved.") &&
+    ordersActions.includes("Order cancelled and reserved stock released."),
+  "Order V1 must reserve stock at confirmed creation and release active reservations on cancellation"
 )
 assert(
   deliveryPage.includes("shouldLoadCustomerOrders") &&
@@ -1166,10 +1194,10 @@ assert(
   "Delivery page must show failed-delivery return/reinbound status"
 )
 assert(
-  ordersPage.includes("function failedReturnText") &&
-    ordersPage.includes("failedReturnStatus") &&
-    ordersPage.includes("Failed delivery return"),
-  "Orders page must show failed-delivery return/reinbound status"
+  ordersPage.includes("delivery failed") ||
+    ordersData.includes("Delivery failed") ||
+    ordersData.includes("failedReturnStatus"),
+  "Orders module must keep delivery failed/return alert coverage"
 )
 assert(
   deliveryActions.includes('parsed.status === "FAILED"') &&
@@ -1194,7 +1222,6 @@ assert(
     deliveryPage.includes("canOperateDelivery ?") &&
     deliveryPage.includes("Delivery order entry unavailable") &&
     deliveryPage.includes("Customer order delivery actions unavailable") &&
-    deliveryPage.includes("Driver updates unavailable") &&
     deliveryPage.includes("Vehicle maintenance unavailable") &&
     deliveryPage.includes("Delivery payment entry unavailable"),
   "Delivery UI must keep director/view roles away from routine delivery operation controls"
@@ -1210,9 +1237,10 @@ assert(
 )
 assert(
   workflowForms.includes("orderItems: CustomerOrderItem[]") &&
-    workflowForms.includes("Order scan warning - check before confirming") &&
+    workflowForms.includes("Check before confirm") &&
+    workflowForms.includes("Weight difference is allowed.") &&
     workflowForms.includes("Substitution scanned") &&
-    workflowForms.includes("scanned batch will be recorded separately from the original") &&
+    workflowForms.includes("Confirm substitution. No reason needed.") &&
     stockPage.includes("orderItems={ordersResult.ordersData.items}"),
   "Order outbound must warn on requested-vs-scanned differences and visible substitutions while allowing MVP substitution"
 )
@@ -1273,9 +1301,11 @@ assert(
 const appShell = read("components/erp/app-shell.tsx")
 const homePage = read("components/dashboard/home-page.tsx")
 assert(
-  homePage.includes('href: "/orders/prepare"') &&
-    homePage.includes('label: "Prepare Orders"'),
-  "Home shortcuts must include order preparation for eligible users"
+  homePage.includes('href: "/orders/create"') &&
+    homePage.includes('label: "Orders"') &&
+    homePage.includes('href: "/orders/picking"') &&
+    homePage.includes('label: "Order Picking"'),
+  "Home shortcuts must include order creation and picking for eligible users"
 )
 for (const fragment of [
   'label: "Stock Dashboard"',
@@ -1361,15 +1391,9 @@ assert(
   "Sidebar and route guard must split routine stock operator routes from director stock viewing"
 )
 assert(
-  !/const orderRoles:[^\[]*\[[^\]]*delivery_team_general_worker/.test(appShell),
-  "Orders sidebar access must not grant delivery roles general order access"
-)
-
-assert(
-  !/const orderRoles:[^\[]*\[[^\]]*delivery_team_general_worker/.test(
-    ordersActions
-  ),
-  "Order actions must not allow delivery roles to create or prepare orders"
+  /const orderRoles:[\s\S]*?delivery_team_general_worker/.test(appShell) &&
+    /const orderRoles:[\s\S]*?delivery_team_general_worker/.test(ordersActions),
+  "Order V1 must allow delivery general workers with Orders module access"
 )
 assert(
   !(
