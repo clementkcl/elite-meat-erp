@@ -434,15 +434,31 @@ export async function getDeliveryVehicles(): Promise<Vehicle[]> {
     return []
   }
 
-  const { data, error } = await context.supabase
+  let query = context.supabase
     .from("vehicles")
     .select("*")
     .eq("is_active", true)
     .order("vehicle_no", { ascending: true })
 
+  if (!hasAnyRole(context.profile, ["admin", "director"])) {
+    if (!context.profile.departmentId) {
+      return []
+    }
+
+    query = query.eq("delivery_team_id", context.profile.departmentId)
+  }
+
+  const { data, error } = await query
+
   if (error) {
     throw new Error(error.message)
   }
+
+  const canSeeGpsMetadata = hasAnyRole(context.profile, [
+    "delivery_manager",
+    "admin",
+    "director",
+  ])
 
   return asRecordArray(data).map((vehicle) => ({
     id: readString(vehicle.id),
@@ -451,9 +467,13 @@ export async function getDeliveryVehicles(): Promise<Vehicle[]> {
     capacityKg: readNumber(vehicle.capacity_kg),
     active: readBoolean(vehicle.is_active, true),
     deliveryTeamId: readNullableString(vehicle.delivery_team_id),
-    gpsProviderId: readNullableString(vehicle.gps_provider_id),
-    gpsProviderVehicleRef: readString(vehicle.gps_provider_vehicle_ref),
-    gpsEnabled: readBoolean(vehicle.gps_enabled),
+    gpsProviderId: canSeeGpsMetadata
+      ? readNullableString(vehicle.gps_provider_id)
+      : null,
+    gpsProviderVehicleRef: canSeeGpsMetadata
+      ? readString(vehicle.gps_provider_vehicle_ref)
+      : "",
+    gpsEnabled: canSeeGpsMetadata ? readBoolean(vehicle.gps_enabled) : false,
   }))
 }
 
@@ -461,6 +481,12 @@ export async function getDeliveryDrivers() {
   const context = await getQueryContext()
 
   if (!context) {
+    return []
+  }
+
+  if (
+    !hasAnyRole(context.profile, ["delivery_manager", "admin", "director"])
+  ) {
     return []
   }
 

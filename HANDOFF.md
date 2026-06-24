@@ -6,6 +6,43 @@ This handoff reflects the codebase inspection for the existing frozen pork / mea
 
 The repository already contains a large dirty worktree from previous ERP work. Treat existing modified and untracked app files as in-progress work unless the owner explicitly asks to revert them.
 
+## 2026-06-24 - Delivery V1 deploy-ready branch
+
+Task completed:
+
+- Prepared clean branch `codex/delivery-v1-deploy-ready` from Delivery V1 commit `04cd3e0aba22ef4a3bfdbced7dde400bcb7fef20`.
+- Confirmed `/delivery/driver` imports and renders `DriverMobileDeliveryPage`, not legacy `DeliveryPage route="driver"`.
+- Preserved legacy Delivery pages with warning copy while keeping canonical V1 driver workflow on `/delivery/driver`.
+- Renamed duplicate local migration version `202606230013_order_reservation_logic_v1.sql` to `202606230026_order_reservation_logic_v1.sql` and confirmed no duplicate migration versions remain.
+- Added the staged Delivery hotfix migrations for canonical delivery RPC ambiguity, completion RLS, failed-proof constraints, and order finance exposure hardening.
+- Confirmed the unrelated Processing/retail smoke copy is present on this clean branch: `/orders/prepare`, `Prepare customer orders`, `Finished`, and `goods only enter stock after packing`.
+
+Files changed in this pass:
+
+- `app/(erp)/delivery/[id]/page.tsx`
+- `components/delivery/delivery-page.tsx`
+- `lib/delivery/actions.ts`
+- `lib/delivery/queries.ts`
+- `supabase/migrations/202606230015_delivery_permissions_audit_hardening_v1.sql`
+- `supabase/migrations/202606230026_order_reservation_logic_v1.sql`
+- `supabase/migrations/202606240005_delivery_order_rpc_ambiguity_fix_v1.sql`
+- `supabase/migrations/202606240006_delivery_completion_rls_fix_v1.sql`
+- `supabase/migrations/202606240007_delivery_failed_proof_constraints_v1.sql`
+- `supabase/migrations/202606240009_order_delivery_finance_exposure_fix_v1.sql`
+- `supabase/migrations/202606240010_order_customer_category_read_grant_v1.sql`
+- `HANDOFF.md`
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+
+Deployment note:
+
+- Vercel should deploy branch `codex/delivery-v1-deploy-ready`, not `main`, because current remote `main` still renders the legacy `/delivery/driver` page.
+
 ## 2026-06-23 - Delivery Task 10 future truck GPS preparation
 
 Task completed:
