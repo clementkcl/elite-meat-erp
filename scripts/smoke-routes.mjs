@@ -1164,6 +1164,8 @@ assert(
     deliveryDriverPage.includes("goodsReadiness") &&
     deliveryDriverPage.includes("Goods Ready") &&
     deliveryDriverPage.includes("Partially Ready") &&
+    deliveryDriverPage.includes("defaultDriverId") &&
+    deliveryDriverPage.includes("No default vehicle assigned. Ask manager to assign vehicle.") &&
     !deliveryDriverPage.includes("New Order"),
   "Delivery driver route must render V1 tabs and next-action UI, not legacy delivery"
 )

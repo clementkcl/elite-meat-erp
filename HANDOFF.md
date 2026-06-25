@@ -6,6 +6,25 @@ This handoff reflects the codebase inspection for the existing frozen pork / mea
 
 The repository already contains a large dirty worktree from previous ERP work. Treat existing modified and untracked app files as in-progress work unless the owner explicitly asks to revert them.
 
+## 2026-06-25 - Delivery driver expense default vehicle
+
+Task completed:
+
+- Confirmed staging `QA-DELIVERY-TRUCK-01` is assigned to `delivery.driver.qa@elitempsb.com`, not the old `.test` profile.
+- Fixed the Expenses tab so the vehicle dropdown auto-selects the current driver's default vehicle.
+- Added the empty-state message: `No default vehicle assigned. Ask manager to assign vehicle.`
+- Kept delivery link optional and did not add finance/order price fields.
+- Added smoke coverage for the default-vehicle UX.
+
+Files changed in this pass:
+
+- `app/(erp)/delivery/driver/page.tsx`
+- `components/delivery/driver-mobile-delivery-page.tsx`
+- `lib/delivery/queries.ts`
+- `lib/delivery/types.ts`
+- `scripts/smoke-routes.mjs`
+- `HANDOFF.md`
+
 ## 2026-06-25 - Delivery V1 readiness labels and UAT docs
 
 Task completed:

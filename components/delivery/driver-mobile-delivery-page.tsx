@@ -753,17 +753,20 @@ function FailedCard({ delivery }: { delivery: Delivery }) {
 function ExpenseForm({
   vehicles,
   deliveries,
+  driverId,
 }: {
   vehicles: Vehicle[]
   deliveries: Delivery[]
+  driverId: string
 }) {
   const { pending, message, run } = useDeliveryAction()
   const fileRef = useRef<HTMLInputElement>(null)
+  const defaultVehicle = vehicles.find((vehicle) => vehicle.defaultDriverId === driverId)
   const [expenseType, setExpenseType] = useState<DeliveryExpenseType>("PETROL")
   const [amount, setAmount] = useState("")
   const [remark, setRemark] = useState("")
   const [deliveryId, setDeliveryId] = useState("")
-  const [vehicleId, setVehicleId] = useState("")
+  const [vehicleId, setVehicleId] = useState(defaultVehicle?.id ?? "")
 
   function submit() {
     const file = fileRef.current?.files?.[0]
@@ -844,6 +847,11 @@ function ExpenseForm({
           </div>
           <div className="space-y-2">
             <Label htmlFor="expenseVehicle">Vehicle</Label>
+            {!defaultVehicle ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                No default vehicle assigned. Ask manager to assign vehicle.
+              </div>
+            ) : null}
             <NativeSelect
               id="expenseVehicle"
               name="vehicleId"
@@ -985,6 +993,7 @@ export function DriverMobileDeliveryPage({
   expenses,
   vehicles,
   driverName,
+  driverId,
   loadError,
 }: {
   availableDeliveries: Delivery[]
@@ -992,6 +1001,7 @@ export function DriverMobileDeliveryPage({
   expenses: DeliveryExpense[]
   vehicles: Vehicle[]
   driverName: string
+  driverId: string
   loadError?: string | null
 }) {
   const [activeTab, setActiveTab] = useState<DriverTab>("Available")
@@ -1100,7 +1110,11 @@ export function DriverMobileDeliveryPage({
 
       {activeTab === "Expenses" ? (
         <div className="space-y-4">
-          <ExpenseForm vehicles={vehicles} deliveries={expenseDeliveries} />
+          <ExpenseForm
+            vehicles={vehicles}
+            deliveries={expenseDeliveries}
+            driverId={driverId}
+          />
           <ExpenseList expenses={expenses} />
         </div>
       ) : null}

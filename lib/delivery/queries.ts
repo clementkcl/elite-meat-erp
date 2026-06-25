@@ -574,6 +574,7 @@ export async function getDeliveryVehicles(): Promise<Vehicle[]> {
     capacityKg: readNumber(vehicle.capacity_kg),
     active: readBoolean(vehicle.is_active, true),
     deliveryTeamId: readNullableString(vehicle.delivery_team_id),
+    defaultDriverId: readNullableString(vehicle.default_driver_id),
     gpsProviderId: canSeeGpsMetadata
       ? readNullableString(vehicle.gps_provider_id)
       : null,

@@ -92,6 +92,7 @@ export type Vehicle = {
   capacityKg: number
   active: boolean
   deliveryTeamId?: string | null
+  defaultDriverId?: string | null
   gpsProviderId?: string | null
   gpsProviderName?: string
   gpsProviderVehicleRef?: string

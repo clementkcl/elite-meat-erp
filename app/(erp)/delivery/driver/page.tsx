@@ -58,6 +58,7 @@ export default async function DeliveryDriverPage() {
       driverDeliveries={result.driverDeliveries}
       expenses={result.expenses}
       vehicles={result.vehicles}
+      driverId={profile.id}
       driverName={profile.fullName}
       loadError={result.error}
     />
