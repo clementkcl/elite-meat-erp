@@ -51,6 +51,8 @@ const requiredRoutes = [
   "app/(erp)/orders/[id]/page.tsx",
   "app/(erp)/orders/prepare/page.tsx",
   "app/(erp)/delivery/dashboard/page.tsx",
+  "app/(erp)/delivery/driver/page.tsx",
+  "app/(erp)/debug/build/page.tsx",
   "app/(erp)/attendance/today/page.tsx",
   "app/(erp)/oa-actions/dashboard/page.tsx",
   "app/(erp)/retail/dashboard/page.tsx",
@@ -1137,6 +1139,31 @@ for (const [file, moduleKey] of [
 }
 const deliveryActions = read("lib/delivery/actions.ts")
 const deliveryPage = read("components/delivery/delivery-page.tsx")
+const deliveryDriverRoute = read("app/(erp)/delivery/driver/page.tsx")
+const deliveryDriverPage = read("components/delivery/driver-mobile-delivery-page.tsx")
+const buildDebugPage = read("app/(erp)/debug/build/page.tsx")
+assert(
+  deliveryDriverRoute.includes("DriverMobileDeliveryPage") &&
+    !deliveryDriverRoute.includes('import { DeliveryPage }') &&
+    !deliveryDriverRoute.includes('DeliveryPage route="driver"') &&
+    deliveryDriverPage.includes('"Available"') &&
+    deliveryDriverPage.includes('"My Deliveries"') &&
+    deliveryDriverPage.includes('"Completed"') &&
+    deliveryDriverPage.includes('"Failed"') &&
+    deliveryDriverPage.includes('"Expenses"') &&
+    deliveryDriverPage.includes("Complete Delivery") &&
+    deliveryDriverPage.includes("Report Failed") &&
+    deliveryDriverPage.includes("Mark Loaded") &&
+    !deliveryDriverPage.includes("New Order"),
+  "Delivery driver route must render V1 tabs and next-action UI, not legacy delivery"
+)
+assert(
+  buildDebugPage.includes("VERCEL_GIT_COMMIT_REF") &&
+    buildDebugPage.includes("VERCEL_GIT_COMMIT_SHA") &&
+    buildDebugPage.includes("NEXT_PUBLIC_SUPABASE_URL") &&
+    buildDebugPage.includes("Supabase ref"),
+  "Build debug page must expose branch, commit, environment, and Supabase ref"
+)
 assert(
   deliveryActions.includes("assertProofUploadAllowed(order)") &&
     deliveryActions.includes("Proof photos can only be uploaded after the delivery is out for delivery."),

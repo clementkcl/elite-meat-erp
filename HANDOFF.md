@@ -6,6 +6,30 @@ This handoff reflects the codebase inspection for the existing frozen pork / mea
 
 The repository already contains a large dirty worktree from previous ERP work. Treat existing modified and untracked app files as in-progress work unless the owner explicitly asks to revert them.
 
+## 2026-06-25 - Delivery V1 driver UAT polish
+
+Task completed:
+
+- Simplified `/delivery/driver` cards so drivers see one large primary next action at a time: accept, mark loaded, start delivery, or complete delivery.
+- Kept Google Maps, Call, WhatsApp, Address Issue, and Report Failed as smaller secondary actions.
+- Collapsed the failed-proof path behind `Report Failed`; delivered proof remains the primary `Complete Delivery` action.
+- Added `/debug/build` to show runtime branch, commit, Vercel environment, deployment URL, and Supabase project ref without secrets.
+- Added smoke coverage proving `/delivery/driver` renders `DriverMobileDeliveryPage`, contains V1 tabs/actions, and does not import/render the legacy driver route.
+
+Files changed in this pass:
+
+- `components/delivery/driver-mobile-delivery-page.tsx`
+- `app/(erp)/debug/build/page.tsx`
+- `scripts/smoke-routes.mjs`
+- `HANDOFF.md`
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run typecheck` - passed.
+
 ## 2026-06-24 - Delivery V1 deploy-ready branch
 
 Task completed:

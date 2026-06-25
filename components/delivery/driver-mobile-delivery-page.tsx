@@ -256,21 +256,21 @@ function useDeliveryAction() {
 function QuickLinks({ delivery }: { delivery: Delivery }) {
   return (
     <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-3">
-      <Button asChild variant="outline" className="min-h-12 justify-center text-base">
+      <Button asChild variant="outline" size="sm" className="justify-center">
         <a href={mapsUrl(delivery)} target="_blank" rel="noreferrer">
-          <Navigation className="size-5" />
+          <Navigation className="size-4" />
           Google Maps
         </a>
       </Button>
-      <Button asChild variant="outline" className="min-h-12 justify-center text-base">
+      <Button asChild variant="outline" size="sm" className="justify-center">
         <a href={delivery.customerPhone ? `tel:${delivery.customerPhone}` : "#"}>
-          <Phone className="size-5" />
+          <Phone className="size-4" />
           Call
         </a>
       </Button>
-      <Button asChild variant="outline" className="min-h-12 justify-center text-base">
+      <Button asChild variant="outline" size="sm" className="justify-center">
         <a href={whatsappUrl(delivery.customerPhone)} target="_blank" rel="noreferrer">
-          <MessageCircle className="size-5" />
+          <MessageCircle className="size-4" />
           WhatsApp
         </a>
       </Button>
@@ -354,11 +354,11 @@ function AvailableCard({
         </div>
       ) : null}
 
-      <div className="grid gap-2 min-[360px]:grid-cols-2">
+      <div className="space-y-2">
         <Button
           type="button"
           disabled={pending}
-          className="min-h-12 text-base"
+          className="min-h-14 w-full text-lg"
           onClick={() =>
             run(
               () => acceptDelivery(delivery.id, vehicleId || null),
@@ -372,7 +372,8 @@ function AvailableCard({
         <Button
           type="button"
           variant="outline"
-          className="min-h-12 text-base"
+          size="sm"
+          className="w-full"
           onClick={() => setShowVehicle((value) => !value)}
         >
           Change Vehicle
@@ -396,10 +397,11 @@ function AddressIssueForm({ delivery }: { delivery: Delivery }) {
       <Button
         type="button"
         variant="outline"
-        className="min-h-12 w-full text-base"
+        size="sm"
+        className="w-full"
         onClick={() => setOpen((value) => !value)}
       >
-        <AlertTriangle className="size-5" />
+        <AlertTriangle className="size-4" />
         Address Issue
       </Button>
       {open ? (
@@ -616,7 +618,7 @@ function ProofForm({
           ? "Uploading..."
           : outcome === "FAILED"
             ? "Upload Failed Proof"
-            : "Upload Delivered Proof"}
+            : "Complete Delivery"}
       </Button>
       <Message state={message} />
     </div>
@@ -631,28 +633,29 @@ function MyDeliveryCard({
   driverName: string
 }) {
   const { pending, message, run } = useDeliveryAction()
+  const [showFailed, setShowFailed] = useState(false)
 
   return (
     <DeliveryCardShell delivery={delivery}>
-      <div className="grid gap-2 min-[360px]:grid-cols-2">
+      <div className="space-y-2">
         {delivery.status === "ACCEPTED" ? (
           <Button
             type="button"
             disabled={pending}
-            className="min-h-12 text-base"
+            className="min-h-14 w-full text-lg"
             onClick={() =>
               run(() => markDeliveryLoaded(delivery.id), "Delivery marked loaded.")
             }
           >
             <PackageCheck className="size-5" />
-            Loaded
+            Mark Loaded
           </Button>
         ) : null}
         {delivery.status === "LOADED" ? (
           <Button
             type="button"
             disabled={pending}
-            className="min-h-12 text-base"
+            className="min-h-14 w-full text-lg"
             onClick={() =>
               run(() => startDelivery(delivery.id), "Delivery started.")
             }
@@ -669,11 +672,23 @@ function MyDeliveryCard({
             outcome="DELIVERED"
             driverName={driverName}
           />
-          <ProofForm
-            delivery={delivery}
-            outcome="FAILED"
-            driverName={driverName}
-          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={() => setShowFailed((value) => !value)}
+          >
+            <AlertTriangle className="size-4" />
+            Report Failed
+          </Button>
+          {showFailed ? (
+            <ProofForm
+              delivery={delivery}
+              outcome="FAILED"
+              driverName={driverName}
+            />
+          ) : null}
         </div>
       ) : null}
       <AddressIssueForm delivery={delivery} />
