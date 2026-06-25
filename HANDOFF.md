@@ -10,6 +10,7 @@ The repository already contains a large dirty worktree from previous ERP work. T
 
 Task completed:
 
+- Added the requested `View Summary` primary action for completed and failed driver delivery cards.
 - Replaced `.test` browser-QA credentials with valid-email staging QA accounts:
   - `delivery.driver.qa@elitempsb.com`
   - `delivery.manager.qa@elitempsb.com`

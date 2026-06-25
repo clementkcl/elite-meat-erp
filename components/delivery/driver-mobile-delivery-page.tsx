@@ -14,6 +14,7 @@ import {
   Truck,
 } from "lucide-react"
 import { useMemo, useRef, useState, useTransition, type ReactNode } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 import { Badge } from "@/components/ui/badge"
@@ -700,6 +701,12 @@ function MyDeliveryCard({
 function CompletedCard({ delivery }: { delivery: Delivery }) {
   return (
     <DeliveryCardShell delivery={delivery}>
+      <Button asChild className="min-h-14 w-full text-lg">
+        <Link href={`/delivery/${delivery.id}`}>
+          <CheckCircle2 className="size-5" />
+          View Summary
+        </Link>
+      </Button>
       <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
         <CheckCircle2 className="mr-2 inline size-4" />
         Proof uploaded. Completed {delivery.completedAt ? new Date(delivery.completedAt).toLocaleString("en") : "today"}.
@@ -711,6 +718,12 @@ function CompletedCard({ delivery }: { delivery: Delivery }) {
 function FailedCard({ delivery }: { delivery: Delivery }) {
   return (
     <DeliveryCardShell delivery={delivery}>
+      <Button asChild className="min-h-14 w-full text-lg">
+        <Link href={`/delivery/${delivery.id}`}>
+          <AlertTriangle className="size-5" />
+          View Summary
+        </Link>
+      </Button>
       <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
         <AlertTriangle className="mr-2 inline size-4" />
         {delivery.failedReason ? label(delivery.failedReason) : "Failed proof uploaded."}

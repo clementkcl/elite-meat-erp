@@ -1157,6 +1157,7 @@ assert(
     deliveryDriverPage.includes("Complete Delivery") &&
     deliveryDriverPage.includes("Report Failed") &&
     deliveryDriverPage.includes("Mark Loaded") &&
+    deliveryDriverPage.includes("View Summary") &&
     !deliveryDriverPage.includes("New Order"),
   "Delivery driver route must render V1 tabs and next-action UI, not legacy delivery"
 )
