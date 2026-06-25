@@ -30,6 +30,31 @@ Commands run and results:
 - `npm.cmd run build` - passed.
 - `npm.cmd run typecheck` - passed.
 
+## 2026-06-25 - Delivery V1 manager exception-first dashboard
+
+Task completed:
+
+- Moved `/delivery` manager review queues above filters, KPIs, driver performance, and the full delivery list.
+- Added `Needs Review First` section covering failed deliveries, GPS unavailable, address/GPS suggestions, pending expenses, late deliveries, and driver took too long.
+- Added a scoped pending-expense count to dashboard reviews and linked managers to `/delivery/expenses?status=PENDING`.
+- Added smoke coverage so the manager dashboard must keep exception review before filters/KPIs.
+
+Files changed in this pass:
+
+- `app/(erp)/delivery/page.tsx`
+- `components/delivery/manager-delivery-dashboard.tsx`
+- `lib/delivery/queries.ts`
+- `lib/delivery/types.ts`
+- `scripts/smoke-routes.mjs`
+- `HANDOFF.md`
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run typecheck` - passed.
+
 ## 2026-06-24 - Delivery V1 deploy-ready branch
 
 Task completed:

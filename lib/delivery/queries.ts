@@ -916,9 +916,20 @@ async function buildDashboardReviews(
     .eq("status", "PENDING")
     .order("created_at", { ascending: false })
     .limit(100)
+  const expensesQuery = supabase
+    .from("delivery_expenses")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "PENDING")
+    .gte("created_at", `${filterDate}T00:00:00.000Z`)
+    .lte("created_at", `${filterDate}T23:59:59.999Z`)
+  const { count: pendingExpenses, error: expenseError } = await expensesQuery
 
   if (error) {
     throw new Error(error.message)
+  }
+
+  if (expenseError) {
+    throw new Error(expenseError.message)
   }
 
   const addressSuggestions = await withSignedAddressSuggestionUrls(
@@ -930,6 +941,7 @@ async function buildDashboardReviews(
     failedDeliveries: deliveries.filter((delivery) => delivery.status === "FAILED"),
     gpsUnavailable: deliveries.filter((delivery) => delivery.gpsUnavailable),
     addressSuggestions,
+    pendingExpenses: pendingExpenses ?? 0,
     lateDeliveries,
     slowDeliveries,
   }
@@ -954,6 +966,7 @@ function emptyDashboard(): DeliveryDashboardData {
       failedDeliveries: [],
       gpsUnavailable: [],
       addressSuggestions: [],
+      pendingExpenses: 0,
       lateDeliveries: [],
       slowDeliveries: [],
     },

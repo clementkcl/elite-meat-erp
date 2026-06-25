@@ -1141,6 +1141,7 @@ const deliveryActions = read("lib/delivery/actions.ts")
 const deliveryPage = read("components/delivery/delivery-page.tsx")
 const deliveryDriverRoute = read("app/(erp)/delivery/driver/page.tsx")
 const deliveryDriverPage = read("components/delivery/driver-mobile-delivery-page.tsx")
+const deliveryManagerDashboard = read("components/delivery/manager-delivery-dashboard.tsx")
 const buildDebugPage = read("app/(erp)/debug/build/page.tsx")
 assert(
   deliveryDriverRoute.includes("DriverMobileDeliveryPage") &&
@@ -1163,6 +1164,13 @@ assert(
     buildDebugPage.includes("NEXT_PUBLIC_SUPABASE_URL") &&
     buildDebugPage.includes("Supabase ref"),
   "Build debug page must expose branch, commit, environment, and Supabase ref"
+)
+assert(
+  deliveryManagerDashboard.indexOf("Needs Review First") <
+    deliveryManagerDashboard.indexOf("<DashboardFilters") &&
+    deliveryManagerDashboard.includes("PendingExpenseReview") &&
+    deliveryManagerDashboard.includes("Driver Took Too Long"),
+  "Delivery manager dashboard must put exception review before filters and KPIs"
 )
 assert(
   deliveryActions.includes("assertProofUploadAllowed(order)") &&

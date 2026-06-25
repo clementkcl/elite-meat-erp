@@ -81,6 +81,7 @@ export default async function DeliveryHomePage({
             failedDeliveries: [],
             gpsUnavailable: [],
             addressSuggestions: [],
+            pendingExpenses: 0,
             lateDeliveries: [],
             slowDeliveries: [],
           },

@@ -433,6 +433,35 @@ function AddressSuggestionReview({ data }: { data: DeliveryDashboardData }) {
   )
 }
 
+function PendingExpenseReview({ count }: { count: number }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Pending Expenses</CardTitle>
+        <CardDescription>Driver expense claims waiting for review.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {count > 0 ? (
+          <div className="rounded-md border p-3 text-sm">
+            <div className="font-medium">{count} pending expense{count === 1 ? "" : "s"}</div>
+            <div className="text-muted-foreground">
+              Petrol, parking, toll, repair, and other receipts.
+            </div>
+            <Button asChild variant="outline" size="sm" className="mt-3">
+              <Link href="/delivery/expenses?status=PENDING">Review Expenses</Link>
+            </Button>
+          </div>
+        ) : (
+          <EmptyState
+            title="No pending expenses"
+            description="New driver expense claims will appear here."
+          />
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function ManagerDeliveryDashboard({
   data,
   filters,
@@ -450,7 +479,7 @@ export function ManagerDeliveryDashboard({
             Delivery Dashboard
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manager review for delivery progress, issues, and driver workload.
+            Review delivery exceptions first, then scan today status and driver workload.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -468,6 +497,39 @@ export function ManagerDeliveryDashboard({
           Delivery dashboard data could not load. Check database migrations and permissions.
         </div>
       ) : null}
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-semibold">Needs Review First</h2>
+          <p className="text-sm text-muted-foreground">
+            Failed deliveries, GPS issues, address suggestions, expenses, late deliveries, and slow trips.
+          </p>
+        </div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <ReviewDeliveryList
+            title="Failed Deliveries"
+            description="Failed proof uploaded and needs manager review."
+            deliveries={data.reviews.failedDeliveries}
+          />
+          <ReviewDeliveryList
+            title="GPS Unavailable"
+            description="Proof completed without phone GPS."
+            deliveries={data.reviews.gpsUnavailable}
+          />
+          <AddressSuggestionReview data={data} />
+          <PendingExpenseReview count={data.reviews.pendingExpenses} />
+          <ReviewDeliveryList
+            title="Late Deliveries"
+            description="Requested date is before the selected date and still open."
+            deliveries={data.reviews.lateDeliveries}
+          />
+          <ReviewDeliveryList
+            title="Driver Took Too Long"
+            description="Started more than two hours before completion or still out."
+            deliveries={data.reviews.slowDeliveries}
+          />
+        </div>
+      </section>
 
       <DashboardFilters filters={filters} deliveries={data.deliveries} />
 
@@ -523,30 +585,6 @@ export function ManagerDeliveryDashboard({
           <DeliveryList deliveries={data.deliveries} />
         </CardContent>
       </Card>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <ReviewDeliveryList
-          title="Failed Deliveries"
-          description="Failed proof uploaded and needs manager review."
-          deliveries={data.reviews.failedDeliveries}
-        />
-        <ReviewDeliveryList
-          title="GPS Unavailable"
-          description="Proof completed without phone GPS."
-          deliveries={data.reviews.gpsUnavailable}
-        />
-        <AddressSuggestionReview data={data} />
-        <ReviewDeliveryList
-          title="Late Deliveries"
-          description="Requested date is before the selected date and still open."
-          deliveries={data.reviews.lateDeliveries}
-        />
-        <ReviewDeliveryList
-          title="Driver Took Too Long"
-          description="Started more than two hours before completion or still out."
-          deliveries={data.reviews.slowDeliveries}
-        />
-      </div>
 
       <div className="rounded-md border bg-muted/30 p-4 text-sm text-muted-foreground">
         V1 does not include a dispatch board. Use this page for status review and issue follow-up.

@@ -556,6 +556,7 @@ export type DeliveryDashboardData = {
     failedDeliveries: Delivery[]
     gpsUnavailable: Delivery[]
     addressSuggestions: DeliveryDashboardAddressSuggestion[]
+    pendingExpenses: number
     lateDeliveries: Delivery[]
     slowDeliveries: Delivery[]
   }
