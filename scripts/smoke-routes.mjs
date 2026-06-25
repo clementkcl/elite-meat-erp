@@ -1143,6 +1143,8 @@ const deliveryDriverRoute = read("app/(erp)/delivery/driver/page.tsx")
 const deliveryDriverPage = read("components/delivery/driver-mobile-delivery-page.tsx")
 const deliveryManagerDashboard = read("components/delivery/manager-delivery-dashboard.tsx")
 const buildDebugPage = read("app/(erp)/debug/build/page.tsx")
+const packageJson = read("package.json")
+const deliveryPreviewVerifier = read("scripts/delivery-preview-verify.mjs")
 assert(
   deliveryDriverRoute.includes("DriverMobileDeliveryPage") &&
     !deliveryDriverRoute.includes('import { DeliveryPage }') &&
@@ -1164,6 +1166,17 @@ assert(
     buildDebugPage.includes("NEXT_PUBLIC_SUPABASE_URL") &&
     buildDebugPage.includes("Supabase ref"),
   "Build debug page must expose branch, commit, environment, and Supabase ref"
+)
+assert(
+  packageJson.includes('"delivery:preview"') &&
+    packageJson.includes("scripts/delivery-preview-verify.mjs") &&
+    deliveryPreviewVerifier.includes("DELIVERY_PREVIEW_URL") &&
+    deliveryPreviewVerifier.includes("DELIVERY_QA_PASSWORD") &&
+    deliveryPreviewVerifier.includes("/debug/build") &&
+    deliveryPreviewVerifier.includes("/delivery/driver") &&
+    deliveryPreviewVerifier.includes("My Deliveries") &&
+    deliveryPreviewVerifier.includes("New Order"),
+  "Delivery preview verifier must login and reject stale legacy driver deployments"
 )
 assert(
   deliveryManagerDashboard.indexOf("Needs Review First") <

@@ -6,6 +6,38 @@ This handoff reflects the codebase inspection for the existing frozen pork / mea
 
 The repository already contains a large dirty worktree from previous ERP work. Treat existing modified and untracked app files as in-progress work unless the owner explicitly asks to revert them.
 
+## 2026-06-25 - Delivery V1 QA Auth and preview verifier
+
+Task completed:
+
+- Replaced `.test` browser-QA credentials with valid-email staging QA accounts:
+  - `delivery.driver.qa@elitempsb.com`
+  - `delivery.manager.qa@elitempsb.com`
+  - `delivery.other.qa@elitempsb.com`
+- Confirmed the new staging Auth users are email-confirmed, have ERP profiles, role rows, outlet/team scope, delivery module access, and the QA driver default vehicle `QA-DELIVERY-TRUCK-01`.
+- Kept the old `.test` users available for database history only; browser QA should use the new `@elitempsb.com` users.
+- Added `npm.cmd run delivery:preview` to verify a deployed Vercel preview logs in as the QA driver, renders `/debug/build`, confirms the expected branch/Supabase ref are visible, and rejects stale legacy `/delivery/driver` tabs.
+- Added smoke coverage for the preview verifier wiring.
+
+Files changed in this pass:
+
+- `package.json`
+- `scripts/delivery-preview-verify.mjs`
+- `scripts/smoke-routes.mjs`
+- `HANDOFF.md`
+
+Preview verification command:
+
+```cmd
+set DELIVERY_PREVIEW_URL=<vercel-preview-url>
+set DELIVERY_QA_PASSWORD=<qa-password>
+npm.cmd run delivery:preview
+```
+
+Deployment note:
+
+- The public deployment was still stale when checked: `/debug/build` returned 404 and `/delivery/driver` still rendered the legacy tabs. Deploy branch `codex/delivery-v1-deploy-ready` before running browser QA.
+
 ## 2026-06-25 - Delivery V1 driver UAT polish
 
 Task completed:
