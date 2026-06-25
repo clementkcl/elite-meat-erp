@@ -33,6 +33,18 @@ function formatWeight(value: number) {
   })} kg`
 }
 
+function readinessVariant(readiness: Delivery["goodsReadiness"]) {
+  if (readiness === "Goods Ready") {
+    return "success"
+  }
+
+  if (readiness === "Partially Ready") {
+    return "warning"
+  }
+
+  return "outline"
+}
+
 function compactDate(value?: string | null) {
   return value || new Date().toISOString().slice(0, 10)
 }
@@ -235,10 +247,16 @@ function DeliveryList({ deliveries }: { deliveries: Delivery[] }) {
                   Driver {delivery.driverName}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
                 <div>
                   <div className="text-muted-foreground">Status</div>
                   <StatusBadge value={delivery.status} />
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Ready</div>
+                  <Badge variant={readinessVariant(delivery.goodsReadiness)}>
+                    {delivery.goodsReadiness}
+                  </Badge>
                 </div>
                 <div>
                   <div className="text-muted-foreground">Weight</div>
@@ -363,6 +381,9 @@ function ReviewDeliveryList({
               </div>
               <div className="flex items-center gap-2">
                 <StatusBadge value={delivery.status} />
+                <Badge variant={readinessVariant(delivery.goodsReadiness)}>
+                  {delivery.goodsReadiness}
+                </Badge>
                 <Button asChild variant="outline" size="sm">
                   <Link href={`/delivery/${delivery.id}`}>Review</Link>
                 </Button>

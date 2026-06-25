@@ -29,6 +29,7 @@ import {
   type DeliveryExpenseStatus,
   type DeliveryExpenseType,
   type DeliveryFailedReason,
+  type DeliveryGoodsReadiness,
   type DeliveryItem,
   type DeliveryJobType,
   type DeliveryLifecycleStatus,
@@ -42,6 +43,14 @@ type DeliveryQueryContext = {
   profile: CurrentProfile
   supabase: SupabaseServerClient
 }
+
+const readyOrderStatuses = new Set([
+  "READY",
+  "READY_FOR_DELIVERY",
+  "OUT_FOR_DELIVERY",
+  "DELIVERED",
+  "FAILED",
+])
 
 function isDeliveryLifecycleStatus(value: string): value is DeliveryLifecycleStatus {
   return deliveryLifecycleStatuses.includes(value as DeliveryLifecycleStatus)
@@ -140,16 +149,113 @@ async function mapDeliveries(
   supabase: SupabaseServerClient,
   rows: Record<string, unknown>[]
 ): Promise<Delivery[]> {
-  const driverNames = await loadProfiles(supabase, rows)
-  const vehicleNos = await loadVehicles(supabase, rows)
+  const [driverNames, vehicleNos, goodsReadiness] = await Promise.all([
+    loadProfiles(supabase, rows),
+    loadVehicles(supabase, rows),
+    loadGoodsReadiness(supabase, rows),
+  ])
 
-  return rows.map((row) => mapDelivery(row, driverNames, vehicleNos))
+  return rows.map((row) =>
+    mapDelivery(
+      row,
+      driverNames,
+      vehicleNos,
+      goodsReadiness.get(readString(row.id)) ?? "Not Ready"
+    )
+  )
+}
+
+async function loadGoodsReadiness(
+  supabase: SupabaseServerClient,
+  rows: Record<string, unknown>[]
+) {
+  const deliveryIds = rows.map((row) => readString(row.id)).filter(Boolean)
+  const result = new Map<string, DeliveryGoodsReadiness>()
+
+  for (const row of rows) {
+    result.set(readString(row.id), fallbackGoodsReadiness(readString(row.status)))
+  }
+
+  if (deliveryIds.length === 0) {
+    return result
+  }
+
+  const { data: linkRows } = await supabase
+    .from("delivery_orders")
+    .select("delivery_id, source_customer_order_id")
+    .in("delivery_id", deliveryIds)
+  const links = asRecordArray(linkRows).filter((row) =>
+    readNullableString(row.source_customer_order_id)
+  )
+  const orderIds = Array.from(
+    new Set(
+      links
+        .map((row) => readNullableString(row.source_customer_order_id))
+        .filter((id): id is string => Boolean(id))
+    )
+  )
+
+  if (orderIds.length === 0) {
+    return result
+  }
+
+  const { data: orderRows } = await supabase
+    .from("customer_orders")
+    .select("id, status")
+    .in("id", orderIds)
+  const orderStatuses = new Map(
+    asRecordArray(orderRows).map((row) => [
+      readString(row.id),
+      readString(row.status),
+    ])
+  )
+  const byDelivery = new Map<string, boolean[]>()
+
+  for (const link of links) {
+    const deliveryId = readString(link.delivery_id)
+    const orderId = readNullableString(link.source_customer_order_id)
+    const status = orderId ? orderStatuses.get(orderId) : null
+
+    if (!status) {
+      continue
+    }
+
+    byDelivery.set(deliveryId, [
+      ...(byDelivery.get(deliveryId) ?? []),
+      readyOrderStatuses.has(status),
+    ])
+  }
+
+  for (const [deliveryId, readiness] of byDelivery) {
+    if (readiness.every(Boolean)) {
+      result.set(deliveryId, "Goods Ready")
+    } else if (readiness.some(Boolean)) {
+      result.set(deliveryId, "Partially Ready")
+    } else {
+      result.set(deliveryId, "Not Ready")
+    }
+  }
+
+  return result
+}
+
+function fallbackGoodsReadiness(status: string): DeliveryGoodsReadiness {
+  if (["LOADED", "OUT_FOR_DELIVERY", "DELIVERED"].includes(status)) {
+    return "Goods Ready"
+  }
+
+  if (status === "FAILED") {
+    return "Partially Ready"
+  }
+
+  return "Not Ready"
 }
 
 function mapDelivery(
   row: Record<string, unknown>,
   driverNames = new Map<string, string>(),
-  vehicleNos = new Map<string, string>()
+  vehicleNos = new Map<string, string>(),
+  goodsReadiness: DeliveryGoodsReadiness = "Not Ready"
 ): Delivery {
   const status = readString(row.status, "AVAILABLE")
   const deliveryType = readString(row.delivery_type, "CUSTOMER_DELIVERY")
@@ -198,6 +304,7 @@ function mapDelivery(
     loadedAt: readNullableString(row.loaded_at),
     startedAt: readNullableString(row.started_at),
     completedAt: readNullableString(row.completed_at),
+    goodsReadiness,
     createdAt: readString(row.created_at, new Date().toISOString()),
   }
 }

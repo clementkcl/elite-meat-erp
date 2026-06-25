@@ -1143,6 +1143,9 @@ const deliveryDriverRoute = read("app/(erp)/delivery/driver/page.tsx")
 const deliveryDriverPage = read("components/delivery/driver-mobile-delivery-page.tsx")
 const deliveryManagerDashboard = read("components/delivery/manager-delivery-dashboard.tsx")
 const buildDebugPage = read("app/(erp)/debug/build/page.tsx")
+const deliveryQueries = read("lib/delivery/queries.ts")
+const deliveryPhoneQa = read("docs/DELIVERY_V1_PHONE_QA.md")
+const deliveryUatGate = read("docs/DELIVERY_V1_LIMITED_UAT_GATE.md")
 const packageJson = read("package.json")
 const deliveryPreviewVerifier = read("scripts/delivery-preview-verify.mjs")
 assert(
@@ -1158,8 +1161,31 @@ assert(
     deliveryDriverPage.includes("Report Failed") &&
     deliveryDriverPage.includes("Mark Loaded") &&
     deliveryDriverPage.includes("View Summary") &&
+    deliveryDriverPage.includes("goodsReadiness") &&
+    deliveryDriverPage.includes("Goods Ready") &&
+    deliveryDriverPage.includes("Partially Ready") &&
     !deliveryDriverPage.includes("New Order"),
   "Delivery driver route must render V1 tabs and next-action UI, not legacy delivery"
+)
+assert(
+  deliveryQueries.includes('select("id, status")') &&
+    deliveryQueries.includes("readyOrderStatuses") &&
+    deliveryQueries.includes("Goods Ready") &&
+    deliveryManagerDashboard.includes("goodsReadiness") &&
+    !deliveryQueries.includes("total_order_price") &&
+    !deliveryQueries.includes("unit_price") &&
+    !deliveryQueries.includes("payment_status"),
+  "Delivery readiness must use safe order statuses only, not finance fields"
+)
+assert(
+  deliveryPhoneQa.includes("Android Chrome") &&
+    deliveryPhoneQa.includes("iPhone Safari") &&
+    deliveryPhoneQa.includes("delivery.driver.qa@elitempsb.com") &&
+    deliveryPhoneQa.includes("Do not record passwords") &&
+    deliveryUatGate.includes("Limited UAT is **not ready**") &&
+    deliveryUatGate.includes("NO-GO for limited UAT") &&
+    deliveryUatGate.includes("Stock outbound/loading remains in the Stock module"),
+  "Delivery real-phone QA and limited UAT gate docs must stay present"
 )
 assert(
   buildDebugPage.includes("VERCEL_GIT_COMMIT_REF") &&

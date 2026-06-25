@@ -74,6 +74,10 @@ export type DeliveryGoodsIssueReason = (typeof deliveryGoodsIssueReasons)[number
 export type DeliveryExpenseType = (typeof deliveryExpenseTypes)[number]
 export type DeliveryExpenseStatus = (typeof deliveryExpenseStatuses)[number]
 export type DeliveryProofType = "DELIVERED" | "FAILED"
+export type DeliveryGoodsReadiness =
+  | "Goods Ready"
+  | "Not Ready"
+  | "Partially Ready"
 
 export type DeliveryPerson = {
   id: string
@@ -380,6 +384,7 @@ export type Delivery = {
   loadedAt: string | null
   startedAt: string | null
   completedAt: string | null
+  goodsReadiness: DeliveryGoodsReadiness
   createdAt: string
 }
 

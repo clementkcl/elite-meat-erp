@@ -6,6 +6,28 @@ This handoff reflects the codebase inspection for the existing frozen pork / mea
 
 The repository already contains a large dirty worktree from previous ERP work. Treat existing modified and untracked app files as in-progress work unless the owner explicitly asks to revert them.
 
+## 2026-06-25 - Delivery V1 readiness labels and UAT docs
+
+Task completed:
+
+- Added driver/manager readiness labels: `Goods Ready`, `Not Ready`, and `Partially Ready`.
+- Readiness is calculated from linked customer order statuses only; Delivery does not read price, cost, credit, payment, profit, stock value, or accounting fields.
+- If a delivery has no linked customer order, readiness falls back to the delivery lifecycle: loaded/out/delivered means `Goods Ready`, failed means `Partially Ready`, otherwise `Not Ready`.
+- Added real-phone QA checklist for Android Chrome and iPhone Safari.
+- Added limited-UAT gate checklist. Current recommendation remains NO-GO until deployed Vercel preview is verified.
+- Added smoke coverage for readiness labels, safe order-status query shape, and QA/UAT docs.
+
+Files changed in this pass:
+
+- `components/delivery/driver-mobile-delivery-page.tsx`
+- `components/delivery/manager-delivery-dashboard.tsx`
+- `lib/delivery/queries.ts`
+- `lib/delivery/types.ts`
+- `docs/DELIVERY_V1_PHONE_QA.md`
+- `docs/DELIVERY_V1_LIMITED_UAT_GATE.md`
+- `scripts/smoke-routes.mjs`
+- `HANDOFF.md`
+
 ## 2026-06-25 - Delivery V1 QA Auth and preview verifier
 
 Task completed:

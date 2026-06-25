@@ -134,6 +134,18 @@ function statusVariant(status: Delivery["status"]) {
   return "outline"
 }
 
+function readinessVariant(readiness: Delivery["goodsReadiness"]) {
+  if (readiness === "Goods Ready") {
+    return "success"
+  }
+
+  if (readiness === "Partially Ready") {
+    return "warning"
+  }
+
+  return "outline"
+}
+
 function mapsUrl(delivery: Delivery) {
   const latitude = delivery.customerLatitude ?? delivery.completedLatitude
   const longitude = delivery.customerLongitude ?? delivery.completedLongitude
@@ -296,9 +308,14 @@ function DeliveryCardShell({
               {delivery.deliveryNo}
             </CardDescription>
           </div>
-          <Badge variant={statusVariant(delivery.status)} className="mt-1">
-            {label(delivery.status)}
-          </Badge>
+          <div className="flex flex-col items-end gap-2">
+            <Badge variant={statusVariant(delivery.status)}>
+              {label(delivery.status)}
+            </Badge>
+            <Badge variant={readinessVariant(delivery.goodsReadiness)}>
+              {delivery.goodsReadiness}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
