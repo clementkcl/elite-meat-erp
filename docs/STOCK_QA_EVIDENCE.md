@@ -6252,16 +6252,16 @@ Scope:
 
 What changed:
 
-- `Save rule and inbound` now appears only while a barcode rule is still being learned.
+- `Save first barcode + rule` now appears only while a barcode rule is still being learned.
 - Once a persisted or session-saved rule is usable, Page 2 shows `Open scanner` instead of also showing the save submit action.
 - This avoids accidental blank/repeated submissions after the first rule is already ready.
 - No server action, RLS, stock movement, duplicate prevention, or migration changed.
 
 Manual QA:
 
-- Open a no-rule setup and confirm Page 2 shows `Save rule and inbound`.
+- Open a no-rule setup and confirm Page 2 shows `Save first barcode + rule`.
 - Save the first sample rule and go back to Page 2.
-- Confirm Page 2 shows `Open scanner` and no longer shows `Save rule and inbound`.
+- Confirm Page 2 shows `Open scanner` and no longer shows `Save first barcode + rule`.
 
 ## 2026-06-29 Barcode Length Warning Precedence
 

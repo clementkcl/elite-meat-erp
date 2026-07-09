@@ -349,7 +349,7 @@ includesAll(
     "inferBarcodeWeightRuleWithStatus",
     "Weight appears in more than one place. Scan another sample barcode.",
     "mustSaveCurrentRule",
-    "Save rule and inbound",
+    "Save first barcode + rule",
     "data-stock-action=\"saved-barcode-rule-length-cue\"",
     "Expected length: {expectedBarcodeLength} digits.",
     "Save first barcode. Future scans use this rule.",
@@ -420,6 +420,7 @@ includesAll(
     "data-stock-action=\"scanner-primary-scan-action-slot\"",
     "data-stock-action=\"scanner-camera-window\"",
     "data-stock-action=\"scanner-camera-feedback-frame\"",
+    "Scanner stays open until Close.",
     "border-emerald-400",
     "border-red-400",
     "Scan failed. Try again.",
@@ -722,14 +723,14 @@ includesAll(
     "canManageStockTake ||",
     "canDirectorApproveStockTake",
     "data-stock-action=\"whole-session-undo-confirmation\"",
-    "Confirm Delete Whole Session",
+    "Confirm manager-approved Delete Whole Session",
     "This will delete this session by voiding {recentInboundCount} saved",
-    "Manager/admin approval required.",
+    "Manager-approved only. Audit kept.",
     "Keep session",
     "Delete Whole Session",
     "data-stock-action=\"start-new-inbound-session\"",
     "function startNewInboundSession",
-    "Delete needs manager/admin approval.",
+    "Manager-approved Delete Whole Session only. Audit kept.",
     "Full audit remains in",
     "undoInboundSessionAction",
     "[...stockManagerRoles, \"director\"]",
@@ -746,6 +747,32 @@ assert(
 assert(
   !workflowForms.includes("mt-2 grid grid-cols-2 gap-2"),
   "Inbound sticky summary Saved/Weight cards must stay one-column on phone."
+)
+const manualSummaryStart = workflowForms.indexOf(
+  'data-stock-action="manual-label-next-unit"'
+)
+const manualSummaryEnd = workflowForms.indexOf(
+  'data-stock-action="manual-weight-progress-card"',
+  manualSummaryStart
+)
+assert(
+  manualSummaryStart >= 0 &&
+    manualSummaryEnd > manualSummaryStart &&
+    workflowForms
+      .slice(manualSummaryStart, manualSummaryEnd)
+      .includes("sticky top-2 z-20"),
+  "Manual weight entry summary must stay sticky on phone."
+)
+const historyPanelStart = workflowForms.indexOf(
+  'data-stock-action="inbound-session-history"'
+)
+const historyPanelPrefix = workflowForms.slice(
+  Math.max(0, historyPanelStart - 120),
+  historyPanelStart
+)
+assert(
+  historyPanelStart >= 0 && historyPanelPrefix.includes('inboundStep === "setup"'),
+  "Inbound session history must stay on setup, not active scan/manual pages."
 )
 
 console.log("Stock inbound guided flow coverage passed.")

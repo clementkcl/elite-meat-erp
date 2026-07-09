@@ -3901,10 +3901,11 @@ export function BarcodeInboundForm({
             </div>
           </div>
 
-          <div
-            data-stock-action="inbound-session-history"
-            className="rounded-lg border bg-background p-3 text-sm"
-          >
+          {inboundStep === "setup" ? (
+            <div
+              data-stock-action="inbound-session-history"
+              className="rounded-lg border bg-background p-3 text-sm"
+            >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="font-semibold">Inbound Session History</div>
@@ -4062,7 +4063,8 @@ export function BarcodeInboundForm({
                 </Button>
               </div>
             ) : null}
-          </div>
+            </div>
+          ) : null}
 
           {sessionSetupNotice && inboundStep === "setup" ? (
             <div
@@ -5299,9 +5301,9 @@ export function BarcodeInboundForm({
               </div>
               <div className="mt-1 break-words text-xs">
                 {currentBarcodeWeightRule
-                  ? `Scan now. Digits ${currentBarcodeWeightRule.barcodeWeightStart}-${currentBarcodeWeightRule.barcodeWeightStart + currentBarcodeWeightRule.barcodeWeightLength - 1}, ${currentBarcodeWeightRule.barcodeWeightDecimals} decimals.`
+                  ? "Rule ready. Keep scanning."
                   : sessionBarcodeRuleSaved
-                    ? `Keep scanning. Digits ${preset.barcodeWeightStart}-${Number(preset.barcodeWeightStart) + Number(preset.barcodeWeightLength) - 1}, ${preset.barcodeWeightDecimals} decimals.`
+                    ? "Rule saved. Keep scanning."
                   : "Scan barcode, enter actual kg once."}
               </div>
               {currentBarcodeWeightRule?.sampleBarcode ? (
@@ -5475,7 +5477,7 @@ export function BarcodeInboundForm({
             <div className="space-y-3">
               <div
                 data-stock-action="manual-label-next-unit"
-                className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
+                className="sticky top-2 z-20 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 shadow-sm"
               >
                 <div className="text-xs font-medium uppercase">
                   Enter next unit
@@ -5794,7 +5796,7 @@ export function BarcodeInboundForm({
                   Boolean(sessionFinishedAt)
                 }
               >
-                {inboundStep === "rule" ? "Save rule and inbound" : "Save inbound"}
+                {inboundStep === "rule" ? "Save first barcode + rule" : "Save inbound"}
               </SubmitButton>
             ) : null}
             {manualWeightConfirmationReady ? (
@@ -6004,7 +6006,7 @@ export function BarcodeInboundForm({
               </div>
             )}
             <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Delete needs manager/admin approval.
+              Manager-approved Delete Whole Session only. Audit kept.
             </div>
             <div
               data-stock-action="future-session-summary-print-area"
@@ -6205,14 +6207,14 @@ export function BarcodeInboundForm({
                 className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
               >
                 <div className="font-semibold">
-                  Confirm Delete Whole Session
+                  Confirm manager-approved Delete Whole Session
                 </div>
                 <div className="mt-1">
                   This will delete this session by voiding {recentInboundCount} saved{" "}
                   {manualMode ? "unit" : "barcode"}
                   {recentInboundCount === 1 ? "" : "s"} totaling{" "}
                   {recentInboundWeightKg.toFixed(3)} kg for batch {batchNo}.
-                  Manager/admin approval required. Audit kept.
+                  Manager-approved only. Audit kept.
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <Button

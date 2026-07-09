@@ -672,7 +672,7 @@ export function BarcodeScanner({
                   data-stock-action="continuous-scan-auto-save-cue"
                   className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm break-words text-emerald-700"
                 >
-                  Continuous scan. Valid scans save automatically.
+                  Scanner stays open until Close.
                 </div>
               ) : (
                 <div

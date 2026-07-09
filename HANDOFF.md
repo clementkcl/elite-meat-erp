@@ -39846,3 +39846,50 @@ Commands run and results:
 Risks / remaining checks:
 
 - Real logged-in `/stock/inbound` QA should choose setup, leave before scanning, return, and confirm the same unfinished session can continue.
+
+## 2026-07-09 - Stock Inbound manager-approved session delete copy
+
+Task completed:
+
+- Continued the active guided Stock Inbound goal with a summary-page safety wording cleanup.
+- The whole-session delete warning now says `Manager-approved Delete Whole Session only. Audit kept.`
+- The destructive confirmation title now says `Confirm manager-approved Delete Whole Session`.
+- The Barcode Rule page no longer repeats long digit-position hints in the active scan cue; it now says `Rule ready. Keep scanning.` or `Rule saved. Keep scanning.`
+- The shared scanner popup no longer says all continuous scans auto-save; it now says `Scanner stays open until Close.` so barcode-rule sample scanning is not misleading.
+- The Manual Weight Entry top summary is now sticky on phone, matching the active scanner summary behavior.
+- Inbound Session History now renders only on the setup page, keeping active rule/scanner/manual pages focused on the sticky session summary and current task.
+- The whole-session delete confirmation body now uses the same manager-approved wording as the summary warning.
+- The Barcode Rule save button now says `Save first barcode + rule` so workers know the first sample barcode is saved while the rule is learned.
+- No stock movement, barcode uniqueness, RLS, permission, migration, or undo logic changed.
+- Updated Stock scanner/inbound/mobile/acceptance coverage and QA evidence to enforce the manager-approved copy, shorter scan cue, scanner-popup close behavior, rule-save button label, sticky manual-entry summary, and setup-only session history.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `components/stock/barcode-scanner.tsx`
+- `scripts/stock-scanner-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real logged-in `/stock/inbound` QA should finish a session and confirm workers see the manager-approved delete message while only permitted roles can open the destructive action.
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks.
