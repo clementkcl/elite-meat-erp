@@ -1,5 +1,143 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-09 - Stock Inbound shorter session-lock copy
+
+Task completed:
+
+- Continued the active guided Stock Inbound goal with one more worker-copy trim.
+- Changed the active scanner lock cue to `Session locked. Finish first.`
+- Changed the pending-label cue to `Saving label. Cancel first.`
+- Updated Stock mobile/owner QA docs and coverage so the current short copy is tested.
+- Kept the same session locking, pending-label safety, stock save, RLS, audit, barcode uniqueness, migration, and movement behavior.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/MODULE_STATUS.md`
+- `docs/STOCK_MOBILE_UX_REQUIREMENT_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound QA docs match profile-default copy
+
+Task completed:
+
+- Continued the active guided Stock Inbound goal with a QA-doc alignment pass.
+- Updated owner/Vercel/mobile/evidence docs to match the current short `/stock/inbound` location cue: `Using location: [location]. Profile default.`
+- Added owner-QA doc coverage so stale `Default location` / `Default from your profile` wording does not return.
+- No app behavior, stock action, RLS, audit, barcode uniqueness, migration, or movement logic changed in this pass.
+
+Files changed in this pass:
+
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_MOBILE_UX_REQUIREMENT_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound short worker helper copy
+
+Task completed:
+
+- Continued the active guided Stock Inbound goal with a mobile-worker copy cleanup.
+- Shortened setup-lock, profile-default, session-code, and barcode-rule helper text on `/stock/inbound`.
+- Kept the same session locking, barcode rule, stock save, RLS, audit, and movement behavior.
+- Updated Stock Inbound/mobile/acceptance source guards to enforce the shorter copy.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound completion audit wording refresh
+
+Task completed:
+
+- Continued the active guided Stock Inbound goal with a documentation/evidence cleanup.
+- Updated the completion audit so Page 2 documents the current `Save first barcode + rule` button.
+- Updated the scanner-popup evidence so it matches the current `Scanner stays open until Close.` copy and no longer claims every popup scan auto-saves.
+- No app code, stock action, RLS, migration, barcode uniqueness, or movement behavior changed.
+
+Files changed in this pass:
+
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-completion-audit-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
 ## 2026-07-09 - Stock Inbound unauthenticated 390px browser evidence
 
 Task completed:

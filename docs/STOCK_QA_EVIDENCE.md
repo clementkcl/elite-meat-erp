@@ -4007,7 +4007,7 @@ Scope:
 
 - Updated Barcode Inbound initial setup so the signed-in worker's active assigned stock location is preferred when the page opens.
 - Older browser-saved inbound presets can still help with product, brand, and origin, but they no longer override an active assigned stock location on initial page open.
-- Added a short green worker cue: `Default location: [location]. You can change it.`
+- Added a short green worker cue: `Using location: [location]. Profile default.`
 - Kept the confirmed rule that the worker can edit the location before the first saved scan; after the first saved scan, session scope remains locked until finishing.
 - No inbound save rule, barcode validation, server action, RPC, RLS policy, database schema, migration, role access, or stock movement behavior was changed.
 
@@ -4021,7 +4021,7 @@ Manual QA still required:
 
 - Sign in as a scoped stock worker whose profile has an assigned stock location.
 - Open `/stock/inbound` around 390px width after previously using another inbound location in the same browser.
-- Confirm the page opens with the assigned stock location selected and shows `Default location: [location]. You can change it.`
+- Confirm the page opens with the assigned stock location selected and shows `Using location: [location]. Profile default.`
 - Change location before the first scan and confirm the selected location is used.
 - Save one scan and confirm product, brand, origin, and location are locked until `Finish Inbound Session`.
 
@@ -4163,20 +4163,20 @@ Scope:
 
 - Added a green `Scanning inbound` card above the Barcode Inbound scanner after product, brand, origin, and location are selected.
 - The card shows the active brand, product, origin, and location so phone workers can confirm the save context before scanning.
-- After the first saved scan, the card shows `Session locked. Finish before changing setup.`
+- After the first saved scan, the card shows `Session locked. Finish first.`
 - No inbound save rule, duplicate validation, label generation, undo/audit behavior, server action, RPC, RLS policy, database schema, migration, role access, or stock movement behavior was changed.
 
 Prepared / source-guarded coverage added:
 
 - `components/stock/workflow-forms.tsx` renders the inbound scan context card above the barcode field.
-- `scripts/stock-mobile-ux-coverage.mjs` guards `Scanning inbound` and `Session locked. Finish before changing setup.`
+- `scripts/stock-mobile-ux-coverage.mjs` guards `Scanning inbound` and `Session locked. Finish first.`
 
 Manual QA still required:
 
 - Open `/stock/inbound` around 390px width.
 - Choose product, brand, origin, and location.
 - Confirm the green `Scanning inbound` card appears above the scanner and shows the correct context.
-- Save one scan and confirm the same card shows `Session locked. Finish before changing setup.`
+- Save one scan and confirm the same card shows `Session locked. Finish first.`
 
 ## 2026-06-24 Stock Take Active Scope Card
 

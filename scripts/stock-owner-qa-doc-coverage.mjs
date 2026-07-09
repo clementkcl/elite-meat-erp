@@ -56,6 +56,7 @@ includesAll(
     "Locks NV Belly Boneless",
     "Barcode length is different from saved rule",
     "external scanner input",
+    "Using location: [location]. Profile default.",
     "whole-session undo/delete action",
     "Stock Inbound",
     "Recent Inbound Templates",

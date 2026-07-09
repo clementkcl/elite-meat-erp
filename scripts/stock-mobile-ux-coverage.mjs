@@ -280,7 +280,7 @@ includesAll(
     "event.key !== \"Enter\" || inboundStep !== \"manual\"",
     "Enter kg. Press Enter to save.",
     "const scopeLockedReason = sessionFinishedAt",
-    "Session finished. Start a new inbound session before changing setup.",
+    "Session finished. Start new session to change setup.",
     "Session finished. Start a new session to change setup.",
     "const finishBlockedNoSavedMessage = inboundMode === \"internal_label\"",
     "Save at least one barcode before finishing this session.",
@@ -303,7 +303,7 @@ includesAll(
     "Detected barcode rule",
     "Sample length:",
     "Weight digits:",
-    "Save first barcode. Future scans use this rule.",
+    "Save first barcode. Future scans use rule.",
     "Barcode rule setup",
     "Manufacturer:",
     "Display name:",
@@ -486,7 +486,7 @@ includesAll(
     "function assignedStockLocationId",
     "defaultLocationId",
     "Using location:",
-    "Default from your profile.",
+    "Profile default.",
     "Change Location",
     "Change only for another storage location.",
     "className=\"min-h-11 w-full sm:w-auto\"",
@@ -594,7 +594,7 @@ includesAll(
     "checked={mustSaveCurrentRule || preset.saveWeightRule}",
     "disabled={mustSaveCurrentRule || scopeLocked}",
     "Save weight rule for first scan",
-    "First supplier barcode needs a rule.",
+    "First barcode needs rule.",
     "Save first barcode + rule",
     "inboundStep !== \"rule\" || !canUseBarcodeRuleForSession",
     "data-stock-action=\"locked-barcode-rule-fields\"",
@@ -614,7 +614,7 @@ includesAll(
     "shouldOpenWeightRulePanel",
     "barcodeRuleSetupReady && !canUseBarcodeRuleForSession && !sessionFinishedAt",
     "Set barcode rule once",
-    "Future scans use this rule.",
+    "Future scans use rule.",
     "Generate internal label",
     "data-stock-action=\"generate-internal-label-from-weight\"",
     "No supplier weight? Use internal label.",
@@ -661,7 +661,7 @@ includesAll(
     "Learning barcode rule",
     "Manual label inbound",
     "Scanning inbound",
-    "Session locked. Finish before changing setup.",
+    "Session locked. Finish first.",
     "manualMode ? \"Saved units\" : \"Saved scans\"",
     "manualMode ? \"Saved total weight\" : \"Saved weight\"",
     "manualMode ? \"Enter one unit weight kg\" : \"Actual net weight kg\"",
@@ -1121,7 +1121,7 @@ assert(
 assert(
   /id="batchNo"[\s\S]*?name="batchNo"[\s\S]*?readOnly[\s\S]*?aria-readonly="true"/.test(
     workflowForms
-  ) && workflowForms.includes("Auto-generated session code."),
+  ) && workflowForms.includes("Auto session code."),
   "Stock inbound session code must be auto-generated and read-only."
 )
 assert(

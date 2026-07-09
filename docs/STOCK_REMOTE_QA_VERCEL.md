@@ -136,7 +136,7 @@ Latest Codex QA preparation note, 2026-06-24:
 - Barcode Inbound recent scan cards and finished-session details now use the 390px breakpoint so saved labels and summary fields are easier to compare on worker phones.
 - Stock Outbound now stays direct-outbound focused; order picking belongs in `/orders/picking`, and the Stock page shows a link there for customer-order work.
 - Stock Outbound scanned rows now turn red for missing, blocked-status, or wrong-transfer-destination barcodes and show `Remove before confirm.` guidance beside the row.
-- Barcode Inbound now prefers the worker assigned stock location when the page opens and shows `Default location: [location]. You can change it.` before scanning.
+- Barcode Inbound now prefers the worker assigned stock location when the page opens and shows `Using location: [location]. Profile default.` before scanning.
 - Receive-transfer and normal Stock Return now prefer the worker assigned stock location. Stock Return shows `Returning to` first and keeps location editing under `Change return location`.
 - Receive-transfer now shows `Pending to this location` for the selected receiving location; confirm only barcodes destined to that location appear and tapping one fills the barcode field.
 - Stock item edit and Stock filter dropdowns now use phone-size controls so category, brand, movement type, and status selects are easier to tap around 390px width.
@@ -196,7 +196,7 @@ Latest Codex QA preparation note, 2026-06-24:
 3. ERP Home: confirm the stock shortcut is labeled `Stock`, not `Stock Dashboard`, for general workers.
 3. `/stock/inbound`: confirm recent item buttons, search, required brand/origin, editable location, no horizontal scrolling, and Scan Barcode/manual entry blocked until product, brand, origin, and location are chosen.
 4. `/stock/inbound`: if recent inbound templates exist, confirm they show two per row around 390px width and the helper says `Tap Brand + Product to scan faster.`
-5. `/stock/inbound`: confirm the assigned stock location appears first with `Default location: [location]. You can change it.`
+5. `/stock/inbound`: confirm the assigned stock location appears first with `Using location: [location]. Profile default.`
 6. `/stock/inbound`: change the location before the first scan and confirm the scanner uses the selected location.
 7. Confirm disabled scan fields show the short reason directly under the barcode field, for example `Choose product, brand, origin, and location first.` or `Connection lost. Please reconnect before scanning.`
 8. Tap the manual barcode fallback on a phone and confirm the numeric keyboard appears with a Done key, with no autocorrect or capitalization suggestions.
@@ -208,7 +208,7 @@ Latest Codex QA preparation note, 2026-06-24:
 14. Open `Weight rule and notes`, tap optional `Reference no.`, and confirm the keyboard has a Done key. Leave it blank and confirm inbound still works.
 8. `/stock/inbound`: confirm the green `Scanning inbound` card appears above the scanner with active brand, product, origin, and location.
 9. `/stock/inbound`: scan or manually enter two unique barcodes and confirm continuous scanning, previous scan product/weight, saved count, and saved total weight.
-10. `/stock/inbound`: confirm the `Scanning inbound` card says `Session locked. Finish before changing setup.` after the first saved scan.
+10. `/stock/inbound`: confirm the `Scanning inbound` card says `Session locked. Finish first.` after the first saved scan.
 11. `/stock/inbound`: confirm `Saved scans` and `Saved weight` sit side by side around 390px width.
 12. `/stock/inbound`: confirm recent inbound scan cards show two per row around 390px width when multiple saved scans exist.
 13. `/stock/inbound`: finish the inbound session and confirm summary details use two columns around 390px width.
@@ -319,7 +319,7 @@ If phone camera or Bluetooth label printer cannot be tested:
 17. Confirm batch number auto-generates.
 18. Confirm inbound source is inside `Weight rule and notes` and defaults to Supplier/import.
 19. Confirm location defaults to the signed-in user's stock location even if the browser previously saved another inbound location.
-20. Confirm `Default location: [location]. You can change it.` appears when the assigned location is active.
+20. Confirm `Using location: [location]. Profile default.` appears when the assigned location is active.
 21. Confirm the location can be edited before the first saved scan.
 22. Confirm saved barcode weight rule is reused for item + brand + origin.
 21. Confirm continuous scan saves valid unique barcodes.

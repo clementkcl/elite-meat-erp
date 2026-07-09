@@ -3406,12 +3406,12 @@ export function BarcodeInboundForm({
     hasSavedSessionEntries ||
     Boolean(pendingInternalLabel)
   const scopeLockedReason = sessionFinishedAt
-    ? "Session finished. Start a new inbound session before changing setup."
+    ? "Session finished. Start new session to change setup."
     : pendingInternalLabel
-      ? "Scan or cancel the pending label before changing setup."
-      : "Saved stock exists. Finish or Delete Whole Session before changing setup."
+      ? "Scan or cancel pending label first."
+      : "Saved stock exists. Finish or Delete Whole Session."
   const setupChangeProtectionMessage =
-    "Review is safe. To change setup, finish or Delete Whole Session."
+    "Review only. Finish or Delete Whole Session to change."
   const finishBlockedByPendingLabel = Boolean(pendingInternalLabel)
   const finishBlockedByNoSavedScan = savedSessionScans.length === 0
   const finishBlockedNoSavedMessage = inboundMode === "internal_label"
@@ -4176,12 +4176,12 @@ export function BarcodeInboundForm({
                     disabled={scopeLocked}
                   />
                   <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
-                    {selectedLocation
-                      ? `Using location: ${selectedLocation.name}.`
-                      : "Choose stock location before scanning."}
-                    {locationDefaultedToAssigned && assignedDefaultLocation
-                      ? " Default from your profile."
-                      : ""}
+                {selectedLocation
+                  ? `Using location: ${selectedLocation.name}.`
+                  : "Choose stock location before scanning."}
+                {locationDefaultedToAssigned && assignedDefaultLocation
+                  ? " Profile default."
+                  : ""}
                   </div>
                 </div>
                 <div
@@ -4315,7 +4315,7 @@ export function BarcodeInboundForm({
                     <div className="mt-2 rounded-md border border-emerald-200 bg-background/70 px-3 py-2 text-xs font-medium text-emerald-800">
                       {sessionFinishedAt
                         ? "Session finished. Start a new session to change setup."
-                        : "Session locked. Finish before changing setup."}
+                        : "Session locked. Finish first."}
                     </div>
                   ) : null}
                 </div>
@@ -4821,12 +4821,12 @@ export function BarcodeInboundForm({
                 aria-live="polite"
                 className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800"
               >
-                {selectedLocation
-                  ? `Using location: ${selectedLocation.name}.`
-                  : "Choose stock location before scanning."}
-                {locationDefaultedToAssigned && assignedDefaultLocation
-                  ? " Default from your profile."
-                  : ""}
+                    {selectedLocation
+                      ? `Using location: ${selectedLocation.name}.`
+                      : "Choose stock location before scanning."}
+                    {locationDefaultedToAssigned && assignedDefaultLocation
+                      ? " Profile default."
+                      : ""}
               </div>
               <details className="rounded-md border bg-muted/30 p-3">
                 <summary className="flex min-h-9 cursor-pointer items-center break-words text-sm font-medium">
@@ -5088,7 +5088,7 @@ export function BarcodeInboundForm({
                     aria-readonly="true"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Auto-generated session code.
+                    Auto session code.
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -5127,8 +5127,8 @@ export function BarcodeInboundForm({
                 </label>
                 <p className="text-xs text-muted-foreground md:col-span-2">
                   {mustSaveCurrentRule
-                    ? "First supplier barcode needs a rule."
-                    : "Future scans use this rule."}
+                    ? "First barcode needs rule."
+                    : "Future scans use rule."}
                 </p>
               </div>
             </div>
@@ -5139,8 +5139,8 @@ export function BarcodeInboundForm({
             {scopeLocked ? (
               <div className="mb-1 text-xs font-medium text-amber-700">
                 {sessionFinishedAt
-                  ? "Session finished. Start a new inbound session before changing setup."
-                  : "Session locked. Finish this session before changing setup."}
+                  ? "Session finished. Start new session to change setup."
+                  : "Session locked. Finish before changes."}
               </div>
             ) : null}
             <div
@@ -5411,7 +5411,7 @@ export function BarcodeInboundForm({
                 </div>
               </div>
               <p className="mt-2 text-xs">
-                Save first barcode. Future scans use this rule.
+                Save first barcode. Future scans use rule.
               </p>
             </div>
           ) : null}
@@ -5630,7 +5630,7 @@ export function BarcodeInboundForm({
             >
               <div className="font-semibold">Pending label</div>
               <div className="mt-1">
-                Saving label. Cancel before changing setup.
+                Saving label. Cancel first.
               </div>
               <div
                 data-stock-action="pending-internal-label-display-name"
