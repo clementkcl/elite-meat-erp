@@ -100,6 +100,10 @@ includesAll(
     "Additional local browser evidence from 2026-07-09",
     "documentElement.scrollWidth = 375",
     "signing in would transmit demo credentials",
+    "Additional local browser attempt from 2026-07-10",
+    "PowerShell reached `/stock/inbound`",
+    "could not reach `127.0.0.1:3900` or `localhost:3900`",
+    "browser viewport was reset",
   ],
   "Guided inbound remaining proof gates"
 )

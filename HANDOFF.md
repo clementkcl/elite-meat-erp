@@ -4488,7 +4488,7 @@ Next recommended task:
 Task completed:
 
 - Removed a redundant conditional around the Stock Inbound external-scanner cue.
-- The worker-facing text remains `External scanner: scan into this box.`
+- The worker-facing text is `External scanner: scan here.`
 - Kept scanner behavior, phone scanner popup, sticky summary, undo, Finish Session, access control, RLS, and migrations unchanged.
 
 Files changed in this pass:
@@ -44263,4 +44263,172 @@ Commands run and results:
 Risks / remaining checks:
 
 - Real logged-in `/stock/inbound` QA should finish a session and confirm workers see the manager-approved delete message while only permitted roles can open the destructive action.
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks.
+
+## 2026-07-10 - Stock Inbound history setup notice
+
+Task completed:
+
+- Continued the active Stock Inbound mobile workflow cleanup.
+- Shortened the recent-session reuse notice from a long display-name sentence to `New session. Setup copied.`
+- Updated source coverage and QA evidence for the shorter phone-width copy.
+- No stock action, RLS, movement, barcode uniqueness, or migration logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run typecheck` - passed after `npm.cmd run build` refreshed Next generated route types.
+
+Risks / remaining checks:
+
+- Real logged-in `/stock/inbound` QA should tap `Use same setup` around 390px width and confirm setup is restored while the notice stays short.
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks.
+
+## 2026-07-10 - Stock Inbound scanner action row
+
+Task completed:
+
+- Continued the active Stock Inbound mobile workflow cleanup.
+- Changed the active scanner action row to stack as one column on phone width and wrap only on wider screens.
+- Updated source coverage and QA evidence for the phone-width button layout.
+- No stock action, RLS, movement, barcode uniqueness, or migration logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run typecheck` - passed after `npm.cmd run build` refreshed Next generated route types.
+
+Risks / remaining checks:
+
+- Real logged-in `/stock/inbound` QA should open Barcode Rule/Scanner around 390px width and confirm action buttons stack cleanly.
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks.
+
+## 2026-07-10 - Stock Inbound external scanner short copy
+
+Task completed:
+
+- Continued the active Stock Inbound mobile workflow cleanup.
+- Shortened the active scanner external-scanner helper to `External scanner: scan here.`
+- Updated source coverage so the longer wording does not come back.
+- No scanner behavior, stock action, RLS, movement, barcode uniqueness, or migration logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `HANDOFF.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run typecheck` - passed after `npm.cmd run build` refreshed Next generated route types.
+
+Risks / remaining checks:
+
+- Real logged-in `/stock/inbound` QA should use a handheld scanner or pasted barcode around 390px width and confirm the short helper still makes sense.
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks.
+
+## 2026-07-10 - Stock Inbound local browser verification attempt
+
+Task completed:
+
+- Continued the active Stock Inbound goal with a local verification attempt rather than adding duplicate UI.
+- Confirmed the Next dev server can start on `127.0.0.1:3900`.
+- Confirmed PowerShell can reach `/stock/inbound` and gets the expected auth redirect.
+- Tried the in-app browser at 390px against `127.0.0.1:3900` and `localhost:3900`; both returned connection refused from the browser environment.
+- Reset the browser viewport after the attempt.
+- No app code, stock action, RLS, movement, barcode uniqueness, or migration logic changed for this verification step.
+
+Files changed in this pass:
+
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run typecheck` - passed after `npm.cmd run build` refreshed Next generated route types.
+
+Risks / remaining checks:
+
+- Real logged-in `/stock/inbound` 390px QA still needs owner/Vercel or a local browser session with app access.
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks.
+
+## 2026-07-10 - Stock Inbound completion audit evidence refresh
+
+Task completed:
+
+- Continued the active Stock Inbound goal by updating the completion audit with the current 2026-07-10 local browser attempt.
+- The audit now records that the dev server started and PowerShell reached `/stock/inbound`, but the in-app browser could not reach `127.0.0.1:3900` or `localhost:3900`.
+- Added coverage so the audit keeps this remaining-proof limitation visible.
+- No app code, stock action, RLS, movement, barcode uniqueness, or migration logic changed.
+
+Files changed in this pass:
+
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `scripts/stock-inbound-guided-completion-audit-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real logged-in `/stock/inbound` 390px QA still needs owner/Vercel or a local browser session with app access.
 - Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks.

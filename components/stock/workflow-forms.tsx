@@ -4047,7 +4047,7 @@ export function BarcodeInboundForm({
     setOriginQuery(session.originName)
     setBrandName("")
     setOriginName("")
-    setSessionSetupNotice(`New session ready: ${session.displayName}.`)
+    setSessionSetupNotice("New session. Setup copied.")
 
     if (!inboundPresetCanScan(next)) {
       setDecodeStatus("warning")
@@ -4714,7 +4714,7 @@ export function BarcodeInboundForm({
                 }
               />
               <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                External scanner: scan into this box.
+                External scanner: scan here.
               </div>
               {!manualMode ? (
                 <>
@@ -6107,7 +6107,7 @@ export function BarcodeInboundForm({
           <div
             className={
               scannerVisible
-                ? "flex flex-wrap gap-2"
+                ? "grid gap-2 sm:flex sm:flex-wrap"
                 : "hidden"
             }
           >

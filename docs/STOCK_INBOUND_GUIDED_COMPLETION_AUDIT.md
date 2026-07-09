@@ -69,6 +69,13 @@ Additional local browser evidence from 2026-07-09:
 - In the in-app browser at 390px width, `/login` rendered with `window.innerWidth = 390`, `documentElement.scrollWidth = 375`, and no horizontal overflow.
 - Authenticated `/stock/inbound` layout, phone camera, handheld scanner input, Supabase saves, and print/PDF output were not tested because signing in would transmit demo credentials to the configured Supabase project and needs owner approval.
 
+Additional local browser attempt from 2026-07-10:
+
+- The Next.js dev server started on `127.0.0.1:3900`.
+- PowerShell reached `/stock/inbound` and received the expected unauthenticated auth redirect.
+- The in-app browser at 390px width could not reach `127.0.0.1:3900` or `localhost:3900` and reported connection refused, so no logged-in Stock Inbound browser evidence was captured in this environment.
+- The browser viewport was reset after the attempt.
+
 ## Remaining Proof Before Goal Completion
 
 Do not mark the active guided Stock Inbound goal complete until all of these are captured:

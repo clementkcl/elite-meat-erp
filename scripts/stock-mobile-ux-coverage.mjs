@@ -267,7 +267,7 @@ includesAll(
     "Open scanner",
     "Save rule first",
     "disabled={!scanSetupReady || !canUseBarcodeRuleForSession}",
-    "External scanner: scan into this box.",
+    "External scanner: scan here.",
     "Scan sample, enter kg.",
     "Weight saves label.",
     ": \"\"",

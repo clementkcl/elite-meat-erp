@@ -7503,6 +7503,77 @@ Manual QA:
 - Scan a barcode with a different length that cannot decode.
 - Confirm the warning mentions the expected/got barcode length and tells the worker to generate an internal label.
 
+## 2026-07-10 Inbound History Setup Notice
+
+Scope:
+
+- `/stock/inbound` recent session reuse.
+
+What changed:
+
+- Reusing a past inbound session setup now shows `New session. Setup copied.` instead of repeating the full product/manufacturer display name in the notice.
+- Source coverage guards the short copy.
+- No stock action, RLS, movement, barcode uniqueness, or migration logic changed.
+
+Manual QA:
+
+- Open `/stock/inbound` around 390px width.
+- Tap `Use same setup` on a recent session.
+- Confirm the notice is short and the selected product/manufacturer/origin/location still restore correctly.
+
+## 2026-07-10 Inbound Scanner Action Row
+
+Scope:
+
+- `/stock/inbound` active scanner action buttons.
+
+What changed:
+
+- The active scanner action row is now one-column on phone width and only wraps into a row on wider screens.
+- Existing Back, Save, Confirm, and Finish behavior was not changed.
+- No stock action, RLS, movement, barcode uniqueness, or migration logic changed.
+
+Manual QA:
+
+- Open `/stock/inbound` around 390px width.
+- Go to Barcode Rule or Scanner.
+- Confirm the action buttons stack cleanly without horizontal scrolling.
+
+## 2026-07-10 Inbound External Scanner Helper
+
+Scope:
+
+- `/stock/inbound` active scanner helper text.
+
+What changed:
+
+- The external scanner helper now says `External scanner: scan here.`
+- Source coverage rejects the longer old wording.
+- No scanner behavior, stock action, RLS, movement, barcode uniqueness, or migration logic changed.
+
+Manual QA:
+
+- Open `/stock/inbound` around 390px width.
+- Go to Barcode Rule or Scanner.
+- Confirm the helper below the scanner field is short and readable.
+
+## 2026-07-10 Local 390px Browser Attempt
+
+Scope:
+
+- `/stock/inbound` local phone-width verification.
+
+What was checked:
+
+- Next dev server starts on `127.0.0.1:3900`.
+- PowerShell route probe reached `/stock/inbound` and received the expected auth redirect.
+- In-app browser was set to 390px width, but could not reach `127.0.0.1:3900` or `localhost:3900` in this environment.
+
+Result:
+
+- Browser-localhost access is blocked here, so real logged-in 390px UI evidence still needs owner/Vercel or local browser testing.
+- Source, smoke, lint, typecheck, and build checks remain the available verification for this pass.
+
 ## Final Sign-Off
 
 - [ ] All 13 acceptance tests passed with real evidence.

@@ -363,7 +363,7 @@ includesAll(
     "Setup locked. Save, print, attach.",
     "<OfflineScanAlert className=\"border-red-300 bg-red-50\" />",
     "event.key !== \"Enter\"",
-    "External scanner: scan into this box.",
+    "External scanner: scan here.",
     ": \"\"",
     "Previous scan",
     "manualMode ? \"Previous entered weight\" : \"Previous scan\"",
