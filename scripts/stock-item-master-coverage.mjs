@@ -44,6 +44,7 @@ const migration045 = read("supabase/migrations/202606100045_item_master_default_
 const migration010 = read("supabase/migrations/202606250010_stock_item_default_weight_v1.sql")
 const migration011 = read("supabase/migrations/202606250011_stock_item_display_name_v1.sql")
 const migration012 = read("supabase/migrations/202606250012_stock_manufacturer_merge_v1.sql")
+const migration013 = read("supabase/migrations/202606250013_stock_item_merge_v1.sql")
 const seed = read("supabase/seed.sql")
 const packageJson = read("package.json")
 
@@ -115,6 +116,29 @@ includesAll(
     "grant execute on function public.merge_stock_manufacturer(uuid, uuid) to authenticated",
   ],
   "Manufacturer merge migration"
+)
+
+includesAll(
+  migration013,
+  [
+    "create or replace function public.merge_stock_item",
+    "if not public.can_administer_stock()",
+    "update public.stock_units set item_id = p_target_item_id",
+    "update public.stock_movements set item_id = p_target_item_id",
+    "update public.customer_order_items set item_id = p_target_item_id",
+    "update public.order_stock_reservations set item_id = p_target_item_id",
+    "update public.retail_price_rules set item_id = p_target_item_id",
+    "Cannot merge: target product already has matching retail price rules.",
+    "update public.retail_processing_boms set raw_item_id = p_target_item_id",
+    "update public.retail_processing_boms set finished_item_id = p_target_item_id",
+    "update public.retail_processing_raw_lines set item_id = p_target_item_id",
+    "update public.retail_processing_finished_lines set item_id = p_target_item_id",
+    "update public.barcode_weight_rules set item_id = p_target_item_id",
+    "set is_active = false",
+    "STOCK_ITEM_MERGED",
+    "grant execute on function public.merge_stock_item(uuid, uuid) to authenticated",
+  ],
+  "Product merge migration"
 )
 
 includesAll(
@@ -199,6 +223,23 @@ includesAll(
 )
 
 includesAll(
+  functionBody(actions, "mergeItemAction"),
+  [
+    "runStockAction(formData, [\"admin\", \"director\"]",
+    "parsed.sourceItemId === parsed.targetItemId",
+    "Choose two different products.",
+    "merge_stock_item",
+    "p_source_item_id: parsed.sourceItemId",
+    "p_target_item_id: parsed.targetItemId",
+    "revalidatePath(\"/stock/settings\")",
+    "revalidatePath(\"/stock/inbound\")",
+    "revalidatePath(\"/stock/items\")",
+    "Product merged. Source is inactive.",
+  ],
+  "Product merge action"
+)
+
+includesAll(
   functionBody(actions, "updateItemAction"),
   [
     "runStockAction(formData, stockItemEditorRoles",
@@ -269,13 +310,19 @@ includesAll(
     "{selectedItem ? (",
     "Enter name and a numeric item code before creating the item.",
     "function MergeManufacturerForm",
+    "function MergeProductForm",
     ".sort((a, b) => compareText(a.name, b.name))",
     "Merge manufacturers",
     "Admin cleanup for duplicate manufacturer names.",
+    "Merge products",
+    "Admin cleanup for duplicate product names.",
     "Source becomes inactive. Audit kept.",
     "name=\"sourceBrandId\"",
     "name=\"targetBrandId\"",
     "action={mergeBrandAction}",
+    "name=\"sourceItemId\"",
+    "name=\"targetItemId\"",
+    "action={mergeItemAction}",
   ],
   "Item master form controls"
 )
@@ -327,6 +374,7 @@ includesAll(
     "{ key: \"displayName\", header: \"Display name\" }",
     "displayName: stockDisplayItemName(",
     "String(row.displayName ?? row.name ?? \"Unknown product\")",
+    "<MasterDataForms brands={data.brands} items={data.items} />",
   ],
   "Product master display-name list"
 )

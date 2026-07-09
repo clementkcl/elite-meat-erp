@@ -6,6 +6,39 @@ Use this file to record real Supabase, RLS, device, and workflow evidence before
 
 Use `docs/STOCK_COMPLETION_AUDIT.md` to compare local automated evidence with the manual evidence still required.
 
+## 2026-07-10 Stock Product Duplicate Merge Cleanup
+
+Scope:
+
+- Stock Settings duplicate product cleanup for products created through `Other / custom product`.
+
+Evidence captured:
+
+- Added `merge_stock_item` migration and Stock Settings `Merge products` form for admin/director cleanup.
+- Merge moves stock/order/reservation/retail references, deactivates/renames the duplicate source product, and keeps audit history instead of deleting data.
+- Source checks passed: `node scripts\stock-item-master-coverage.mjs` and `node scripts\stock-migration-safety.mjs`.
+
+Manual QA:
+
+- In Supabase-backed QA, create two safe demo duplicate products, merge the duplicate into the product to keep, and confirm stock units, movements, barcode rules, orders/reservations, retail rows, reports, and audit log still point to the kept product.
+
+## 2026-07-10 Stock Inbound Explicit Other Product Setup
+
+Scope:
+
+- `/stock/inbound` Page 1 product setup.
+
+Evidence captured:
+
+- Added a visible `Use Other Product` action that opens the existing new-product form for typed products.
+- Added `Other / custom product` to the native Product dropdown, using the same new-product form instead of a second save path.
+- Existing product selection closes the manual product form so setup stays clean after a choice is made.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- At phone width, type a new product name, tap `Use Other Product`, confirm the new-product form opens, save the product with a manufacturer, and continue inbound.
+
 ## 2026-07-10 Stock Inbound Recent Template Simplification
 
 Scope:

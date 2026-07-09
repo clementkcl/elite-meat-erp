@@ -1,5 +1,83 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-10 - Stock product duplicate merge cleanup
+
+Task completed:
+
+- Continued the active Stock Inbound naming goal by adding admin/director cleanup for duplicate products created through `Other / custom product`.
+- Added idempotent migration `202606250013_stock_item_merge_v1.sql` with `merge_stock_item(source, target)`.
+- The merge RPC moves stock/order/reservation/retail price/processing references from the duplicate product to the kept product, writes an audit log, and deactivates/renames the source product instead of deleting it.
+- Added `mergeItemAction` and a compact Stock Settings `Merge products` form beside the existing manufacturer merge form.
+- No worker inbound scan/save behavior, barcode uniqueness, stock movement history, RLS policies, or outlet/location isolation logic changed.
+
+Files changed in this pass:
+
+- `supabase/migrations/202606250013_stock_item_merge_v1.sql`
+- `lib/stock/actions.ts`
+- `components/stock/workflow-forms.tsx`
+- `components/stock/stock-page.tsx`
+- `scripts/stock-item-master-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606250013_stock_item_merge_v1.sql`
+
+Commands run and results:
+
+- `node scripts\stock-item-master-coverage.mjs` - passed.
+- `node scripts\stock-migration-safety.mjs` - passed.
+- `node scripts\stock-inbound-guided-completion-audit-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live Supabase QA should merge two safe demo products first, then confirm stock units, movements, barcode rules, orders/reservations, retail rows, reports, and audit log still resolve to the kept product.
+
+## 2026-07-10 - Stock Inbound explicit Other Product setup
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by making the product `Other` path obvious on mobile.
+- Added a `Use Other Product` action on `/stock/inbound` setup that opens the existing new-product form and pre-fills the typed search text when available.
+- Added `Other / custom product` to the native Product dropdown and wired it to the same safe new-product form.
+- Reopening the manual product form now replaces stale typed product text with the current search text.
+- Selecting an existing product now closes the manual product form again, keeping the session setup clean.
+- Updated the Stock Inbound completion audit so it matches the current simplified recent-template cards and Other Product setup.
+- No schema, RLS, stock movement, barcode uniqueness, server action, manufacturer save logic, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone setup QA should verify typing a new product, tapping `Use Other Product`, saving it with a manufacturer, and continuing into barcode/manual inbound.
+
 ## 2026-07-10 - Stock Inbound recent template simplification
 
 Task completed:

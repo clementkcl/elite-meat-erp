@@ -140,6 +140,11 @@ const mergeBrandSchema = z.object({
   targetBrandId: z.string().trim().uuid(),
 })
 
+const mergeItemSchema = z.object({
+  sourceItemId: z.string().trim().uuid(),
+  targetItemId: z.string().trim().uuid(),
+})
+
 const barcodeInboundSchema = z.object({
   barcode: z.string().trim().min(3),
   itemId: z.string().trim().min(1),
@@ -1755,6 +1760,38 @@ export async function mergeBrandAction(
     revalidatePath("/stock/inbound")
 
     return "Manufacturer merged. Source is inactive."
+  })
+}
+
+export async function mergeItemAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(mergeItemSchema, formData)
+
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(formData, ["admin", "director"], async (context) => {
+    if (parsed.sourceItemId === parsed.targetItemId) {
+      throw new Error("Choose two different products.")
+    }
+
+    const { error } = await context.supabase.rpc("merge_stock_item", {
+      p_source_item_id: parsed.sourceItemId,
+      p_target_item_id: parsed.targetItemId,
+    })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    revalidatePath("/stock/settings")
+    revalidatePath("/stock/inbound")
+    revalidatePath("/stock/items")
+
+    return "Product merged. Source is inactive."
   })
 }
 

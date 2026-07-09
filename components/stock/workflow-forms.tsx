@@ -32,6 +32,7 @@ import {
   logInboundScanIssueAction,
   logStockScanIssueAction,
   mergeBrandAction,
+  mergeItemAction,
   receiveTransferAction,
   releaseInspectionStockAction,
   rejectDamageRequestAction,
@@ -370,6 +371,8 @@ function ItemSelect({
   onChange,
   manufacturerName = "",
   disabled = false,
+  allowOther = false,
+  customLabel = "Other / custom product",
 }: {
   items: Item[]
   brands?: Brand[]
@@ -377,6 +380,8 @@ function ItemSelect({
   onChange?: (value: string) => void
   manufacturerName?: string
   disabled?: boolean
+  allowOther?: boolean
+  customLabel?: string
 }) {
   const activeItems = items
     .filter((item) => item.active)
@@ -420,6 +425,7 @@ function ItemSelect({
           </option>
         )
       })}
+      {allowOther ? <option value="__other">{customLabel}</option> : null}
     </NativeSelect>
   )
 }
@@ -1300,7 +1306,87 @@ function MergeManufacturerForm({ brands }: { brands: Brand[] }) {
   )
 }
 
-export function MasterDataForms({ brands = [] }: { brands?: Brand[] }) {
+function MergeProductForm({
+  items,
+  brands,
+}: {
+  items: Item[]
+  brands: Brand[]
+}) {
+  const activeItems = items
+    .filter((item) => item.active)
+    .sort((a, b) =>
+      compareText(
+        formatProductName(
+          a,
+          a.defaultBrandId
+            ? brands.find((brand) => brand.id === a.defaultBrandId)
+            : null
+        ),
+        formatProductName(
+          b,
+          b.defaultBrandId
+            ? brands.find((brand) => brand.id === b.defaultBrandId)
+            : null
+        )
+      )
+    )
+
+  return (
+    <WorkflowCard
+      title="Merge products"
+      description="Admin cleanup for duplicate product names."
+      action={mergeItemAction}
+      submitLabel="Merge product"
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="sourceItemId">Duplicate</Label>
+          <NativeSelect id="sourceItemId" name="sourceItemId" required>
+            <option value="">Select duplicate</option>
+            {activeItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {formatProductName(
+                  item,
+                  item.defaultBrandId
+                    ? brands.find((brand) => brand.id === item.defaultBrandId)
+                    : null
+                )}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="targetItemId">Keep</Label>
+          <NativeSelect id="targetItemId" name="targetItemId" required>
+            <option value="">Select product to keep</option>
+            {activeItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {formatProductName(
+                  item,
+                  item.defaultBrandId
+                    ? brands.find((brand) => brand.id === item.defaultBrandId)
+                    : null
+                )}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Source becomes inactive. Audit kept.
+      </p>
+    </WorkflowCard>
+  )
+}
+
+export function MasterDataForms({
+  brands = [],
+  items = [],
+}: {
+  brands?: Brand[]
+  items?: Item[]
+}) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <WorkflowCard
@@ -1337,6 +1423,7 @@ export function MasterDataForms({ brands = [] }: { brands?: Brand[] }) {
         </div>
       </WorkflowCard>
       <MergeManufacturerForm brands={brands} />
+      <MergeProductForm items={items} brands={brands} />
     </div>
   )
 }
@@ -1995,6 +2082,7 @@ export function BarcodeInboundForm({
   const [originQuery, setOriginQuery] = useState("")
   const [quickItemName, setQuickItemName] = useState("")
   const [quickItemCategory, setQuickItemCategory] = useState("MEAT")
+  const [showManualProductEntry, setShowManualProductEntry] = useState(false)
   const [recentLabels, setRecentLabels] = useState<InboundLabel[]>(() =>
     initialSessionDraft
       ? inboundLabelsForBatch(
@@ -2478,6 +2566,20 @@ export function BarcodeInboundForm({
     }
 
     applyInboundSetupPreset({ ...preset, [key]: value })
+
+    if (key === "itemId" && value) {
+      setShowManualProductEntry(false)
+    }
+  }
+
+  function openManualProductEntry() {
+    const typedProduct = quickProductNameSuggestion || productQuery.trim()
+
+    if (typedProduct) {
+      setQuickItemName(typedProduct)
+    }
+
+    setShowManualProductEntry(true)
   }
 
   function selectInboundBrand(nextBrandId: string) {
@@ -4543,21 +4645,42 @@ export function BarcodeInboundForm({
                 items={filteredItems}
                 brands={localBrands}
                 value={preset.itemId}
-                onChange={(value) => selectInboundSetup("itemId", value)}
+                onChange={(value) => {
+                  if (value === "__other") {
+                    openManualProductEntry()
+                    return
+                  }
+
+                  selectInboundSetup("itemId", value)
+                }}
                 manufacturerName={selectedManufacturerValue}
                 disabled={scopeLocked}
+                allowOther
               />
               {!preset.itemId ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                   Choose a product or tap a recent template before scanning.
                 </div>
               ) : null}
+              {!preset.itemId ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-stock-action="use-other-product"
+                  className="min-h-11 w-full justify-start whitespace-normal text-left"
+                  disabled={scopeLocked}
+                  onClick={openManualProductEntry}
+                >
+                  Use Other Product
+                </Button>
+              ) : null}
               <details
                 data-stock-action="manual-product-entry"
                 open={
-                  Boolean(quickProductNameSuggestion) &&
-                  !productSearchHasExactMatch &&
-                  !preset.itemId
+                  !preset.itemId &&
+                  (showManualProductEntry ||
+                    (Boolean(quickProductNameSuggestion) &&
+                      !productSearchHasExactMatch))
                 }
                 className="rounded-md border bg-muted/30 p-3"
               >
