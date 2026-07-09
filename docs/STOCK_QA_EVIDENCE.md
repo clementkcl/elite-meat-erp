@@ -6,6 +6,149 @@ Use this file to record real Supabase, RLS, device, and workflow evidence before
 
 Use `docs/STOCK_COMPLETION_AUDIT.md` to compare local automated evidence with the manual evidence still required.
 
+## 2026-07-09 Stock Inbound Manual Duplicate Previous-Weight Cleanup
+
+Scope:
+
+- `/stock/inbound` manual weight active page.
+
+Evidence captured:
+
+- Removed the duplicate previous-weight note inside the manual helper card.
+- The sticky summary and previous-entry card still show prior weight, barcode, and undo access.
+- Source checks passed: `node scripts\stock-mobile-ux-coverage.mjs`, `node scripts\stock-acceptance-coverage.mjs`, and `node scripts\stock-inbound-guided-flow-coverage.mjs`.
+
+Manual QA:
+
+- Enter two manual weights at phone width and confirm previous weight is visible once in the main active flow with Undo Last Weight Entry available.
+
+## 2026-07-09 Stock Inbound Active Page Preset Cleanup
+
+Scope:
+
+- `/stock/inbound` active scan/manual pages.
+
+Evidence captured:
+
+- The full current-scan preset card now hides on active scan/manual pages.
+- The sticky summary remains visible and carries session code, display name, product, manufacturer, origin/location, saved count, and saved weight.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- Open active scan/manual entry at phone width and confirm the page shows the sticky summary without the duplicate preset card.
+
+## 2026-07-09 Stock Inbound Sticky Summary Session Code
+
+Scope:
+
+- `/stock/inbound` active scan/manual sticky summary.
+
+Evidence captured:
+
+- The sticky active-session summary now shows the inbound session code under the display name.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- Open active scan/manual entry at phone width and confirm the session code stays visible while scanning or entering weights.
+
+## 2026-07-09 Stock Inbound Sticky Summary Product Lines
+
+Scope:
+
+- `/stock/inbound` active scan/manual sticky summary.
+
+Evidence captured:
+
+- The sticky active-session summary now shows product and manufacturer separately under the display name.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- Open active scan/manual entry at phone width and confirm display name, product, manufacturer, origin/location, count, and weight stay visible.
+
+## 2026-07-09 Stock Inbound Manager-Approved Delete Confirmation
+
+Scope:
+
+- `/stock/inbound` whole-session delete confirmation.
+
+Evidence captured:
+
+- The destructive confirmation now says `Confirm manager-approved Delete Whole Session`.
+- Existing manager/admin/director server-side action gate remains unchanged.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- Finish a session, open Delete Whole Session, and confirm the manager-approved warning is shown before voiding.
+
+## 2026-07-09 Stock Inbound Summary Finish Label
+
+Scope:
+
+- `/stock/inbound` session summary action grid.
+
+Evidence captured:
+
+- The disabled summary finish action is labeled `Finish Session`, matching the guided workflow wording.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- Finish an inbound session on phone width and confirm the summary shows Print Labels PDF, Print Session Summary, Finish Session, and Delete Whole Session.
+
+## 2026-07-09 Stock Inbound Shorter Scan Hints
+
+Scope:
+
+- `/stock/inbound` barcode rule and recent scan helper text.
+
+Evidence captured:
+
+- Rule preview now says `Preview only. Net kg below.`
+- First-rule helper now says `Save first barcode. Rule reused.`
+- Recent barcode-mode scan note now says `Barcode labels already attached.`
+- Source checks passed: `node scripts\stock-mobile-ux-coverage.mjs`, `node scripts\stock-inbound-guided-flow-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- Open `/stock/inbound` at phone width and confirm the rule/scan helper copy stays short but understandable.
+
+## 2026-07-09 Stock Inbound Short Display Name Label
+
+Scope:
+
+- `/stock/inbound` setup and preview display-name labels.
+
+Evidence captured:
+
+- The setup and locked preview cards now use the shorter label `Display name`.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- Open `/stock/inbound` at phone width and confirm the display name card remains clear while product and manufacturer stay separate.
+
+## 2026-07-09 Stock Inbound Immediate-Save QA Alignment
+
+Scope:
+
+- `/stock/inbound` barcode-rule learning message and internal-label QA guidance.
+
+Evidence captured:
+
+- Barcode rule learning now says `Weight position found. Save rule.`
+- Current no-barcode/internal-label QA now checks immediate stock save before print/attach.
+- `/stock/no-barcode-inbound` now tells workers stock saves when the label is generated.
+- Source checks passed: `node scripts\stock-mobile-ux-coverage.mjs`, `node scripts\stock-owner-qa-doc-coverage.mjs`, and `node scripts\stock-inbound-guided-flow-coverage.mjs`.
+
+Manual QA:
+
+- Open Inbound with Barcode, scan a no-rule supplier barcode, enter kg, and confirm the shorter rule-save message.
+- Open Inbound without Barcode, generate one internal label, confirm stock saves immediately, then print/attach it.
+
 ## 2026-07-09 Stock Inbound Invalid-Rule Wording Alignment
 
 Scope:
@@ -113,7 +256,7 @@ Scope:
 Evidence captured:
 
 - Fixed-weight fallback now shows `Set default fixed kg first.`
-- Whole-session delete now shows `Confirm Delete Whole Session`, shorter void count/weight text, and `Manager approval required. Audit kept.`
+- Whole-session delete now shows `Confirm manager-approved Delete Whole Session`, shorter void count/weight text, and `Manager approval required. Audit kept.`
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
 
 Manual QA:
@@ -1583,7 +1726,7 @@ Manual QA still required:
 Scope:
 
 - Barcode Inbound now has a second `Generate internal label` button beside `Net weight kg`.
-- Repeated internal-label inbound can enter a weight, print/attach the generated label, scan it back, and return to the same weight field for the next unit.
+- Repeated internal-label inbound can enter a weight, save the generated label immediately, print/attach it, and return to the same weight field for the next unit.
 - Existing generated barcode format, duplicate checks, label printing, server actions, RLS, and schema were not changed.
 
 Prepared / source-guarded coverage added:
@@ -5033,7 +5176,7 @@ Scope:
 
 - Stock Module Mobile UX only.
 - `/stock/inbound` now shows a larger `Generate internal label` action for no-weight barcode cases.
-- The helper message now tells workers to enter kg, generate/print/attach the label, then scan the printed label before stock saves.
+- The helper message now tells workers to enter kg, generate the label, save stock, then print/attach the label.
 - No server action, RLS policy, barcode generation logic, stock movement rule, label format, schema, migration, live Supabase data, camera permission, or printer behavior was changed.
 
 Prepared / source-guarded QA coverage added:
@@ -5045,7 +5188,7 @@ Prepared / source-guarded QA coverage added:
 Manual QA still required:
 
 - Open `/stock/inbound` on a real phone or 390px viewport.
-- Enter weight for a no-weight barcode case, tap `Generate internal label`, print/attach the label, scan it back, and confirm the stock unit saves.
+- Enter weight for a no-weight barcode case, tap `Generate internal label`, and confirm the stock unit saves before print/attach.
 - Print through the phone/Bluetooth print path or save with PDF fallback.
 
 ## 2026-06-23 Stock Inbound Quick Product Buttons
@@ -5525,7 +5668,7 @@ Requested checklist status:
 | Continuous scanning UI | Source guarded for large scan/manual controls, continuous copy, recent scan list, previous scan, count, and total weight. | Test phone camera/manual fallback while scanning multiple barcodes. |
 | Duplicate warning | Source guarded for `Duplicate barcode. Inbound is blocked.` | Scan the same barcode twice and verify no second save. |
 | No-weight warning | Source guarded for label-generation guidance. | Scan a no-weight barcode and confirm save is blocked. |
-| Label generation | Source guarded for 50mm x 30mm label, Code 128 bars, print action, and PDF fallback. | Print or save PDF from a real phone/browser and scan the printed label. |
+| Label generation | Source guarded for 50mm x 30mm label, Code 128 bars, print action, and PDF fallback. | Generate a label, confirm stock saves, then print or save PDF from a real phone/browser. |
 | Label reprint | Source guarded for `/stock/units/[id]` mobile reprint without reason. | Reprint a real stock-unit label from phone. |
 | Outbound by order | Source guarded for order-first scan block, quick ready-order buttons, substitution warning, and previous outbound scan. | Test a real ready order and matching/substitute barcodes. |
 | Direct outbound | Source guarded for Sales, Processing, Transfer, Sample/Testing, Damage/Spoilage, Return Supplier, quick remarks, and damage photo picker. | Submit test direct flows and confirm server-side acceptance/blocking. |
@@ -6214,7 +6357,7 @@ What changed:
 Manual QA:
 
 - Start a no-supplier-barcode inbound session.
-- Enter kg, generate/print/attach the label, scan the printed label, and confirm the kg field clears.
+- Enter kg, generate the label, confirm stock saves, then print/attach it and confirm the kg field clears.
 - Confirm the screen remains on Manual Weight and the kg field is ready for the next unit.
 
 ## 2026-06-29 Guided Inbound Acceptance Coverage

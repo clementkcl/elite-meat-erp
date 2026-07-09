@@ -2852,9 +2852,7 @@ export function BarcodeInboundForm({
         saveWeightRule: true,
       }))
       setDecodeStatus("warning")
-      setDecodeMessage(
-        "Weight position found. Save this scan to learn the rule for next time."
-      )
+      setDecodeMessage("Weight position found. Save rule.")
       return
     }
 
@@ -2925,9 +2923,7 @@ export function BarcodeInboundForm({
       saveWeightRule: true,
     }))
     setDecodeStatus("warning")
-    setDecodeMessage(
-      "Weight position found. Save this scan to learn the rule for next time."
-    )
+    setDecodeMessage("Weight position found. Save rule.")
   }
 
   function handleNetWeightKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -4233,7 +4229,7 @@ export function BarcodeInboundForm({
                   className="rounded-md border bg-muted/30 px-3 py-2"
                 >
                   <div className="text-xs font-medium uppercase text-muted-foreground">
-                    Generated display product name
+                    Display name
                   </div>
                   <div className="mt-1 break-words text-lg font-semibold">
                     {selectedProductDisplayName}
@@ -4331,6 +4327,13 @@ export function BarcodeInboundForm({
                   </div>
                   <div className="mt-1 text-base font-semibold">
                     {selectedProductDisplayName}
+                  </div>
+                  <div className="mt-1 break-all font-mono text-xs text-emerald-800">
+                    {batchNo}
+                  </div>
+                  <div className="mt-1 grid gap-1 text-xs text-emerald-800 sm:grid-cols-2">
+                    <div>Product: {selectedProductName}</div>
+                    <div>Manufacturer: {selectedManufacturerName}</div>
                   </div>
                   <div className="mt-1 text-emerald-800">
                     {selectedOriginName}{" "}
@@ -5176,7 +5179,14 @@ export function BarcodeInboundForm({
             </div>
           </div>
 
-          <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <div
+            data-stock-action="current-scan-preset-card"
+            className={
+              inboundStep === "scan" || inboundStep === "manual"
+                ? "hidden"
+                : "rounded-md border bg-muted/30 p-3 text-sm"
+            }
+          >
             <div className="font-medium">Current scan preset</div>
             {scopeLocked ? (
               <div className="mb-1 text-xs font-medium text-amber-700">
@@ -5190,7 +5200,7 @@ export function BarcodeInboundForm({
               className="mt-2 rounded-md border bg-background px-3 py-2"
             >
               <div className="text-xs font-medium uppercase text-muted-foreground">
-                Generated display name
+                Display name
               </div>
               <div className="mt-1 break-words font-semibold">
                 {selectedProductDisplayName}
@@ -5381,7 +5391,7 @@ export function BarcodeInboundForm({
                   : "-"}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Preview only. Actual kg is saved below.
+                Preview only. Net kg below.
               </p>
               {barcode ? (
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -5453,7 +5463,7 @@ export function BarcodeInboundForm({
                 </div>
               </div>
               <p className="mt-2 text-xs">
-                Save first barcode. Future scans use rule.
+                Save first barcode. Rule reused.
               </p>
             </div>
           ) : null}
@@ -5582,12 +5592,6 @@ export function BarcodeInboundForm({
                 <div className="mt-2 text-xs font-medium">
                   Enter kg. Save, print, attach, repeat.
                 </div>
-                {latestSavedScan ? (
-                  <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-900">
-                    Previous entered weight: {latestSavedScan.productName},{" "}
-                    {latestSavedScan.weightKg} kg.
-                  </div>
-                ) : null}
               </div>
             </div>
           ) : null}
@@ -5862,7 +5866,7 @@ export function BarcodeInboundForm({
                   <StockLabelPrintNote />
                 ) : (
                   <div className="mt-2 rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
-                    Supplier labels already attached.
+                    Barcode labels already attached.
                   </div>
                 )}
                 {activePrintLabels.length > 0 ? (
@@ -6225,7 +6229,7 @@ export function BarcodeInboundForm({
                 className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
               >
                 <div className="font-semibold">
-                  Confirm Delete Whole Session
+                  Confirm manager-approved Delete Whole Session
                 </div>
                 <div className="mt-1">
                   Voids {recentInboundCount} saved{" "}
@@ -6280,7 +6284,7 @@ export function BarcodeInboundForm({
                 className="min-h-11 w-full whitespace-normal"
                 disabled
               >
-                Session finished
+                Finish Session
               </Button>
               <Button
                 type="button"
@@ -9706,8 +9710,8 @@ export function NoBarcodeInboundForm() {
         <CardTitle>No-barcode stock needs a label first</CardTitle>
         <CardDescription>
           MVP stock uses one barcode per stock unit. Generate and print an
-          internal barcode label from Barcode Inbound, attach it to the item,
-          then scan the printed label.
+          internal barcode label from Barcode Inbound. Stock saves when the
+          label is generated.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

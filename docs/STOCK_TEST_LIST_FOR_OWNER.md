@@ -56,15 +56,15 @@ Pass result:
 7. Confirm the 50mm x 30mm label preview shows company name, product name, weight, and barcode.
 8. Print to a Bluetooth label printer if available; otherwise use `PDF fallback`.
 9. Attach the label to the test product.
-10. Scan the printed label to confirm inbound.
-11. Confirm the stock saves only after the printed label is scanned back.
+10. Confirm stock saves immediately after label generation.
+11. Attach the printed label to the product.
 12. Confirm the page returns immediately to weight entry for the next unit.
 13. Enter a second weight and confirm previous saved item, previous weight, current count, and current total weight update.
 14. Finish the session and confirm the summary shows the same item/manufacturer/location and all saved labels.
 
 Pass result:
 
-- A worker can keep entering weights, generate labels, scan the printed labels, and save barcode stock without reselecting item, manufacturer, origin, or location.
+- A worker can keep entering weights, generate labels, and save barcode stock without reselecting item, manufacturer, origin, or location.
 
 ## Stock Mobile UX Quick Pass
 
@@ -249,9 +249,9 @@ Latest Codex QA preparation note, 2026-06-25:
 13. Finish the inbound session and confirm summary details use two columns around 390px width.
 14. Scan the same inbound barcode again and confirm `Duplicate barcode. Inbound is blocked.` appears immediately as a short red blocked alert and the duplicate is not saved.
 15. Scan a no-weight barcode and confirm save is blocked with label-generation guidance.
-15a. Scan a supplier barcode with no saved rule, enter actual kg once, and confirm the form says `Weight position found. Save this scan to learn the rule for next time.`
+15a. Scan a supplier barcode with no saved rule, enter actual kg once, and confirm the form says `Weight position found. Save rule.`
 15b. Confirm `Save weight rule for future scans` is on for a no-rule item + brand + origin, save that scan, then scan another same-format barcode and confirm weight auto-fills.
-16. Generate an internal label, test `Print label` plus `PDF fallback`, scan the printed label, and confirm the stock unit saves.
+16. Generate an internal label, confirm the stock unit saves, then test `Print label` plus `PDF fallback`.
 17. Open `/stock/units/[id]` and confirm label reprint works without a reason field.
 18. On `/stock/inbound`, confirm `Finish Session` is a full-width phone-size button around 390px width.
 19. Open `/stock/no-barcode-inbound` and confirm `Open Barcode Inbound` is a full-width phone-size in-app link to `/stock/inbound`.
@@ -442,7 +442,7 @@ Pass result:
 4. Enter weight on the label-generation area.
 5. Confirm `Generate internal label` is large and easy to tap at about 390px width.
 6. Tap `Generate internal label`.
-7. Confirm stock is not saved yet; print/attach the label, then scan the printed label to save.
+7. Confirm stock saves immediately, then print/attach the label.
 8. Confirm the label preview contains company name, product name, weight, and barcode.
 9. Confirm the barcode itself does not include `KG` text.
 10. Confirm the green guidance card says Bluetooth label printer first.

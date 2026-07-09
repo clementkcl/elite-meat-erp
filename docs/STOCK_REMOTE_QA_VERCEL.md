@@ -62,7 +62,7 @@ Use this focused pass before the broad Stock Mobile QA list. It proves the curre
 4. Confirm the scanner stays hidden until a label is generated.
 5. Enter one weight, generate a numeric-only internal barcode, and confirm the 50mm x 30mm label preview shows company, product, weight, and barcode.
 6. Print with Bluetooth label printer if available; otherwise use PDF fallback.
-7. Attach the label, scan it back, and confirm stock saves only after the printed label is scanned.
+7. Confirm stock saves immediately, then attach the label to the test product.
 8. Confirm the page returns to the weight field for the next unit.
 9. Enter a second weight and confirm previous saved item/weight, session count, and total weight update.
 10. Finish the session and capture the summary screen.
@@ -214,9 +214,9 @@ Latest Codex QA preparation note, 2026-06-24:
 13. `/stock/inbound`: finish the inbound session and confirm summary details use two columns around 390px width.
 14. `/stock/inbound`: scan a duplicate and confirm `Duplicate barcode. Inbound is blocked.` appears immediately as a short red blocked alert and the duplicate is not saved.
 15. `/stock/inbound`: scan a no-weight barcode and confirm the app guides the worker to generate an internal label.
-15a. `/stock/inbound`: scan a supplier barcode with no saved rule, enter actual kg once, and confirm the form says `Weight position found. Save this scan to learn the rule for next time.`
+15a. `/stock/inbound`: scan a supplier barcode with no saved rule, enter actual kg once, and confirm the form says `Weight position found. Save rule.`
 15b. `/stock/inbound`: confirm `Save weight rule for future scans` is on for a no-rule item + brand + origin, save that scan, then scan another same-format barcode and confirm weight auto-fills.
-16. `/stock/inbound`: generate an internal label, test `Print label` and `PDF fallback`, then scan the printed label and confirm stock saves.
+16. `/stock/inbound`: generate an internal label, confirm stock saves, then test `Print label` and `PDF fallback`.
 17. `/stock/units/[id]`: reprint an old label without entering a reason.
 18. `/stock/inbound`: confirm `Finish Session` is a full-width phone-size button around 390px width.
 19. `/stock/no-barcode-inbound`: confirm `Open Barcode Inbound` is a full-width phone-size in-app link to `/stock/inbound`.
@@ -326,7 +326,7 @@ If phone camera or Bluetooth label printer cannot be tested:
 22. Confirm item, brand, origin, and location lock after the first saved scan until `Finish Session`.
 23. Confirm no-weight barcode is blocked with label-printing guidance.
 24. Confirm `Generate internal label` is large and easy to tap at about 390px width.
-25. Confirm stock is not saved until the printed label is scanned back.
+25. Confirm stock saves immediately after label generation.
 26. Confirm `Print label` is the primary label action and `PDF fallback` remains available.
 27. Confirm the green guidance card says Bluetooth label printer first.
 28. Confirm the same card says PDF fallback is available and one label prints per page.

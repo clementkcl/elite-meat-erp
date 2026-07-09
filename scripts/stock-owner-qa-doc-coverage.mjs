@@ -117,7 +117,7 @@ includesAll(
     "Main mobile users are general workers.",
     "Stock mobile home shows Inbound, Outbound, Transfer, Receive, Return/Damage, Stock Take.",
     "Duplicate barcode blocks immediately with red warning.",
-    "Generated internal label saves stock only after the printed label is scanned.",
+    "Generated internal label saves stock immediately.",
     "Bluetooth label printer primary; PDF fallback required.",
     "Damage/spoilage requires photo and creates approval request only.",
     "Receive-transfer at wrong location is blocked.",
