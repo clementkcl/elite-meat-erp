@@ -2130,10 +2130,10 @@ export function BarcodeInboundForm({
         setSessionBarcodeRuleLength(String(formData.get("barcode") ?? "").length)
         setPreset((current) => ({ ...current, saveWeightRule: false }))
         setDecodeStatus("success")
-        setDecodeMessage(`Rule saved. Saved ${savedWeightText}. Keep scanning.`)
+        setDecodeMessage(`Rule saved. ${savedWeightText} saved.`)
       } else {
         setDecodeStatus("success")
-        setDecodeMessage(`Saved ${savedWeightText}. Keep scanning.`)
+        setDecodeMessage(`${savedWeightText} saved.`)
       }
 
       setInboundStep(wasInternalLabel && inboundMode === "internal_label" ? "manual" : "scan")
@@ -2332,7 +2332,7 @@ export function BarcodeInboundForm({
         time: new Date().toISOString(),
       },
       ...current,
-    ].slice(0, 8))
+    ])
   }
 
   function logInboundScanIssue(
@@ -2783,7 +2783,7 @@ export function BarcodeInboundForm({
 
     if (readyToSubmit) {
       setDecodeStatus("success")
-      setDecodeMessage(`Saving ${decoded.weightKg} kg. Keep scanner ready.`)
+      setDecodeMessage(`Saving ${decoded.weightKg} kg.`)
       window.setTimeout(() => formRef.current?.requestSubmit(), 0)
     }
   }
@@ -3624,7 +3624,7 @@ export function BarcodeInboundForm({
     !pendingInternalLabel &&
     decodeMessage.includes("Use internal label")
   const inboundSummaryNextAction = manualMode
-    ? "Print and attach labels."
+    ? "Print labels."
     : "Move stock when ready."
   const inboundCardTitle = manualMode
     ? "Inbound without Barcode"
@@ -3728,7 +3728,7 @@ export function BarcodeInboundForm({
         ? "Choose location, then scan."
         : template.hasRule
         ? "Ready. Scan next barcode."
-        : "Scan barcode, enter kg once."
+        : "Scan sample, enter kg."
     )
     if (inboundPresetCanScan(next)) {
       setInboundStep(template.hasRule ? "scan" : "rule")
@@ -3803,16 +3803,6 @@ export function BarcodeInboundForm({
     )
     setInboundStep(session.hasRule ? "scan" : "rule")
     window.setTimeout(() => barcodeInputRef.current?.focus(), 0)
-  }
-
-  function inboundTemplateStatusText(template: InboundTemplate) {
-    if (manualMode) {
-      return "Template ready: opens manual weight"
-    }
-
-    return template.hasRule
-      ? "Saved rule ready: opens scanner"
-      : "No rule yet: opens rule setup"
   }
 
   return (
@@ -4272,12 +4262,6 @@ export function BarcodeInboundForm({
                       <span className="block font-medium">
                         {template.label}
                       </span>
-                      <span className="block text-xs opacity-80">
-                        Origin: {template.originName}
-                      </span>
-                      <span className="block text-xs font-medium opacity-90">
-                        {inboundTemplateStatusText(template)}
-                      </span>
                     </span>
                   </Button>
                 ))}
@@ -4289,7 +4273,7 @@ export function BarcodeInboundForm({
             )}
             {inboundTemplates.length > 0 ? (
               <p className="text-xs text-muted-foreground">
-                Tap Manufacturer + Product to scan faster.
+                Tap recent product.
               </p>
             ) : null}
           </div>
@@ -4890,7 +4874,7 @@ export function BarcodeInboundForm({
                       : ""}
               </div>
               <details className="rounded-md border bg-muted/30 p-3">
-                <summary className="flex min-h-9 cursor-pointer items-center break-words text-sm font-medium">
+                <summary className="flex min-h-11 cursor-pointer items-center break-words text-sm font-medium">
                   Change Location
                 </summary>
                 <div className="mt-3 space-y-2">
@@ -4960,10 +4944,10 @@ export function BarcodeInboundForm({
               />
               <p className="text-xs text-muted-foreground">
                 {manualMode
-                  ? "Enter kg. Press Enter to save."
+                  ? "Enter kg. Press Enter."
                   : currentBarcodeWeightRule
-                  ? "Auto-filled from saved barcode rule after scan."
-                  : "Scan barcode, enter kg once."}
+                  ? "Auto-filled by rule."
+                  : "Scan sample, enter kg."}
               </p>
               <Button
                 type="button"
@@ -5371,7 +5355,7 @@ export function BarcodeInboundForm({
                   ? "Rule ready. Keep scanning."
                   : sessionBarcodeRuleSaved
                     ? "Rule saved. Keep scanning."
-                  : "Scan barcode, enter kg once."}
+                  : "Scan sample, enter kg."}
               </div>
               {currentBarcodeWeightRule?.sampleBarcode ? (
                 <div className="mt-1 break-all text-xs">
@@ -5596,7 +5580,7 @@ export function BarcodeInboundForm({
                 data-stock-action="manual-weight-enter-shortcut"
                 className="mt-2 rounded-md border border-emerald-200 bg-white/70 px-3 py-2 text-xs font-medium text-emerald-800"
               >
-                Press Enter or Done to save next weight.
+                Enter saves next weight.
                 </div>
               </div>
               {!isOnline ? (
@@ -5605,7 +5589,7 @@ export function BarcodeInboundForm({
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                 <div className="font-medium">Manual Weight Entry</div>
                 <div className="mt-2 text-xs font-medium">
-                  Enter kg. Save, print, attach, repeat.
+                  Enter kg. Print label. Repeat.
                 </div>
               </div>
             </div>
@@ -5887,8 +5871,8 @@ export function BarcodeInboundForm({
                 {activePrintLabels.length > 0 ? (
                   <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
                     {manualMode
-                      ? "Print and attach labels."
-                      : "Labels can be reprinted if needed."}
+                      ? "Print labels."
+                      : "Reprint if needed."}
                   </div>
                 ) : null}
               </div>
@@ -6139,7 +6123,7 @@ export function BarcodeInboundForm({
                   Duplicate/error scans in this session
                 </div>
                 <div className="mt-3 grid gap-2">
-                  {sessionErrors.map((error) => (
+                  {sessionErrors.slice(0, 8).map((error) => (
                     <div
                       key={`summary-error-${error.id}`}
                       className="rounded-md border border-amber-200 bg-background px-3 py-2"
@@ -6156,6 +6140,11 @@ export function BarcodeInboundForm({
                     </div>
                   ))}
                 </div>
+                {sessionErrors.length > 8 ? (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Showing latest 8 errors. Full list prints in session summary.
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {voidedSessionScans.length > 0 ? (
@@ -6199,8 +6188,7 @@ export function BarcodeInboundForm({
                 </div>
                 {voidedSessionScans.length > 8 ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    Showing latest 8 voided entries. Full audit remains in
-                    stock movements and barcode scan logs.
+                    Showing latest 8 voided. Full audit kept.
                   </div>
                 ) : null}
               </div>
@@ -6379,7 +6367,7 @@ export function BarcodeInboundForm({
             </div>
             {recentLabels.length > 12 ? (
               <div className="mt-2 text-xs text-muted-foreground">
-                Showing latest 12. Session totals include all saved scans.
+                Showing latest 12. Totals include all.
               </div>
             ) : null}
           </div>

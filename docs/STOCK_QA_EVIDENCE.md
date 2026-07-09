@@ -1,10 +1,103 @@
 # Stock QA Evidence Log
 
-Last updated: 2026-06-29
+Last updated: 2026-07-10
 
 Use this file to record real Supabase, RLS, device, and workflow evidence before calling the Stock module ready for internal pilot use. Do not mark a row as passed from demo-mode data only.
 
 Use `docs/STOCK_COMPLETION_AUDIT.md` to compare local automated evidence with the manual evidence still required.
+
+## 2026-07-10 Stock Inbound Recent Template Simplification
+
+Scope:
+
+- `/stock/inbound` Page 1 recent inbound template cards.
+
+Evidence captured:
+
+- Recent template cards now show only the manufacturer + product display name.
+- Extra origin/status text was removed from the card to keep the worker-first mobile setup screen lighter.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, `node scripts\stock-acceptance-coverage.mjs`, and `node scripts\stock-label-coverage.mjs`.
+
+Manual QA:
+
+- At phone width, open `/stock/inbound`, confirm recent template cards show simple product names, tap one, and verify it still opens scanner or barcode-rule setup as appropriate.
+
+## 2026-07-09 Stock Inbound Compact Helper Copy
+
+Scope:
+
+- `/stock/inbound` manual-weight and session-summary helper text.
+
+Evidence captured:
+
+- Manual-weight shortcut, label-print, recent-list, and audit helper messages were shortened for phone use.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- At phone width, enter two manual weights, finish the session, and confirm summary/help messages stay short.
+
+## 2026-07-09 Stock Inbound Shorter Worker Copy
+
+Scope:
+
+- `/stock/inbound` scan and manual-weight helper messages.
+
+Evidence captured:
+
+- Scanner save, rule-save, manual-weight, and rule-fill helper text was shortened.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- At phone width, scan one supplier barcode and enter one manual-label weight. Confirm messages stay short and easy to read.
+
+## 2026-07-09 Stock Inbound Compact Summary Errors
+
+Scope:
+
+- `/stock/inbound` session summary duplicate/error list.
+
+Evidence captured:
+
+- The on-screen summary shows only the latest 8 duplicate/error scans with a short note.
+- The printable session summary still includes the full duplicate/error list.
+- Source check passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`.
+
+Manual QA:
+
+- Create more than 8 duplicate/error scans, finish the session, and confirm the mobile summary stays compact while Print Session Summary includes all errors.
+
+## 2026-07-09 Stock Inbound Full-Session Error Totals
+
+Scope:
+
+- `/stock/inbound` current-session duplicate/error scan tracking.
+
+Evidence captured:
+
+- Current-session duplicate/error state is no longer capped to the latest 8 entries.
+- Session summary and print summary can now report the full duplicate/error scan count for the session.
+- Source check passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`.
+
+Manual QA:
+
+- In one inbound session, create more than 8 duplicate or blocked scans and confirm the summary count matches all errors.
+
+## 2026-07-09 Stock Inbound Location Tap Target
+
+Scope:
+
+- `/stock/inbound` Page 1 setup location changer.
+
+Evidence captured:
+
+- The `Change Location` disclosure header now uses the same `min-h-11` phone tap-target size as other stock workflow disclosures.
+- Source checks passed: `node scripts\stock-mobile-ux-coverage.mjs` and `node scripts\stock-inbound-guided-flow-coverage.mjs`.
+
+Manual QA:
+
+- At 390px width, open `/stock/inbound`, tap `Change Location`, and confirm it opens easily without horizontal scrolling.
 
 ## 2026-07-09 Stock Inbound Setup Finish Handler Reuse
 

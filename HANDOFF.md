@@ -1,5 +1,209 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-10 - Stock Inbound recent template simplification
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by simplifying recent inbound template cards for mobile workers.
+- Recent templates now show only the manufacturer + product display name with short helper copy, so workers can tap a familiar product quickly without extra origin/status text.
+- Removed the now-unused template status helper and updated stock source guards to protect the simpler card behavior.
+- No schema, RLS, stock movement, barcode uniqueness, server action, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound compact helper copy
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by shortening remaining helper text in the manual-weight and session-summary areas.
+- Worker-facing labels now use shorter copy such as `Enter saves next weight.`, `Enter kg. Print label. Repeat.`, `Print labels.`, and `Full audit kept.`
+- No schema, RLS, stock movement, barcode uniqueness, server action, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed after updating the label coverage string.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run typecheck` - passed when rerun after build finished.
+
+Risks / remaining checks:
+
+- A parallel `typecheck` run failed while `build` was rewriting `.next` generated type files; rerunning typecheck after build passed.
+- Real long-session Supabase QA, phone camera, external scanner, Bluetooth/PDF label printing, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound shorter worker copy
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by shortening worker-facing scan and weight helper messages.
+- Supplier-barcode and manual-weight flows now use shorter messages such as `Saving 12.345 kg.`, `Auto-filled by rule.`, and `Enter kg. Press Enter.`
+- No schema, RLS, stock movement, barcode uniqueness, server action, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real long-session Supabase QA, phone camera, external scanner, Bluetooth/PDF label printing, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound compact summary errors
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by keeping the on-screen session summary error list compact on mobile.
+- The visible summary now shows the latest 8 duplicate/error scans with a short note, while the full error list remains available in the printable session summary.
+- No schema, RLS, stock movement, barcode uniqueness, server action, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real long-session Supabase QA, phone camera, external scanner, Bluetooth/PDF label printing, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound full-session error totals
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by removing the hidden 8-error cap from current-session duplicate/error scan state.
+- Session summary and print summary now count all duplicate/error scans from the current session instead of only the latest 8.
+- Added a coverage guard so `recordSessionError` does not cap data before summary.
+- No schema, RLS, stock movement, barcode uniqueness, server action, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real long-session Supabase QA, phone camera, external scanner, Bluetooth/PDF label printing, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound location tap target
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by making the setup page `Change Location` disclosure match the 44px+ worker tap-target size used by the rest of the mobile stock controls.
+- Added a coverage guard so stock workflow disclosure headers do not regress to cramped phone tap targets.
+- No schema, RLS, stock movement, barcode uniqueness, server action, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real long-session Supabase QA, phone camera, external scanner, Bluetooth/PDF label printing, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
 ## 2026-07-09 - Stock Inbound setup finish handler reuse
 
 Task completed:

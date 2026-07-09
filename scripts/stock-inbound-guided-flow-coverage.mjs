@@ -81,7 +81,7 @@ includesAll(
     "No previous inbound sessions yet.",
     "Page {boundedHistoryPage} / {historyPageCount}",
     "recentLabels.slice(0, 12).map",
-    "Showing latest 12. Session totals include all saved scans.",
+    "Showing latest 12. Totals include all.",
   ],
   "Inbound session history"
 )
@@ -111,7 +111,7 @@ const historySetupStart = workflowForms.indexOf(
   "function applyInboundHistorySetup"
 )
 const historySetupEnd = workflowForms.indexOf(
-  "function inboundTemplateStatusText",
+  "return (",
   historySetupStart
 )
 assert(historySetupStart >= 0, "applyInboundHistorySetup function missing")
@@ -212,10 +212,6 @@ includesAll(
     "setBrandName(\"\")",
     "setOriginName(\"\")",
     "data-stock-action=\"recent-inbound-template-card\"",
-    "function inboundTemplateStatusText(template: InboundTemplate)",
-    "Template ready: opens manual weight",
-    "Saved rule ready: opens scanner",
-    "No rule yet: opens rule setup",
     "data-stock-action=\"inbound-mode-guidance\"",
     "Inbound with Barcode",
     "Inbound without Barcode",
@@ -435,9 +431,9 @@ includesAll(
     "data-stock-action=\"scanner-popup-external-input\"",
     "External scanner input",
     "handleDetected(typedValue)",
-    "Saving ${decoded.weightKg} kg. Keep scanner ready.",
-    "Rule saved. Saved ${savedWeightText}. Keep scanning.",
-    "Saved ${savedWeightText}. Keep scanning.",
+    "Saving ${decoded.weightKg} kg.",
+    "Rule saved. ${savedWeightText} saved.",
+    "${savedWeightText} saved.",
     "window.setTimeout(() => formRef.current?.requestSubmit(), 0)",
     "Duplicate barcode. Inbound is blocked.",
     "inboundScannerContextSummary",
@@ -550,8 +546,8 @@ includesAll(
     "data-stock-action=\"manual-weight-enter-shortcut\"",
     "data-stock-action=\"manual-weight-progress-card\"",
     "Enter next unit",
-    "Press Enter or Done to save next weight.",
-    "Enter kg. Save, print, attach, repeat.",
+    "Enter saves next weight.",
+    "Enter kg. Print label. Repeat.",
     "Previous entered weight",
     "manualPreviousWeightText",
     "Undo Last Weight Entry",
@@ -595,7 +591,7 @@ assert(
   "Summary Print Labels PDF must use all saved session labels, not internal-label mode only."
 )
 assert(
-  workflowForms.includes("Labels can be reprinted if needed."),
+  workflowForms.includes("Reprint if needed."),
   "Supplier-barcode sessions must expose safe label reprint copy."
 )
 
@@ -629,6 +625,18 @@ const inboundActionEnd = workflowForms.indexOf(
 )
 assert(inboundActionStart >= 0, "inboundFormAction function missing")
 assert(inboundActionEnd > inboundActionStart, "inboundFormAction boundary missing")
+
+const sessionErrorStart = workflowForms.indexOf("function recordSessionError")
+const sessionErrorEnd = workflowForms.indexOf(
+  "function logInboundScanIssue",
+  sessionErrorStart
+)
+assert(sessionErrorStart >= 0, "recordSessionError function missing")
+assert(sessionErrorEnd > sessionErrorStart, "recordSessionError boundary missing")
+assert(
+  !workflowForms.slice(sessionErrorStart, sessionErrorEnd).includes(".slice(0, 8)"),
+  "Inbound session error count must not be capped before summary."
+)
 const inboundActionBlock = workflowForms.slice(inboundActionStart, inboundActionEnd)
 includesAll(
   inboundActionBlock,
@@ -693,7 +701,7 @@ const historySetupStartForSerial = workflowForms.indexOf(
   "function applyInboundHistorySetup"
 )
 const historyStatusStart = workflowForms.indexOf(
-  "function inboundTemplateStatusText",
+  "return (",
   historySetupStartForSerial
 )
 assert(
@@ -701,6 +709,19 @@ assert(
     .slice(historySetupStartForSerial, historyStatusStart)
     .includes("labelSerialRef.current = 0"),
   "History setup reuse must reset internal-label running serial."
+)
+
+assert(
+  !workflowForms.includes("function inboundTemplateStatusText"),
+  "Recent inbound templates should not render extra status helper copy."
+)
+assert(
+  !workflowForms.includes("Origin: {template.originName}"),
+  "Recent inbound template cards should show only manufacturer + product."
+)
+assert(
+  workflowForms.includes("Tap recent product."),
+  "Recent inbound templates should use short worker helper copy."
 )
 
 includesAll(
@@ -729,6 +750,8 @@ includesAll(
     "{savedSessionScans.length} saved",
     "Compact list.",
     "data-stock-action=\"inbound-session-summary-error-list\"",
+    "sessionErrors.slice(0, 8).map",
+    "Showing latest 8 errors. Full list prints in session summary.",
     "data-stock-action=\"inbound-session-summary-voided-list\"",
     "const voidedSessionScans = recentLabels.filter(",
     "Voided scans kept for audit",
@@ -787,7 +810,7 @@ includesAll(
     "data-stock-action=\"start-new-inbound-session\"",
     "function startNewInboundSession",
     "Manager approval required. Audit kept.",
-    "Full audit remains in",
+    "Full audit kept.",
     "undoInboundSessionAction",
     "[...stockManagerRoles, \"director\"]",
     "create or replace function public.void_inbound_stock_session",

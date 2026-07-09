@@ -176,7 +176,7 @@ includesAll(
     "StockLabelPrintArea",
     "StockLabelPreview",
     "productName: selectedProductDisplayName",
-    "Print and attach labels.",
+    "Print labels.",
   ],
   "Inbound label generation surface"
 )
