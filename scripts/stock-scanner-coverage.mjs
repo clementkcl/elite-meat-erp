@@ -170,6 +170,11 @@ includesAll(
     "{scanFeedbackMessage}",
     "scanFeedbackMessage || \"Scan failed. Try again.\"",
     "scanFeedbackMessage || \"Check scan before saving.\"",
+    "const lastScanToneClass =",
+    "Blocked. Try again.",
+    "Check scan.",
+    "role={cameraFrameTone === \"error\" ? \"alert\" : \"status\"}",
+    "cameraFrameTone === \"error\" ? \"assertive\" : \"polite\"",
     "data-stock-action=\"scanner-primary-scan-action-slot\"",
     "data-stock-action=\"scanner-last-saved-item-weight-top\"",
     "data-stock-action=\"scanner-session-total-top\"",
@@ -209,6 +214,11 @@ includesAll(
     "vibrateAndBeep()",
   ],
   "Stock inbound save-success feedback"
+)
+
+assert(
+  workflowForms.includes('setDecodeStatus("warning")\n      setDecodeMessage(`Saving ${decoded.weightKg} kg.`)'),
+  "Stock inbound pre-save scanner feedback must stay warning until the server confirms save."
 )
 
 assert(

@@ -237,7 +237,7 @@ includesAll(
   workflowForms + barcodeScanner + stockActions + stockInboundSessionVoidMigration,
   [
     "Recent inbound templates",
-    "Tap recent product.",
+    "Tap template.",
     "originName:",
     "guided-inbound-flow",
     "data-stock-action=\"read-only-inbound-session-code\"",
@@ -409,7 +409,7 @@ includesAll(
     "const selectedOriginName =",
     "Origin: {selectedOriginName}",
     "enterKeyHint=\"search\"",
-    "Quick inbound products",
+    "Products",
     "Tap product.",
     "data-stock-action=\"guided-inbound-page-cue\"",
     "Page {inboundPageNumber}/{visibleInboundSteps.length}",
@@ -447,7 +447,7 @@ includesAll(
     "Product not found.",
     "placeholder=\"Product name only\"",
     "className=\"min-h-11 w-full sm:w-auto\"",
-    "Recent manufacturers",
+    "Manufacturers",
     "inboundBrandSearch",
     "Search manufacturer",
     "quickManufacturerNameSuggestion",
@@ -466,15 +466,15 @@ includesAll(
     "name=\"originName\"",
     "value={originName.trim()}",
     "function selectInboundBrand",
-    "Quick inbound origins",
+    "Origins",
     "inboundOriginSearch",
     "Search origin",
     "quickOriginNameSuggestion",
     "originSearchHasExactMatch",
-    "Use search text as custom origin:",
+    "Use as origin:",
     "function selectInboundOrigin",
-    "Tap origin to avoid dropdown.",
-    "Quick inbound locations",
+    "Tap origin.",
+    "Locations",
     "Change location only.",
     "function inboundPresetCanScan",
     "function selectInboundSetup",
@@ -1004,9 +1004,10 @@ assert(
   "Stock worker offline scanner message must use the approved short wording."
 )
 assert(
-  workflowForms.includes("Connection issue. Retry this barcode.") &&
+  workflowForms.includes("Check message above.") &&
+    !workflowForms.includes("Connection issue. Retry this barcode.") &&
     !workflowForms.includes("If the internet is unstable"),
-  "Stock inbound save errors must use short worker-facing retry copy."
+  "Stock inbound save errors must use short neutral worker-facing copy."
 )
 assert(
   !workflowForms.includes('className="flex h-9 w-full rounded-md border border-input') &&

@@ -375,7 +375,7 @@ Page: `/stock/inbound`
 11. Confirm quick inbound origin buttons appear before the origin dropdown and fit at about 390px width.
 12. Tap a quick origin button and confirm it fills the origin.
 13. Confirm the origin dropdown and Other/custom origin still work as fallback.
-13a. Search a missing origin, tap `Use search text as custom origin`, confirm `Save origin first`, save it, and confirm Barcode Rule Page opens only after the saved origin is selected.
+13a. Search a missing origin, tap `Use as origin`, confirm `Save origin first`, save it, and confirm Barcode Rule Page opens only after the saved origin is selected.
 14. Confirm quick inbound location buttons appear before the location dropdown and fit at about 390px width.
 15. Tap a quick location button and confirm it fills the location.
 16. Confirm the location dropdown still works as a fallback.

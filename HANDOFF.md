@@ -1,5 +1,59 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-10 - Stock scanner failed-scan tone guard
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by tightening phone scanner feedback.
+- The scanner popup `Last scanned barcode` card now follows the same success/warning/error tone as the camera frame, so duplicate/no-weight/blocked scans no longer show a green last-scan card beside a red failure state.
+- Scanner last-scan errors now announce assertively for screen readers.
+- Updated the guided Stock Inbound completion audit to record the red/yellow/green last-scan card evidence.
+- Replaced the misleading post-error helper `Connection issue. Retry this barcode.` with the neutral `Check message above.` so duplicate or validation blocks are not presented as connection failures.
+- Pre-save scanner feedback now uses the warning/amber state for `Saving ... kg.` and only turns green after the server confirms stock was saved.
+- Stock Inbound setup labels now use shorter A-Z list copy: `Products`, `Manufacturers`, `Origins`, `Locations`, `Tap template.`, `Tap origin.`, and `Use as origin:`.
+- Custom setup save buttons now use shorter labels: `Save product`, `Save manufacturer`, and `Save origin`.
+- Kept the existing camera scanner, external scanner input, continuous scanning, undo, finish, and server-side validation behavior unchanged.
+
+Files changed in this pass:
+
+- `components/stock/barcode-scanner.tsx`
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-scanner-coverage.mjs`
+- `scripts/stock-inbound-guided-completion-audit-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None in this pass.
+
+SQL run order:
+
+- Unchanged. Pending display-name migration remains `supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql` after `202606250013_stock_item_merge_v1.sql`.
+
+Commands run and results:
+
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-completion-audit-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Manual phone QA should confirm duplicate/no-weight scans show red failed-scan feedback in the popup while valid saved scans show green feedback.
+- Live Supabase, phone camera, handheld scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
 ## 2026-07-10 - Stock Inbound custom name casing guard
 
 Task completed:

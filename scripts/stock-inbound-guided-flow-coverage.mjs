@@ -262,7 +262,7 @@ includesAll(
     "if (nextOriginId === \"__other\")",
     "if (!originName.trim() && originQuery.trim())",
     "setOriginName(originQuery.trim())",
-    "Use search text as custom origin:",
+    "Use as origin:",
     "selectInboundOrigin(\"__other\")",
     "const quickOriginInputRef = useRef<HTMLInputElement | null>(null)",
     "window.setTimeout(() => quickOriginInputRef.current?.focus(), 0)",
@@ -271,7 +271,7 @@ includesAll(
     "Save origin.",
     "formAction={quickOriginCreateAction}",
     "data-stock-action=\"quick-create-origin\"",
-    "Save origin now",
+    "Save origin",
     "ref={quickOriginInputRef}",
   ],
   "Session setup"
@@ -343,7 +343,7 @@ includesAll(
     "Use as product: {quickProductNameSuggestion}",
     "data-stock-action=\"manual-product-entry\"",
     "ref={quickProductInputRef}",
-    "Save product now",
+    "Save product",
     "data-stock-action=\"quick-create-item\"",
     "formNoValidate",
     "quickItemName.trim().replace(/\\s+/g, \" \")",
@@ -366,7 +366,7 @@ includesAll(
     "formNoValidate",
     "data-stock-action=\"quick-create-brand\"",
     "submitter?.dataset.stockAction === \"quick-create-brand\"",
-    "Save manufacturer now",
+    "Save manufacturer",
     "brandName?: string",
     "brandName:",
     "result.brandName ??",
@@ -851,7 +851,7 @@ assert(
   "Recent inbound template cards should show only manufacturer + product."
 )
 assert(
-  workflowForms.includes("Tap recent product."),
+  workflowForms.includes("Tap template."),
   "Recent inbound templates should use short worker helper copy."
 )
 

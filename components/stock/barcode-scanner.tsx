@@ -309,9 +309,21 @@ export function BarcodeScanner({
         : "Scan saved. Keep scanning."
       : cameraFrameTone === "error"
         ? scanFeedbackMessage || "Scan failed. Try again."
-        : cameraFrameTone === "warning"
+      : cameraFrameTone === "warning"
           ? scanFeedbackMessage || "Check scan before saving."
           : "Keep barcode inside the box."
+  const lastScanToneClass =
+    cameraFrameTone === "error"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : cameraFrameTone === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-emerald-200 bg-emerald-50 text-emerald-700"
+  const lastScanStatusText =
+    cameraFrameTone === "error"
+      ? "Blocked. Try again."
+      : cameraFrameTone === "warning"
+        ? "Check scan."
+        : "Detected. Checking scan."
 
   useEffect(() => {
     onDetectedRef.current = onDetected
@@ -847,8 +859,14 @@ export function BarcodeScanner({
                 <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                   <div
                     data-stock-action="scanner-last-scanned-barcode"
-                    aria-live="polite"
-                    className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm break-words text-emerald-700"
+                    role={cameraFrameTone === "error" ? "alert" : "status"}
+                    aria-live={
+                      cameraFrameTone === "error" ? "assertive" : "polite"
+                    }
+                    className={[
+                      "rounded-md border px-3 py-2 text-sm break-words",
+                      lastScanToneClass,
+                    ].join(" ")}
                   >
                     <div className="text-xs font-semibold uppercase">
                       Last scanned barcode
@@ -859,7 +877,7 @@ export function BarcodeScanner({
                     </div>
                       {continuous ? (
                         <div className="mt-2 text-xs font-medium">
-                        Detected. Checking scan.
+                        {lastScanStatusText}
                         </div>
                       ) : null}
                   </div>

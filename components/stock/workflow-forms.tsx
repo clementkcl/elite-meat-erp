@@ -2943,7 +2943,7 @@ export function BarcodeInboundForm({
       decoded.status === "decoded"
 
     if (readyToSubmit) {
-      setDecodeStatus("success")
+      setDecodeStatus("warning")
       setDecodeMessage(`Saving ${decoded.weightKg} kg.`)
       window.setTimeout(() => formRef.current?.requestSubmit(), 0)
     }
@@ -4505,7 +4505,7 @@ export function BarcodeInboundForm({
             )}
             {inboundTemplates.length > 0 ? (
               <p className="text-xs text-muted-foreground">
-                Tap recent product.
+                Tap template.
               </p>
             ) : null}
           </div>
@@ -4736,7 +4736,7 @@ export function BarcodeInboundForm({
               {quickInboundItems.length > 0 ? (
                 <div className="space-y-2">
                   <div className="text-sm font-medium">
-                    Quick inbound products
+                    Products
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {quickInboundItems.slice(0, 6).map((item) => {
@@ -4903,7 +4903,7 @@ export function BarcodeInboundForm({
                     variant="outline"
                     className="min-h-11 w-full sm:w-auto"
                   >
-                    {quickCreatePending ? "Saving product..." : "Save product now"}
+                    {quickCreatePending ? "Saving product..." : "Save product"}
                   </Button>
                 </div>
                 <input type="hidden" name="itemCode" value={quickItemCode} />
@@ -4950,7 +4950,7 @@ export function BarcodeInboundForm({
               {activeInboundBrands.length > 0 ? (
                 <div className="space-y-2">
                   <div className="text-sm font-medium">
-                    Recent manufacturers
+                    Manufacturers
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {activeInboundBrands.slice(0, 6).map((brand) => {
@@ -5048,7 +5048,7 @@ export function BarcodeInboundForm({
                   >
                     {quickBrandCreatePending
                       ? "Saving manufacturer..."
-                      : "Save manufacturer now"}
+                      : "Save manufacturer"}
                   </Button>
                   <ActionMessage state={quickBrandCreateState} />
                 </div>
@@ -5069,7 +5069,7 @@ export function BarcodeInboundForm({
               {activeInboundOrigins.length > 0 ? (
                 <div className="space-y-2">
                   <div className="text-sm font-medium">
-                    Quick inbound origins
+                    Origins
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {activeInboundOrigins.slice(0, 6).map((origin) => {
@@ -5091,7 +5091,7 @@ export function BarcodeInboundForm({
                     })}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Tap origin to avoid dropdown.
+                    Tap origin.
                   </p>
                 </div>
               ) : null}
@@ -5117,7 +5117,7 @@ export function BarcodeInboundForm({
                     selectInboundOrigin("__other")
                   }}
                 >
-                  Use search text as custom origin: {quickOriginNameSuggestion}
+                  Use as origin: {quickOriginNameSuggestion}
                 </Button>
               ) : null}
               {preset.originId === "__other" ? (
@@ -5155,7 +5155,7 @@ export function BarcodeInboundForm({
                   >
                     {quickOriginCreatePending
                       ? "Saving origin..."
-                      : "Save origin now"}
+                      : "Save origin"}
                   </Button>
                   <ActionMessage state={quickOriginCreateState} />
                 </div>
@@ -5183,7 +5183,7 @@ export function BarcodeInboundForm({
                   {activeInboundLocations.length > 0 ? (
                     <div className="space-y-2">
                       <div className="text-sm font-medium">
-                        Quick inbound locations
+                        Locations
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
                         {activeInboundLocations.slice(0, 6).map((location) => {
@@ -6070,7 +6070,7 @@ export function BarcodeInboundForm({
           ) : null}
           {state.status === "error" ? (
             <p className="text-sm text-muted-foreground">
-              Connection issue. Retry this barcode.
+              Check message above.
             </p>
           ) : null}
           <div

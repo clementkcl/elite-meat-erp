@@ -6,6 +6,26 @@ Use this file to record real Supabase, RLS, device, and workflow evidence before
 
 Use `docs/STOCK_COMPLETION_AUDIT.md` to compare local automated evidence with the manual evidence still required.
 
+## 2026-07-10 Stock Scanner Failed-Scan Tone
+
+Scope:
+
+- Stock phone scanner popup failed-scan feedback.
+
+Evidence captured:
+
+- The `Last scanned barcode` card now uses red/warning/green styling from the current scan result instead of always showing green.
+- Duplicate/no-weight/blocked scans should visually match the red camera-frame failure state.
+- Failed scans announce as an alert in the popup instead of a quiet status update.
+- The generic post-error helper now says `Check message above.` instead of calling every failed save a connection issue.
+- The temporary `Saving ... kg.` state now stays amber until the server confirms the stock save.
+- Valid saved scans still show green feedback after the workflow confirms the save.
+
+Manual QA:
+
+- In `/stock/inbound`, open the phone scanner and scan a duplicate or no-weight barcode. Confirm both the camera frame and last-scan card show blocked/error feedback.
+- Scan a valid barcode and confirm both areas switch to green saved feedback.
+
 ## 2026-07-10 Stock Scanner Success Feedback Timing
 
 Scope:
@@ -346,7 +366,7 @@ Evidence captured:
 
 Manual QA:
 
-- On `/stock/inbound`, search a missing origin, tap `Use search text as custom origin`, confirm `Save origin first`, save it, then continue to Barcode Rule Page and save a first supplier barcode rule.
+- On `/stock/inbound`, search a missing origin, tap `Use as origin`, confirm `Save origin first`, save it, then continue to Barcode Rule Page and save a first supplier barcode rule.
 
 ## 2026-07-10 Stock Product Duplicate Merge Cleanup
 
@@ -607,7 +627,7 @@ Evidence captured:
 
 Manual QA:
 
-- Search a new manufacturer, choose it as custom, and confirm Next remains blocked until `Save manufacturer now` succeeds.
+- Search a new manufacturer, choose it as custom, and confirm Next remains blocked until `Save manufacturer` succeeds.
 - After saving, confirm the saved manufacturer is selected and barcode/manual inbound can continue.
 
 ## 2026-07-09 Stock Inbound Manual Duplicate Previous-Weight Cleanup
@@ -844,7 +864,7 @@ Scope:
 
 Evidence captured:
 
-- Setup now uses shorter labels: `Auto code.`, `10 per page.`, `Tap product.`, `Save before scanning.`, `Item code:`, `Recent manufacturers`, and `Tap manufacturer.`
+- Setup now uses shorter labels: `Auto code.`, `10 per page.`, `Tap product.`, `Save before scanning.`, `Item code:`, `Manufacturers`, and `Tap manufacturer.`
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
 
 Manual QA:
@@ -1198,7 +1218,7 @@ Scope:
 Evidence captured:
 
 - `components/stock/workflow-forms.tsx` defines `quickOriginNameSuggestion` and checks whether the search exactly matches an active origin.
-- The origin section renders `Use search text as custom origin: ...` when the search text is not already in the list.
+- The origin section renders `Use as origin: ...` when the search text is not already in the list.
 - Clicking the action selects `Other / custom origin` and fills `originName`.
 - `scripts/stock-mobile-ux-coverage.mjs` and `scripts/stock-acceptance-coverage.mjs` guard the custom origin path.
 
@@ -1214,7 +1234,7 @@ Latest check result:
 Manual QA still required:
 
 - On `/stock/inbound`, search for an origin that does not exist.
-- Tap `Use search text as custom origin`, confirm the custom field is filled, then complete one barcode or no-barcode inbound session.
+- Tap `Use as origin`, confirm the custom field is filled, then complete one barcode or no-barcode inbound session.
 - Confirm origin remains visible separately from manufacturer + product in the scanner and summary.
 
 ## 2026-06-29 Inbound Custom Manufacturer Search
@@ -5806,8 +5826,8 @@ Scope:
 
 Prepared / source-guarded QA coverage added:
 
-- `components/stock/workflow-forms.tsx` renders `Quick inbound products` with large buttons and selected state.
-- `scripts/stock-mobile-ux-coverage.mjs` guards `Quick inbound products` and `Tap product.`
+- `components/stock/workflow-forms.tsx` renders `Products` with large buttons and selected state.
+- `scripts/stock-mobile-ux-coverage.mjs` guards `Products` and `Tap product.`
 - Owner and Vercel QA checklists now ask testers to confirm quick product buttons fit around 390px width and still keep search/dropdown fallbacks.
 
 Manual QA still required:
@@ -5827,8 +5847,8 @@ Scope:
 
 Prepared / source-guarded QA coverage added:
 
-- `components/stock/workflow-forms.tsx` renders `Quick inbound locations` with large buttons and selected state.
-- `scripts/stock-mobile-ux-coverage.mjs` guards `Quick inbound locations` and `Tap location to avoid dropdown.`
+- `components/stock/workflow-forms.tsx` renders `Locations` with large buttons and selected state.
+- `scripts/stock-mobile-ux-coverage.mjs` guards `Locations` and the selected-state setup buttons.
 - Owner and Vercel QA checklists now ask testers to confirm quick location buttons fit around 390px width and still keep the assigned default plus dropdown fallback.
 
 Manual QA still required:
@@ -5848,8 +5868,8 @@ Scope:
 
 Prepared / source-guarded QA coverage added:
 
-- `components/stock/workflow-forms.tsx` renders `Quick inbound brands` and `Quick inbound origins` with large buttons and selected state.
-- `scripts/stock-mobile-ux-coverage.mjs` guards `Quick inbound brands`, `Quick inbound origins`, and `Tap origin to avoid dropdown.`
+- `components/stock/workflow-forms.tsx` renders `Manufacturers` and `Origins` with large buttons and selected state.
+- `scripts/stock-mobile-ux-coverage.mjs` guards `Manufacturers`, `Origins`, and `Tap origin.`
 - Owner and Vercel QA checklists now ask testers to confirm quick brand/origin buttons fit around 390px width and still keep dropdown plus Other/custom fallbacks.
 
 Manual QA still required:
