@@ -41,6 +41,9 @@ const migration230006 = read(
 const migration250013 = read(
   "supabase/migrations/202606250013_stock_item_merge_v1.sql"
 )
+const migration250014 = read(
+  "supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql"
+)
 const businessRules = read("docs/BUSINESS_RULES.md")
 const workflowForms = read("components/stock/workflow-forms.tsx")
 const stockLabel = read("components/stock/stock-label.tsx")
@@ -145,10 +148,12 @@ includesAll(
     "202606250011_stock_item_display_name_v1.sql",
     "202606250012_stock_manufacturer_merge_v1.sql",
     "202606250013_stock_item_merge_v1.sql",
+    "202606250014_stock_item_display_name_trigger_v1.sql",
     "VOIDED",
     "INBOUND_VOID",
     "void_inbound_stock_unit",
     "merge_stock_item",
+    "set_item_display_name_on_items",
     "UNKNOWN_BARCODE",
     "WRONG_LOCATION",
     "npx.cmd supabase login",
@@ -157,6 +162,17 @@ includesAll(
     "Do not run `npx.cmd supabase db push` until the project link is confirmed",
   ],
   "Stock migration checklist"
+)
+
+includesAll(
+  migration250014,
+  [
+    "create or replace function public.set_item_display_name",
+    "drop trigger if exists set_item_display_name_on_items on public.items",
+    "create trigger set_item_display_name_on_items",
+    "update public.items",
+  ],
+  "Migration 250014 display-name trigger safety"
 )
 
 includesAll(

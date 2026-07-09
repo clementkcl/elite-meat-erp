@@ -29,6 +29,7 @@ Run these two Stock Inbound sessions before signing off the guided workflow. Cap
 6. Confirm the assigned stock location is selected by default and changing it is under `Change Location`.
 7. Confirm the supplier-barcode flow shows setup, barcode rule, scanner, and summary steps.
 8. Scan or paste the first supplier barcode in the barcode rule page.
+8a. If the same weight appears twice in the sample barcode, confirm the page says `Weight appears twice. Sample cleared. Scan another barcode.`
 9. Type the actual sample weight once.
 10. Confirm the page shows an extracted-weight preview and tells the worker the rule can be saved.
 11. Save the scan and rule.

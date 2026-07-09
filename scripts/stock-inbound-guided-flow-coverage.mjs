@@ -32,6 +32,9 @@ const inboundRuleSampleRpc = read(
   "supabase/migrations/202606250004_stock_barcode_rule_sample_v1.sql"
 )
 const undoRpc = read("supabase/migrations/202606250008_stock_inbound_session_void_rpc_v1.sql")
+const displayNameTrigger = read(
+  "supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql"
+)
 
 includesAll(
   workflowForms,
@@ -75,6 +78,8 @@ includesAll(
     "New session ready: ${session.displayName}.",
     "View details",
     "data-stock-action=\"inbound-session-history-details\"",
+    "{session.originName}",
+    "session.hasRule ? \"Saved rule\" : \"No saved rule\"",
     "voided kept for audit",
     "Saved: {session.count}",
     "Voided: {session.voidedCount}",
@@ -177,11 +182,16 @@ includesAll(
     "Choose once. Scan barcodes.",
     "Review session.",
     "const summaryStepLockedMessage =",
-    "Finish session for summary.",
+    "Open Summary to finish.",
+    "Retry or cancel pending label before summary.",
     "Save at least one unit before summary.",
     "Save at least one barcode before summary.",
     "data-stock-action=\"inbound-summary-locked-cue\"",
     "{summaryStepLockedMessage}",
+    "step === \"summary\" &&",
+    "finishBlockedByNoSavedScan || finishBlockedByPendingLabel",
+    "nextStep === \"summary\" &&",
+    "setDecodeMessage(summaryStepLockedMessage)",
   ],
   "Guided inbound page flow"
 )
@@ -262,7 +272,7 @@ includesAll(
 )
 
 includesAll(
-  workflowForms + displayNames + data + stockPage + actions + actionState,
+  workflowForms + displayNames + data + stockPage + actions + actionState + displayNameTrigger,
   [
     "stockProductName(",
     "stockDisplayItemName(",
@@ -298,6 +308,8 @@ includesAll(
     "function canonicalLookupName(",
     "async function findNamedRecordId(",
     "async function assertUniqueProductManufacturer(",
+    "create or replace function public.set_item_display_name",
+    "new.display_name := nullif(",
     "Product already exists for this manufacturer. Select the existing product instead.",
     "const productName = normalizeProductField(parsed.name)",
     "name: productName",
@@ -426,6 +438,8 @@ includesAll(
     "[\"3\", \"0.001\"]",
     "data-stock-action=\"fixed-weight-fallback-checkbox\"",
     "Use fixed-weight fallback",
+    "const fixedWeightFallbackActive = Boolean(preset.fixedWeightKg.trim())",
+    "sessionBarcodeRuleSaved ||\n    fixedWeightFallbackActive",
     "const selectedItemDefaultWeightKg =",
     "selectedItem.defaultWeightKg.toFixed(3)",
     "preset.fixedWeightKg.trim() ||\n    selectedItemDefaultWeightKg",
@@ -436,7 +450,7 @@ includesAll(
     "data-stock-action=\"rule-extracted-weight-preview\"",
     "Extracted weight preview",
     "ruleExtractedPreviewWeightKg",
-    "No valid weight extracted. Adjust rule or use Inbound without",
+    "No valid weight. Use labels.",
     "Inbound without",
     "data-stock-action=\"barcode-rule-save-summary\"",
     "Rule values to save",
@@ -448,7 +462,7 @@ includesAll(
     "[\"Barcode length\", barcode.trim() ? String(barcode.trim().length) : \"-\"]",
     "inferBarcodeWeightRuleWithStatus",
     "decimalsText: preset.barcodeWeightDecimals",
-    "Weight appears twice. Scan another sample.",
+    "Weight appears twice. Sample cleared. Scan another barcode.",
     "mustSaveCurrentRule",
     "Save first barcode + rule",
     "First barcode teaches rule.",
@@ -538,7 +552,7 @@ includesAll(
     "Last saved item and weight",
     "data-stock-action=\"scanner-last-scanned-barcode\"",
     "Last scanned barcode",
-    "Detected. Ready for next scan.",
+    "Detected. Checking scan.",
     "data-stock-action=\"scanner-session-total-top\"",
     "Inbound session total",
     "Live barcode count and session weight",
@@ -559,7 +573,7 @@ includesAll(
     "Save one unit first.",
     "Save one barcode first.",
     "data-stock-action=\"scanner-camera-session-count-top\"",
-    "Camera window scans",
+    "Camera detections",
     "Undo Last Scan",
     "label.stockUnitId === latestSavedScan?.stockUnitId",
     "disabled={latestScanUndoing || !latestSavedScan}",
@@ -601,6 +615,8 @@ includesAll(
     "inboundStep === \"manual\"",
     "Undo Last Scan",
     "data-stock-action=\"scanner-finish-inbound-session\"",
+    "data-stock-action=\"scanner-finish-blocked-message\"",
+    "finishBlockedMessage",
   ],
   "Inbound scanner popup controls"
 )
@@ -812,6 +828,7 @@ for (const staleCopy of [
   "Choose setup once, then scan barcodes.",
   "Keep scanning. Valid scans save.",
   "Stock saves immediately.",
+  "No valid weight extracted. Adjust rule or use Inbound without Barcode.",
 ]) {
   assert(
     !workflowForms.includes(staleCopy),
@@ -831,6 +848,7 @@ includesAll(
   workflowForms + stockPage + actions + undoRpc,
   [
     "data-stock-action=\"inbound-page-four-session-summary\"",
+    "inboundStep === \"summary\"",
     "Page 4: Inbound session summary",
     "const inboundSessionStatus = wholeSessionVoided",
     "data-stock-action=\"inbound-session-summary-status\"",
@@ -870,6 +888,7 @@ includesAll(
     "Print Session Summary",
     "data-stock-action=\"summary-finish-inbound-session\"",
     "Finish Session",
+    "onClick={finishInboundSession}",
     "className=\"min-h-11 w-full whitespace-normal\"",
     "data-stock-action=\"inbound-summary-action-grid\"",
     "lg:grid-cols-5",
@@ -911,8 +930,10 @@ includesAll(
     "Keep session",
     "Delete Whole Session",
     "data-stock-action=\"start-new-inbound-session\"",
+    "data-stock-action=\"whole-session-delete-role-message\"",
+    "Manager, admin, or director approval needed to delete whole session.",
     "function startNewInboundSession",
-    "Manager approval required. Audit kept.",
+    "Corrections need manager approval. Audit kept.",
     "Full audit kept.",
     "undoInboundSessionAction",
     "[...stockManagerRoles, \"director\"]",

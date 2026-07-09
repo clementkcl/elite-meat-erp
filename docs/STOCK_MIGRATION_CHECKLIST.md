@@ -16,7 +16,7 @@ npx.cmd supabase login
 
 Codex did not run live migrations, did not run `db push`, did not run seed, and did not deploy production.
 
-## Migration 053 Through 250013 Purpose
+## Migration 053 Through 250014 Purpose
 
 Migration:
 
@@ -47,6 +47,8 @@ Migration:
 `supabase/migrations/202606250012_stock_manufacturer_merge_v1.sql`
 
 `supabase/migrations/202606250013_stock_item_merge_v1.sql`
+
+`supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql`
 
 Purpose:
 
@@ -133,6 +135,13 @@ Migration `202606250013` adds:
 - Safe reference moves for stock, barcode rules, orders/reservations, retail price rules, processing records, and audit logs.
 - The duplicate source product is deactivated and renamed instead of deleted.
 
+Migration `202606250014` adds:
+
+- A generated display-name trigger for `items`.
+- Safe backfill so `items.display_name` stays manufacturer + product after item insert/update.
+- Refreshes `merge_stock_manufacturer` so duplicate manufacturer cleanup uses the same product display-name helper.
+- Product and manufacturer still remain stored separately.
+
 ## CLI Login And Link Sequence
 
 Run these from the project root when you regain Supabase access:
@@ -180,6 +189,7 @@ If using SQL Editor instead of CLI:
     - `supabase/migrations/202606250011_stock_item_display_name_v1.sql`
     - `supabase/migrations/202606250012_stock_manufacturer_merge_v1.sql`
     - `supabase/migrations/202606250013_stock_item_merge_v1.sql`
+    - `supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql`
 12. Run `supabase/seed.sql` only for safe demo/staging data.
 
 ## Verify VOIDED Enum
@@ -394,7 +404,7 @@ Expected result:
 
 ## Verify Guided Inbound Product Naming Helpers
 
-Run after migration `202606250011`:
+Run after migration `202606250014`:
 
 ```sql
 select item_code, name, display_name
@@ -407,6 +417,19 @@ Expected result:
 
 - Product fields remain separate.
 - `display_name` is available for generated manufacturer + product display.
+- New/edited items regenerate `display_name` from manufacturer + product.
+
+Also verify the trigger:
+
+```sql
+select tgname
+from pg_trigger
+where tgname = 'set_item_display_name_on_items';
+```
+
+Expected result:
+
+- One row for `set_item_display_name_on_items`.
 
 ## Verify Duplicate Cleanup RPCs
 
@@ -461,6 +484,7 @@ Do not continue to production data until these are true:
 - Migration `202606250011` applies successfully.
 - Migration `202606250012` applies successfully.
 - Migration `202606250013` applies successfully.
+- Migration `202606250014` applies successfully.
 - `/stock/inbound` undo test creates `VOIDED`, `INBOUND_VOID`, and `BARCODE_INBOUND_VOID`.
 - `/stock/inbound` supplier-barcode rule stores barcode length and sample barcode.
 - `/stock/settings` duplicate manufacturer and product merge tests preserve stock history and audit logs.

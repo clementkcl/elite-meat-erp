@@ -2741,9 +2741,13 @@ export function BarcodeInboundForm({
       return
     }
 
-    if (nextStep === "summary" && !sessionFinishedAt) {
+    if (
+      nextStep === "summary" &&
+      !sessionFinishedAt &&
+      (finishBlockedByNoSavedScan || finishBlockedByPendingLabel)
+    ) {
       setDecodeStatus("warning")
-      setDecodeMessage("Finish session first.")
+      setDecodeMessage(summaryStepLockedMessage)
       return
     }
 
@@ -2961,7 +2965,7 @@ export function BarcodeInboundForm({
 
       if (inference.status === "ambiguous") {
         const message =
-          "Weight appears twice. Scan another sample."
+          "Weight appears twice. Sample cleared. Scan another barcode."
         setDecodeStatus("warning")
         setDecodeMessage(message)
         recordSessionError(barcode, message)
@@ -3031,7 +3035,7 @@ export function BarcodeInboundForm({
 
     if (inference.status === "ambiguous") {
       const message =
-        "Weight appears twice. Scan another sample."
+        "Weight appears twice. Sample cleared. Scan another barcode."
       setDecodeStatus("warning")
       setDecodeMessage(message)
       recordSessionError(barcode, message)
@@ -3353,6 +3357,7 @@ export function BarcodeInboundForm({
     selectedManufacturerValue || "No manufacturer"
   const selectedOriginName =
     (selectedOrigin?.name ?? originName.trim()) || "No origin"
+  const fixedWeightFallbackActive = Boolean(preset.fixedWeightKg.trim())
   const currentBarcodeWeightRule = [...barcodeWeightRules]
     .filter(
       (rule) =>
@@ -3362,7 +3367,9 @@ export function BarcodeInboundForm({
     )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
   const canUseBarcodeRuleForSession =
-    Boolean(currentBarcodeWeightRule) || sessionBarcodeRuleSaved
+    Boolean(currentBarcodeWeightRule) ||
+    sessionBarcodeRuleSaved ||
+    fixedWeightFallbackActive
   const expectedBarcodeLength = currentBarcodeWeightRule
     ? currentBarcodeWeightRule.barcodeLength ??
       [...units]
@@ -3673,16 +3680,21 @@ export function BarcodeInboundForm({
   const finishBlockedNoSavedMessage = inboundMode === "internal_label"
     ? "Save one unit first."
     : "Save one barcode first."
+  const finishBlockedMessage = finishBlockedByPendingLabel
+    ? "Retry or cancel pending label."
+    : finishBlockedByNoSavedScan
+      ? finishBlockedNoSavedMessage
+      : ""
   function finishInboundSession() {
     if (finishBlockedByPendingLabel) {
       setDecodeStatus("warning")
-      setDecodeMessage("Retry or cancel pending label.")
+      setDecodeMessage(finishBlockedMessage)
       return
     }
 
     if (finishBlockedByNoSavedScan) {
       setDecodeStatus("warning")
-      setDecodeMessage(finishBlockedNoSavedMessage)
+      setDecodeMessage(finishBlockedMessage)
       return
     }
 
@@ -3695,8 +3707,10 @@ export function BarcodeInboundForm({
   }
 
   const summaryStepLockedMessage =
-    recentInboundCount > 0
-      ? "Finish session for summary."
+    finishBlockedByPendingLabel
+      ? "Retry or cancel pending label before summary."
+      : recentInboundCount > 0
+      ? "Open Summary to finish."
       : inboundMode === "internal_label"
         ? "Save at least one unit before summary."
         : "Save at least one barcode before summary."
@@ -3762,7 +3776,6 @@ export function BarcodeInboundForm({
     inboundStep === "rule" &&
     !canUseBarcodeRuleForSession &&
     (!barcode.trim() || !(Number(netWeightKg) > 0))
-  const fixedWeightFallbackActive = Boolean(preset.fixedWeightKg.trim())
   const selectedItemDefaultWeightKg =
     selectedItem?.defaultWeightKg && selectedItem.defaultWeightKg > 0
       ? selectedItem.defaultWeightKg.toFixed(3)
@@ -4074,7 +4087,9 @@ export function BarcodeInboundForm({
                     (inboundMode === "supplier_barcode" &&
                       !canUseBarcodeRuleForSession))) ||
                 (step === "manual" && !scanSetupReady) ||
-                (step === "summary" && !sessionFinishedAt)
+                (step === "summary" &&
+                  !sessionFinishedAt &&
+                  (finishBlockedByNoSavedScan || finishBlockedByPendingLabel))
 
               return (
                 <Button
@@ -4209,6 +4224,12 @@ export function BarcodeInboundForm({
                       <div className="mt-1 text-xs text-muted-foreground">
                         {session.locationName} /{" "}
                         {new Date(session.lastAt).toLocaleString()}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <Badge variant="outline">{session.originName}</Badge>
+                        <Badge variant={session.hasRule ? "success" : "outline"}>
+                          {session.hasRule ? "Saved rule" : "No saved rule"}
+                        </Badge>
                       </div>
                       {session.voidedCount > 0 ? (
                         <div className="mt-1 text-xs font-medium text-amber-700">
@@ -4629,6 +4650,16 @@ export function BarcodeInboundForm({
                       >
                         Finish Session
                       </Button>
+                      {finishBlockedMessage ? (
+                        <div
+                          data-stock-action="scanner-finish-blocked-message"
+                          role="status"
+                          aria-live="polite"
+                          className="text-sm break-words text-muted-foreground"
+                        >
+                          {finishBlockedMessage}
+                        </div>
+                      ) : null}
                     </div>
                   ) : undefined
                 }
@@ -5668,8 +5699,7 @@ export function BarcodeInboundForm({
               ) : null}
               {rulePreviewInvalid ? (
                 <p className="mt-2 text-xs font-medium" role="alert">
-                  No valid weight extracted. Adjust rule or use Inbound without
-                  Barcode.
+                  No valid weight. Use labels.
                 </p>
               ) : null}
             </div>
@@ -6226,7 +6256,7 @@ export function BarcodeInboundForm({
             <ActionMessage state={undoState} />
           </div>
         ) : null}
-        {sessionFinishedAt && inboundStep === "summary" ? (
+        {inboundStep === "summary" ? (
           <div
             data-stock-action="inbound-page-four-session-summary"
             className="mt-4 rounded-md border bg-background p-4"
@@ -6304,7 +6334,7 @@ export function BarcodeInboundForm({
               </div>
             )}
             <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Manager approval required. Audit kept.
+              Corrections need manager approval. Audit kept.
             </div>
             <div
               data-stock-action="future-session-summary-print-area"
@@ -6562,7 +6592,12 @@ export function BarcodeInboundForm({
                 variant="outline"
                 data-stock-action="summary-finish-inbound-session"
                 className="min-h-11 w-full whitespace-normal"
-                disabled
+                disabled={
+                  Boolean(sessionFinishedAt) ||
+                  finishBlockedByNoSavedScan ||
+                  finishBlockedByPendingLabel
+                }
+                onClick={finishInboundSession}
               >
                 Finish Session
               </Button>
@@ -6624,6 +6659,14 @@ export function BarcodeInboundForm({
                 New inbound session
               </Button>
             </div>
+            {!canDeleteWholeSession && savedSessionScans.length > 0 ? (
+              <div
+                data-stock-action="whole-session-delete-role-message"
+                className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+              >
+                Manager, admin, or director approval needed to delete whole session.
+              </div>
+            ) : null}
           </div>
         ) : null}
         {sessionErrors.length > 0 ? (

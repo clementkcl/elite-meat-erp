@@ -45,8 +45,6 @@ includesAll(
     "<span>{helperText}</span>",
     "continuous",
     "lastDetectedRef",
-    "navigator.vibrate?.(40)",
-    "AudioContext",
     "Scan Barcode",
     "{scanButtonLabel}",
     "size=\"lg\"",
@@ -161,8 +159,8 @@ includesAll(
     "sessionScanCount",
     "setSessionScanCount(0)",
     "setSessionScanCount((count) => count + 1)",
-    "Camera session scans",
-    "Detected. Ready for next scan.",
+    "Camera detections",
+    "Detected. Checking scan.",
     "Current inbound setup",
     "scanContextSummary ||",
     "data-stock-action=\"scanner-current-setup-top\"",
@@ -175,7 +173,7 @@ includesAll(
     "data-stock-action=\"scanner-last-saved-item-weight-top\"",
     "data-stock-action=\"scanner-session-total-top\"",
     "data-stock-action=\"scanner-camera-session-count-top\"",
-    "Camera window scans",
+    "Camera detections",
     "Last saved item and weight",
     "border-2 border-emerald-300",
     "text-lg font-semibold leading-tight",
@@ -184,6 +182,39 @@ includesAll(
     "break-all font-mono text-xs",
   ],
   "Barcode scanner mobile UX"
+)
+
+const cameraStart = scanner.indexOf("async function startScanner")
+assert(cameraStart >= 0, "Scanner camera boundary missing.")
+const detectionBlock = scanner.slice(cameraStart)
+assert(
+  !detectionBlock.includes("playSuccessFeedback()"),
+  "Scanner must not vibrate/beep on raw barcode detection before save result."
+)
+
+assert(
+  !scanner.includes("playSuccessFeedback") &&
+    !scanner.includes("navigator.vibrate") &&
+    !scanner.includes("AudioContext"),
+  "Shared scanner must not play success feedback before stock workflow confirms save."
+)
+
+includesAll(
+  workflowForms,
+  [
+    "function vibrateAndBeep()",
+    "navigator.vibrate?.(80)",
+    "AudioContext",
+    "vibrateAndBeep()",
+  ],
+  "Stock inbound save-success feedback"
+)
+
+assert(
+  !scanner.includes("Detected. Ready for next scan.") &&
+    !scanner.includes("Camera session scans") &&
+    !scanner.includes("Camera window scans"),
+  "Scanner popup must not label raw detections as saved scans."
 )
 
 assert(

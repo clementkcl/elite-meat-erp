@@ -212,36 +212,6 @@ export function BarcodeField({
   )
 }
 
-function playSuccessFeedback() {
-  navigator.vibrate?.(40)
-
-  const AudioContextClass =
-    window.AudioContext ||
-    (window as Window & { webkitAudioContext?: typeof AudioContext })
-      .webkitAudioContext
-
-  if (!AudioContextClass) {
-    return
-  }
-
-  const audio = new AudioContextClass()
-  const oscillator = audio.createOscillator()
-  const gain = audio.createGain()
-
-  oscillator.type = "sine"
-  oscillator.frequency.setValueAtTime(880, audio.currentTime)
-  gain.gain.setValueAtTime(0.05, audio.currentTime)
-  gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.08)
-
-  oscillator.connect(gain)
-  gain.connect(audio.destination)
-  oscillator.start()
-  oscillator.stop(audio.currentTime + 0.08)
-  oscillator.addEventListener("ended", () => {
-    void audio.close()
-  })
-}
-
 function cameraErrorMessage(scanError: unknown) {
   if (!(scanError instanceof Error)) {
     return "Camera could not start. Use manual entry."
@@ -436,7 +406,6 @@ export function BarcodeScanner({
     lastDetectedRef.current = { value: text, at: now }
     setLastValue(text)
     setSessionScanCount((count) => count + 1)
-    playSuccessFeedback()
     onDetectedRef.current(text)
 
     if (!continuous) {
@@ -528,7 +497,6 @@ export function BarcodeScanner({
             lastDetectedRef.current = { value: text, at: now }
             setLastValue(text)
             setSessionScanCount((count) => count + 1)
-            playSuccessFeedback()
             onDetectedRef.current(text)
 
             if (!continuous) {
@@ -802,7 +770,7 @@ export function BarcodeScanner({
                       className="rounded-md border-2 border-emerald-300 bg-emerald-50 px-4 py-3 text-sm break-words text-emerald-800"
                     >
                       <div className="text-xs font-semibold uppercase">
-                        Camera window scans
+                        Camera detections
                       </div>
                       <div className="mt-1 text-2xl font-semibold tabular-nums">
                         {sessionScanCount}
@@ -887,17 +855,17 @@ export function BarcodeScanner({
                     <div className="mt-1 break-all font-mono text-xs">
                       {lastValue}
                     </div>
-                    {continuous ? (
-                      <div className="mt-2 text-xs font-medium">
-                        Detected. Ready for next scan.
-                      </div>
-                    ) : null}
+                      {continuous ? (
+                        <div className="mt-2 text-xs font-medium">
+                        Detected. Checking scan.
+                        </div>
+                      ) : null}
                   </div>
                   <div
                     aria-live="polite"
                     className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm break-words text-emerald-700"
                   >
-                    <div className="font-medium">Camera session scans</div>
+                    <div className="font-medium">Camera detections</div>
                     <div className="mt-1 text-2xl font-semibold tabular-nums">
                       {sessionScanCount}
                     </div>

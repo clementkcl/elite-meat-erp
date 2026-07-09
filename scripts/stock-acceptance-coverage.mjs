@@ -448,7 +448,7 @@ includesAll(
     "data-stock-action=\"whole-session-undo-confirmation\"",
     "Confirm Delete Whole Session",
     "kg) for {batchNo}. Audit kept.",
-    "Manager approval required. Audit kept.",
+    "Corrections need manager approval. Audit kept.",
     "Delete Whole Session",
     "Keep session",
     "undoInboundSessionAction",

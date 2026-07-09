@@ -350,13 +350,13 @@ includesAll(
     "data-stock-action=\"whole-session-undo-confirmation\"",
     "Confirm Delete Whole Session",
     "kg) for {batchNo}. Audit kept.",
-    "Manager approval required. Audit kept.",
+    "Corrections need manager approval. Audit kept.",
     "Delete Whole Session",
     "Keep session",
     "Whole inbound session undo",
     "wholeSessionVoided",
     "Session undone. Stock units were voided.",
-    "Manager approval required. Audit kept.",
+    "Corrections need manager approval. Audit kept.",
     "undoInboundSessionAction",
     "[...stockManagerRoles, \"director\"]",
     "\"void_inbound_stock_session\"",
@@ -563,6 +563,7 @@ includesAll(
     "Enter weight, save stock, then print label.",
     "currentBarcodeWeightRule",
     "sessionBarcodeRuleSaved",
+    "fixedWeightFallbackActive",
     "sessionBarcodeRuleLength",
     "canUseBarcodeRuleForSession",
     "expectedBarcodeLength",
@@ -1188,9 +1189,9 @@ includesAll(
     "grid gap-2 sm:grid-cols-[1fr_auto]",
     "break-all font-mono text-xs",
     "lastDetectedRef.current = null",
-    "Camera session scans",
+    "Camera detections",
     "sessionScanCount",
-    "Detected. Ready for next scan.",
+    "Detected. Checking scan.",
     "Last saved item and weight",
     "Inbound session total",
     "Stays open until Close.",
@@ -1222,9 +1223,26 @@ includesAll(
     "ref={triggerRef}",
     "document.body.style.overflow = \"hidden\"",
     "document.body.style.overflow = previousBodyOverflow",
-    "navigator.vibrate?.(40)",
   ],
   "Stock mobile scanner"
+)
+
+includesAll(
+  workflowForms,
+  [
+    "function vibrateAndBeep()",
+    "navigator.vibrate?.(80)",
+    "AudioContext",
+    "vibrateAndBeep()",
+  ],
+  "Stock inbound confirmed save feedback"
+)
+
+assert(
+  !barcodeScanner.includes("playSuccessFeedback") &&
+    !barcodeScanner.includes("navigator.vibrate") &&
+    !barcodeScanner.includes("AudioContext"),
+  "Stock mobile scanner must not vibrate/beep before the stock save succeeds."
 )
 
 assert(

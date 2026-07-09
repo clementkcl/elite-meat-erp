@@ -6,6 +6,235 @@ Use this file to record real Supabase, RLS, device, and workflow evidence before
 
 Use `docs/STOCK_COMPLETION_AUDIT.md` to compare local automated evidence with the manual evidence still required.
 
+## 2026-07-10 Stock Scanner Success Feedback Timing
+
+Scope:
+
+- Stock phone scanner popup success sound/vibration feedback.
+
+Evidence captured:
+
+- The shared scanner no longer vibrates/beeps on raw camera or handheld detection.
+- Stock Inbound still vibrates/beeps from its save-success handler after the server confirms stock was saved.
+- This prevents duplicate/error scans and pre-save `Saving ... kg` states from getting success feedback before the stock save result is known.
+
+Manual QA:
+
+- In `/stock/inbound`, scan one valid barcode and confirm success feedback happens after the green saved result.
+- Scan a duplicate/invalid barcode and confirm it shows the blocked/error result without success feedback.
+
+## 2026-07-10 Stock Scanner Detection Copy
+
+Scope:
+
+- Stock phone scanner popup.
+
+Evidence captured:
+
+- The scanner popup now labels raw camera reads as `Camera detections`, not saved scans.
+- The last-read cue now says `Detected. Checking scan.` so workers wait for the green/red save result before assuming stock was saved.
+- No server action, RLS, stock movement, barcode uniqueness, camera stream, label print, or database behavior changed.
+
+Manual QA:
+
+- Open `/stock/inbound`, start the phone scanner, scan a valid barcode and a duplicate/invalid barcode, and confirm the popup distinguishes detection from saved stock.
+
+## 2026-07-10 Stock Item Display-Name Merge Helper Alignment
+
+Scope:
+
+- Pending migration `202606250014_stock_item_display_name_trigger_v1.sql`.
+
+Evidence captured:
+
+- The pending display-name trigger migration now also refreshes `merge_stock_manufacturer`.
+- Manufacturer merge now uses `public.stock_item_product_display_name(item.section, item.name)` when recalculating item display names.
+- This keeps duplicate manufacturer cleanup aligned with the same manufacturer + product display-name rule used by inbound pages, labels, stock lists, and reports.
+
+Manual QA:
+
+- After applying migration `202606250014`, merge a duplicate manufacturer in a safe Supabase test project and confirm affected `items.display_name` values stay as manufacturer + product.
+
+## 2026-07-10 Stock Inbound Whole-Session Delete Role Message
+
+Scope:
+
+- `/stock/inbound` session summary Delete Whole Session action.
+
+Evidence captured:
+
+- Normal workers now see a short reason when whole-session delete is unavailable: manager, admin, or director approval is needed.
+- The existing manager/admin/director server-side delete gate remains unchanged.
+- No server action, RLS, stock movement, barcode uniqueness, scanner, label print, or database behavior changed.
+
+Manual QA:
+
+- Open a saved session summary as a normal worker and confirm `Delete Whole Session` is disabled with the manager/admin/director approval message.
+- Repeat as manager/admin and confirm the confirmation dialog still opens before voiding.
+
+## 2026-07-10 Stock Inbound Scanner Finish Block Message
+
+Scope:
+
+- `/stock/inbound` phone scanner popup controls.
+
+Evidence captured:
+
+- The scanner popup now shows the same short finish-block reason used by the server-safe finish guard.
+- Workers see `Save one barcode first.`, `Save one unit first.`, or `Retry or cancel pending label.` instead of a disabled Finish Session button with no context.
+- No server action, RLS, stock movement, barcode uniqueness, scanner camera, label print, or database behavior changed.
+
+Manual QA:
+
+- Open the phone scanner popup before saving stock and confirm the disabled Finish Session control shows the short reason.
+- Save one barcode/unit and confirm the finish-block message disappears.
+
+## 2026-07-10 Stock Inbound History Origin And Rule Cue
+
+Scope:
+
+- `/stock/inbound` Inbound Session History cards.
+
+Evidence captured:
+
+- History cards now show the locked origin and whether the setup has a saved barcode rule.
+- This helps workers pick the correct previous item/manufacturer/origin setup before starting the next session.
+- No server action, RLS, stock movement, barcode uniqueness, scanner, label print, or database behavior changed.
+
+Manual QA:
+
+- Open `/stock/inbound`, confirm each history card shows product, manufacturer, origin, location, count/weight, and saved-rule status at phone width.
+
+## 2026-07-10 Stock Inbound Summary Finish Guard
+
+Scope:
+
+- `/stock/inbound` session summary and start-new-session protection.
+
+Evidence captured:
+
+- The Summary card now renders whenever `inboundStep === "summary"`, including the guarded open-session state reached by `Start new session` when saved stock already exists.
+- The Summary `Finish Session` button now calls the existing `finishInboundSession()` guard while the session is open, and stays disabled after finish.
+- No server action, RLS, stock movement, barcode uniqueness, scanner, label print, or database behavior changed.
+
+Manual QA:
+
+- Save one inbound barcode or internal-label unit, tap `Start new session` before finishing, and confirm Summary appears with status `Open` plus an enabled `Finish Session` button.
+
+## 2026-07-10 Stock Inbound Summary Correction Copy
+
+Scope:
+
+- `/stock/inbound` session summary correction guidance.
+
+Evidence captured:
+
+- The summary warning now says `Corrections need manager approval. Audit kept.`
+- This avoids implying every inbound session needs manager approval while preserving the manager-approved correction/delete rule.
+- No server action, RLS, stock movement, barcode uniqueness, scanner, label print, or database behavior changed.
+
+Manual QA:
+
+- Finish or open an inbound summary and confirm the correction warning appears below the next-step message.
+
+## 2026-07-10 Stock Inbound Summary Step Navigation
+
+Scope:
+
+- `/stock/inbound` guided step navigation and open-session Summary.
+
+Evidence captured:
+
+- The Summary step can now be opened after saved stock exists, even before `sessionFinishedAt`.
+- Summary stays blocked when no stock is saved or an internal label is still pending.
+- The helper now says `Open Summary to finish.` for saved open sessions.
+
+Manual QA:
+
+- Save one inbound barcode or internal-label unit, tap `4 Summary`, and confirm the Summary page opens with status `Open` and an enabled `Finish Session` button.
+
+## 2026-07-10 Stock Item Display Name Trigger Migration
+
+Scope:
+
+- Stock item/manufacturer display-name data contract.
+
+Evidence captured:
+
+- Added migration `202606250014_stock_item_display_name_trigger_v1.sql`.
+- The migration keeps `items.display_name` synced from manufacturer + product fields on insert/update and backfills existing rows.
+- The migration is forward-only and does not drop stock data, RLS, movements, barcodes, or access policies.
+
+Manual QA:
+
+- After applying migrations, create or edit a product with manufacturer `Tican` and product `Belly Boneless`; confirm `display_name` becomes `Tican Belly Boneless`.
+
+## 2026-07-10 Stock Inbound Summary Navigation Guard
+
+Scope:
+
+- `/stock/inbound` guided step navigation.
+
+Evidence captured:
+
+- The shared `goInboundStep()` guard now allows Summary navigation after saved stock exists, matching the Summary step button state.
+- The same guard still blocks Summary when no stock has been saved or an internal label is pending.
+- No server action, RLS, stock movement, barcode uniqueness, scanner, label print, or database behavior changed.
+
+Manual QA:
+
+- Save one inbound barcode or internal-label unit, tap `4 Summary` before finishing, and confirm the Summary page opens instead of showing `Finish session first.`
+
+## 2026-07-10 Stock Inbound Fixed-Weight Scanner Readiness
+
+Scope:
+
+- `/stock/inbound` Barcode Rule Page fixed-weight fallback.
+
+Evidence captured:
+
+- Active fixed-weight fallback now counts as a usable scan rule for the current inbound session.
+- This lets workers proceed from Barcode Rule Page to Scanner when a product uses item-master default fixed weight.
+- No server action, RLS, stock movement, barcode uniqueness, scanner, label print, or database behavior changed.
+
+Manual QA:
+
+- Choose a product with default fixed weight, enable `Use fixed-weight fallback`, and confirm the scanner can open without teaching a barcode position rule.
+
+## 2026-07-10 Stock Inbound 390px Browser QA Attempt
+
+Scope:
+
+- `/stock/inbound` mobile-width visual QA at 390px.
+
+Evidence captured:
+
+- Local shell confirmed the app can serve `/stock/inbound` with HTTP 200 when `next dev` is running.
+- Foreground `npm.cmd run dev -- -p 3001` starts successfully, but the tool timeout kills it.
+- Detached local server attempts did not stay reachable from the in-app browser.
+- Browser checks to `localhost:3001` and the reported network URL failed with connection refused.
+
+Result:
+
+- 390px browser/device QA remains not proven in this environment.
+- Owner/manual QA still needs to verify `/stock/inbound` at phone width on Vercel or a stable local dev server.
+
+## 2026-07-10 Stock Inbound Ambiguous Sample Cleared Message
+
+Scope:
+
+- `/stock/inbound` barcode rule learning.
+
+Evidence captured:
+
+- Ambiguous supplier-barcode samples now say `Weight appears twice. Sample cleared. Scan another barcode.`
+- The sample barcode and kg are cleared after an ambiguous match so the worker can scan a new sample from the same item/manufacturer/origin.
+- No server action, RLS, barcode rule storage, stock movement, scan log, or label-printing logic changed.
+
+Manual QA:
+
+- On Barcode Rule Page, use a sample where the entered weight appears in more than one barcode position and confirm the warning appears, the sample clears, and the worker can scan another barcode.
+
 ## 2026-07-10 Stock Inbound Length Warning Confirm Save
 
 Scope:
@@ -498,7 +727,7 @@ Scope:
 
 Evidence captured:
 
-- Invalid rule preview now says `No valid weight extracted. Adjust rule or use Inbound without Barcode.`
+- Invalid rule preview now says `No valid weight. Use labels.`
 - Current QA wording now uses `Inbound with Barcode` for the barcode mode name.
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs` and `node scripts\stock-owner-qa-doc-coverage.mjs`.
 
@@ -597,13 +826,13 @@ Scope:
 Evidence captured:
 
 - Fixed-weight fallback now shows `Set default fixed kg first.`
-- Whole-session delete now shows `Confirm Delete Whole Session`, shorter void count/weight text, and `Manager approval required. Audit kept.`
+- Whole-session delete now shows `Confirm Delete Whole Session`, shorter void count/weight text, and `Corrections need manager approval. Audit kept.`
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
 
 Manual QA:
 
 - Open `/stock/inbound`, choose a product without default fixed weight, and confirm the short fixed-weight message.
-- Finish a session with saved scans, open Delete Whole Session, and confirm the shorter manager/audit warning appears before delete.
+- Finish a session with saved scans, open Delete Whole Session, and confirm the shorter correction/audit warning appears before delete.
 
 ## Test Run Details
 

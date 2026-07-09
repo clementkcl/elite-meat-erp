@@ -45,6 +45,7 @@ const migration010 = read("supabase/migrations/202606250010_stock_item_default_w
 const migration011 = read("supabase/migrations/202606250011_stock_item_display_name_v1.sql")
 const migration012 = read("supabase/migrations/202606250012_stock_manufacturer_merge_v1.sql")
 const migration013 = read("supabase/migrations/202606250013_stock_item_merge_v1.sql")
+const migration014 = read("supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql")
 const seed = read("supabase/seed.sql")
 const packageJson = read("package.json")
 
@@ -101,6 +102,27 @@ includesAll(
     "Stored default display name",
   ],
   "Item master stored display-name migration"
+)
+
+includesAll(
+  migration014,
+  [
+    "add column if not exists display_name",
+    "create or replace function public.stock_item_product_display_name",
+    "create or replace function public.set_item_display_name",
+    "new.default_brand_id is not null",
+    "from public.brands",
+    "new.display_name := nullif(",
+    "drop trigger if exists set_item_display_name_on_items on public.items",
+    "create trigger set_item_display_name_on_items",
+    "before insert or update of default_brand_id, section, name, display_name",
+    "update public.items",
+    "Maintains items.display_name as manufacturer + product name",
+    "create or replace function public.merge_stock_manufacturer",
+    "public.stock_item_product_display_name(item.section, item.name)",
+    "grant execute on function public.merge_stock_manufacturer(uuid, uuid) to authenticated",
+  ],
+  "Item master display-name trigger migration"
 )
 
 includesAll(
