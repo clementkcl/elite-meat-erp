@@ -1820,7 +1820,9 @@ function buildInboundSessionHistory({
 }) {
   const sessions = new Map<string, InboundSessionHistory>()
 
-  for (const unit of units) {
+  for (const unit of [...units].sort((a, b) =>
+    a.receivedAt.localeCompare(b.receivedAt)
+  )) {
     const batchNo = unit.batchNo?.trim()
 
     if (!batchNo) {
@@ -4676,7 +4678,7 @@ export function BarcodeInboundForm({
                     ? "Scan sample, enter kg."
                     : manualMode
                       ? "Weight saves label."
-                      : "Continuous scan is on."
+                      : ""
                 }
                 scanButtonLabel="Use Phone Scanner"
                 disabled={scanBlocked}

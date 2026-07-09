@@ -54,8 +54,6 @@ includesAll(
     "window.localStorage.setItem(\n        inboundSessionDraftKey",
     "window.localStorage.removeItem(inboundSessionDraftKey)",
     "function buildInboundSessionHistory",
-    "for (const unit of [...units].sort((a, b) =>",
-    "a.receivedAt.localeCompare(b.receivedAt)",
     "voidedCount: number",
     "unit.status === \"VOIDED\"",
     "const [sessionHistoryPage, setSessionHistoryPage] = useState(1)",
@@ -109,6 +107,14 @@ const historyBuildStart = workflowForms.indexOf("function buildInboundSessionHis
 const historyBuildEnd = workflowForms.indexOf("function formatProductName", historyBuildStart)
 assert(historyBuildStart >= 0, "buildInboundSessionHistory function missing")
 assert(historyBuildEnd > historyBuildStart, "buildInboundSessionHistory boundary missing")
+includesAll(
+  workflowForms.slice(historyBuildStart, historyBuildEnd),
+  [
+    "for (const unit of [...units].sort((a, b) =>",
+    "a.receivedAt.localeCompare(b.receivedAt)",
+  ],
+  "Inbound session history sorted source units"
+)
 assert(
   !workflowForms.slice(historyBuildStart, historyBuildEnd).includes(".slice(0, 8)"),
   "Inbound session history details must not cap barcode data before rendering."

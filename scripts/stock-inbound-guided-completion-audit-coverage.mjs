@@ -50,6 +50,7 @@ includesAll(
     "Barcode rule stores length and sample",
     "Different barcode length warning",
     "Scanner popup/window",
+    "Camera detections",
     "External scanner keyboard input",
     "Continuous auto-save scanning",
     "Last scanned item/weight and live totals",
@@ -66,6 +67,12 @@ includesAll(
     "No-barcode Page 3 summary",
   ],
   "Guided inbound requirement matrix"
+)
+
+assert(
+  !audit.includes("Camera window scans") &&
+    !audit.includes("Scanner stays open until Close."),
+  "Guided inbound audit must use current neutral scanner detection copy."
 )
 
 includesAll(

@@ -23,6 +23,38 @@ Manual QA:
 - In `/stock/inbound`, scan one valid barcode and confirm success feedback happens after the green saved result.
 - Scan a duplicate/invalid barcode and confirm it shows the blocked/error result without success feedback.
 
+## 2026-07-10 Stock Inbound Continuous Scanner Helper Trim
+
+Scope:
+
+- `/stock/inbound` active supplier-barcode scanner helper text.
+
+Evidence captured:
+
+- The shared barcode field now renders helper text only when a helper is provided.
+- The active continuous Stock Inbound scanner omits the redundant `Continuous scan is on.` helper line.
+- Barcode rule setup and manual-label setup still keep short helper text where it changes the worker action.
+
+Manual QA:
+
+- Open `/stock/inbound`, reach the active scanner page, and confirm the barcode field area is cleaner while the phone scanner, external input, sticky summary, undo, and finish controls remain visible.
+
+## 2026-07-10 Stock Inbound Session History Sort Guard
+
+Scope:
+
+- `/stock/inbound` session history compact barcode details.
+
+Evidence captured:
+
+- The inbound session-history builder now sorts copied stock units by received time before building latest barcode details.
+- The guided-flow coverage check now proves the sort is inside `buildInboundSessionHistory`, not only in the recent-template helper.
+- No server action, RLS, stock movement, barcode uniqueness, scanner, label print, or database behavior changed.
+
+Manual QA:
+
+- Open `/stock/inbound` after several saved scans in one session, reload the page, and confirm the session history still shows the latest barcode/weight details in the expected order.
+
 ## 2026-07-10 Stock Scanner Detection Copy
 
 Scope:
@@ -49,11 +81,13 @@ Evidence captured:
 
 - The pending display-name trigger migration now also refreshes `merge_stock_manufacturer`.
 - Manufacturer merge now uses `public.stock_item_product_display_name(item.section, item.name)` when recalculating item display names.
+- SQL display-name generation now trims and collapses repeated spaces in manufacturer, section, and product fields, matching the app display-name helper.
 - This keeps duplicate manufacturer cleanup aligned with the same manufacturer + product display-name rule used by inbound pages, labels, stock lists, and reports.
 
 Manual QA:
 
 - After applying migration `202606250014`, merge a duplicate manufacturer in a safe Supabase test project and confirm affected `items.display_name` values stay as manufacturer + product.
+- Edit a safe test item with extra spaces in section/name/manufacturer and confirm `items.display_name` is saved with single spaces.
 
 ## 2026-07-10 Stock Inbound Whole-Session Delete Role Message
 

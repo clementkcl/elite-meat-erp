@@ -42,6 +42,7 @@ includesAll(
     "scanButtonLabel?: string",
     "helperText = \"Type barcode if needed.\"",
     "scanButtonLabel = \"Scan Barcode\"",
+    "helperText ? (",
     "<span>{helperText}</span>",
     "continuous",
     "lastDetectedRef",

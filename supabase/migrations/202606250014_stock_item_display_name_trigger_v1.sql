@@ -12,13 +12,19 @@ returns text
 language sql
 stable
 as $$
+  with normalized as (
+    select
+      nullif(regexp_replace(trim(coalesce(p_section, '')), '\s+', ' ', 'g'), '') as section_name,
+      nullif(regexp_replace(trim(coalesce(p_name, '')), '\s+', ' ', 'g'), '') as item_name
+  )
   select case
-    when nullif(trim(coalesce(p_name, '')), '') is null then null
-    when nullif(trim(coalesce(p_section, '')), '') is null then trim(p_name)
-    when upper(trim(p_section)) = 'GENERAL' then trim(p_name)
-    when lower(trim(p_name)) like lower(trim(p_section)) || '%' then trim(p_name)
-    else trim(p_section) || ' ' || trim(p_name)
-  end;
+    when item_name is null then null
+    when section_name is null then item_name
+    when upper(section_name) = 'GENERAL' then item_name
+    when lower(item_name) like lower(section_name) || '%' then item_name
+    else section_name || ' ' || item_name
+  end
+  from normalized;
 $$;
 
 create or replace function public.set_item_display_name()
@@ -38,7 +44,18 @@ begin
 
   product_name := public.stock_item_product_display_name(new.section, new.name);
   new.display_name := nullif(
-    trim(concat_ws(' ', nullif(trim(coalesce(manufacturer_name, '')), ''), product_name)),
+    regexp_replace(
+      trim(
+        concat_ws(
+          ' ',
+          nullif(regexp_replace(trim(coalesce(manufacturer_name, '')), '\s+', ' ', 'g'), ''),
+          product_name
+        )
+      ),
+      '\s+',
+      ' ',
+      'g'
+    ),
     ''
   );
 
@@ -112,8 +129,10 @@ begin
       where existing.id <> item.id
         and existing.category = item.category
         and existing.default_brand_id = p_target_brand_id
-        and upper(trim(coalesce(existing.section, ''))) = upper(trim(coalesce(item.section, '')))
-        and upper(trim(coalesce(existing.name, ''))) = upper(trim(coalesce(item.name, '')))
+        and upper(regexp_replace(trim(coalesce(existing.section, '')), '\s+', ' ', 'g')) =
+          upper(regexp_replace(trim(coalesce(item.section, '')), '\s+', ' ', 'g'))
+        and upper(regexp_replace(trim(coalesce(existing.name, '')), '\s+', ' ', 'g')) =
+          upper(regexp_replace(trim(coalesce(item.name, '')), '\s+', ' ', 'g'))
     );
   get diagnostics row_count = ROW_COUNT;
   changed_count := changed_count + row_count;

@@ -139,6 +139,7 @@ Migration `202606250014` adds:
 
 - A generated display-name trigger for `items`.
 - Safe backfill so `items.display_name` stays manufacturer + product after item insert/update.
+- SQL-side spacing normalization so direct item edits still collapse messy repeated spaces in section/name/manufacturer display names.
 - Refreshes `merge_stock_manufacturer` so duplicate manufacturer cleanup uses the same product display-name helper.
 - Product and manufacturer still remain stored separately.
 

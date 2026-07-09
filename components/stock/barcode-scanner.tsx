@@ -176,9 +176,11 @@ export function BarcodeField({
         aria-describedby={disabledReasonId}
         className="min-h-11 text-base sm:text-sm"
       />
-      <div className="flex flex-col gap-1 text-xs break-words text-muted-foreground">
-        <span>{helperText}</span>
-      </div>
+      {helperText ? (
+        <div className="flex flex-col gap-1 text-xs break-words text-muted-foreground">
+          <span>{helperText}</span>
+        </div>
+      ) : null}
       {effectiveDisabled && effectiveDisabledReason ? (
         <div
           id={disabledReasonId}

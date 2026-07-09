@@ -109,6 +109,8 @@ includesAll(
   [
     "add column if not exists display_name",
     "create or replace function public.stock_item_product_display_name",
+    "regexp_replace(trim(coalesce(p_section, '')), '\\s+', ' ', 'g')",
+    "regexp_replace(trim(coalesce(p_name, '')), '\\s+', ' ', 'g')",
     "create or replace function public.set_item_display_name",
     "new.default_brand_id is not null",
     "from public.brands",
@@ -120,6 +122,8 @@ includesAll(
     "Maintains items.display_name as manufacturer + product name",
     "create or replace function public.merge_stock_manufacturer",
     "public.stock_item_product_display_name(item.section, item.name)",
+    "upper(regexp_replace(trim(coalesce(existing.section, '')), '\\s+', ' ', 'g'))",
+    "upper(regexp_replace(trim(coalesce(existing.name, '')), '\\s+', ' ', 'g'))",
     "grant execute on function public.merge_stock_manufacturer(uuid, uuid) to authenticated",
   ],
   "Item master display-name trigger migration"
