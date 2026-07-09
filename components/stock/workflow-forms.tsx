@@ -1913,18 +1913,7 @@ export function BarcodeInboundForm({
   const [localItems, setLocalItems] = useState(items)
   const [localBrands, setLocalBrands] = useState(brands)
   const [initialSessionDraft] = useState(() => {
-    const draft = readInboundSessionDraft()
-
-    if (
-      !draft ||
-      !units.some(
-        (unit) => unit.batchNo === draft.batchNo && unit.status !== "VOIDED"
-      )
-    ) {
-      return null
-    }
-
-    return draft
+    return readInboundSessionDraft()
   })
   const [barcode, setBarcode] = useState("")
   const [preset, setPreset] = useState(() =>
@@ -2003,11 +1992,16 @@ export function BarcodeInboundForm({
 
   useEffect(() => {
     try {
-      const hasSavedDraftWork = recentLabels.some(
-        (label) => label.status === "SAVED"
+      const hasReadyDraftSetup = Boolean(
+        preset.itemId &&
+          preset.brandId &&
+          preset.brandId !== "__other" &&
+          preset.originId &&
+          preset.originId !== "__other" &&
+          preset.locationId
       )
 
-      if (sessionFinishedAt || !hasSavedDraftWork) {
+      if (sessionFinishedAt || !hasReadyDraftSetup) {
         window.localStorage.removeItem(inboundSessionDraftKey)
         return
       }
@@ -2019,7 +2013,7 @@ export function BarcodeInboundForm({
     } catch {
       // Ignore unavailable storage, for example private browsing.
     }
-  }, [batchNo, inboundMode, recentLabels, sessionFinishedAt, sessionStartedAt])
+  }, [batchNo, inboundMode, preset, sessionFinishedAt, sessionStartedAt])
 
   useEffect(() => {
     const clearPrintTarget = () => setInboundPrintTarget(null)
@@ -2743,7 +2737,7 @@ export function BarcodeInboundForm({
 
     if (readyToSubmit) {
       setDecodeStatus("success")
-      setDecodeMessage("Saving barcode. Keep scanner ready.")
+      setDecodeMessage(`Saving ${decoded.weightKg} kg. Keep scanner ready.`)
       window.setTimeout(() => formRef.current?.requestSubmit(), 0)
     }
   }
@@ -3928,7 +3922,7 @@ export function BarcodeInboundForm({
               </Button>
             </div>
 
-            {!sessionFinishedAt && recentLabels.length > 0 ? (
+            {!sessionFinishedAt && (scanSetupReady || recentLabels.length > 0) ? (
               <div
                 data-stock-action="continue-current-inbound-session"
                 className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-emerald-900"
@@ -4402,7 +4396,7 @@ export function BarcodeInboundForm({
                   inboundStep === "rule"
                     ? "Scan sample, then enter actual kg."
                     : manualMode
-                      ? "Saved labels print below."
+                      ? "Scan printed label to save."
                       : "Continuous scan is on."
                 }
                 scanButtonLabel="Use Phone Scanner"
@@ -5748,8 +5742,7 @@ export function BarcodeInboundForm({
           ) : null}
           {state.status === "error" ? (
             <p className="text-sm text-muted-foreground">
-              If the internet is unstable, keep the item setup selected and
-              retry this barcode when the connection returns.
+              Connection issue. Retry this barcode.
             </p>
           ) : null}
           <div

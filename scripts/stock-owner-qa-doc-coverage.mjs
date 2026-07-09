@@ -247,7 +247,7 @@ assert(
 includesAll(
   stockLabel,
   [
-    "Bluetooth label printer",
+    "Bluetooth first. PDF fallback.",
     "PDF fallback",
     "50mm x 30mm",
     "stockLabelSizes",

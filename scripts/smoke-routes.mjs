@@ -404,7 +404,7 @@ assert(
     stockUnitDetail.includes("StockLabelPrintArea") &&
     stockLabelSource.includes('pageSize: "50mm 30mm"') &&
     stockLabelSource.includes("window.print()") &&
-    stockLabelSource.includes("Bluetooth label printer") &&
+    stockLabelSource.includes("Bluetooth first. PDF fallback.") &&
     stockLabelSource.includes("PDF fallback"),
   "Stock unit detail page must support 50mm x 30mm label reprint/export"
 )

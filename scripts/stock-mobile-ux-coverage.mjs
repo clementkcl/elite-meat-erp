@@ -269,9 +269,9 @@ includesAll(
     "External scanner: scan into this box.",
     "Continuous scan.",
     "Scan sample, then enter actual kg.",
-    "Saved labels print below.",
+    "Scan printed label to save.",
     "Continuous scan.",
-    "Saving barcode. Keep scanner ready.",
+    "Saving ${decoded.weightKg} kg. Keep scanner ready.",
     "Manual Weight Entry",
     "data-stock-action=\"manual-label-next-unit\"",
     "Enter next unit",
@@ -994,6 +994,11 @@ assert(
   "Stock worker offline scanner message must use the approved short wording."
 )
 assert(
+  workflowForms.includes("Connection issue. Retry this barcode.") &&
+    !workflowForms.includes("If the internet is unstable"),
+  "Stock inbound save errors must use short worker-facing retry copy."
+)
+assert(
   !workflowForms.includes('className="flex h-9 w-full rounded-md border border-input') &&
     !stockPage.includes('className="flex h-9 w-full rounded-md border border-input'),
   "Stock mobile selects must keep phone-size touch targets."
@@ -1270,15 +1275,14 @@ includesAll(
     "Print Labels PDF",
     "Bluetooth printer",
     "Save as PDF",
-    "Bluetooth label printer first.",
-    "Both buttons open the phone print sheet.",
+    "Bluetooth first. PDF fallback.",
     "h-auto min-h-12 w-full justify-center gap-2 whitespace-normal text-left",
     "flex min-w-0 flex-col items-start break-words leading-tight",
     "break-words text-xs font-bold uppercase",
     "mt-1 break-words text-sm font-semibold leading-tight",
     "break-words text-xl font-bold tabular-nums",
     "size-4 shrink-0",
-    "One label prints per page.",
+    "One label per page.",
   ],
   "Stock mobile label reprint"
 )

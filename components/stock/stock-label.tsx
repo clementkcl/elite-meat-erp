@@ -151,12 +151,8 @@ export function StockLabelPrintNote({
 
   return (
     <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm break-words text-emerald-800">
-      <div className="font-medium">Bluetooth label printer first.</div>
-      <div className="mt-1">
-        If the printer is not available, use PDF fallback. Label size:{" "}
-        {size.label}. One label prints per page.
-      </div>
-      <div className="mt-1">Both buttons open the phone print sheet.</div>
+      <div className="font-medium">Bluetooth first. PDF fallback.</div>
+      <div className="mt-1">{size.label}. One label per page.</div>
     </div>
   )
 }

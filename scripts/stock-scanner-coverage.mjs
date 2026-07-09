@@ -172,6 +172,8 @@ includesAll(
     "data-stock-action=\"scanner-live-scan-feedback\"",
     "scanFeedbackStatus === \"error\" ? \"alert\" : \"status\"",
     "{scanFeedbackMessage}",
+    "scanFeedbackMessage || \"Scan failed. Try again.\"",
+    "scanFeedbackMessage || \"Check scan before saving.\"",
     "data-stock-action=\"scanner-primary-scan-action-slot\"",
     "data-stock-action=\"scanner-last-saved-item-weight-top\"",
     "data-stock-action=\"scanner-session-total-top\"",

@@ -39764,3 +39764,85 @@ Risks / remaining checks:
 - Vercel deployment still needs to finish building after push.
 - Supabase migration SQL has not been applied from this machine.
 - Real device Stock Inbound QA remains required for camera, external scanner, Bluetooth/PDF label printing, and live RLS behavior.
+
+## 2026-07-09 - Stock Inbound short retry copy
+
+Task completed:
+
+- Continued the active Stock Inbound mobile workflow cleanup.
+- Replaced the long save-error recovery hint with the short worker message `Connection issue. Retry this barcode.`
+- Changed the manual-label scanner helper to `Scan printed label to save.` so the worker sees the next action.
+- Added source coverage so the old long internet helper does not come back.
+- No stock actions, RLS, migrations, barcode uniqueness, or movement logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real logged-in `/stock/inbound` QA should trigger a save error and confirm the short retry copy fits cleanly on a 390px phone.
+
+## 2026-07-09 - Stock Inbound setup-only draft resume
+
+Task completed:
+
+- Continued the active Stock Inbound multi-page workflow hardening.
+- Fixed unfinished inbound draft handling so a valid setup-only session can be resumed before the first saved barcode/unit.
+- The draft now persists after product, manufacturer, origin, and location are selected, without accepting unresolved Other/custom placeholders.
+- The current unfinished session card now appears for a ready setup even when saved count is still zero.
+- Shortened the reusable label print note to `Bluetooth first. PDF fallback.` plus label size/page count.
+- Updated the phone scanner success frame to prefer live scan feedback, and inbound auto-save feedback now includes the decoded weight.
+- Updated the phone scanner failure frame to prefer live scan feedback before falling back to `Scan failed. Try again.`
+- Updated the phone scanner warning frame to prefer live scan feedback before falling back to `Check scan before saving.`
+- No stock movement, barcode uniqueness, RLS, or migration logic changed.
+
+Files changed in this pass:
+
+- `components/stock/barcode-scanner.tsx`
+- `components/stock/workflow-forms.tsx`
+- `components/stock/stock-label.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/smoke-routes.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-label-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `scripts/stock-scanner-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real logged-in `/stock/inbound` QA should choose setup, leave before scanning, return, and confirm the same unfinished session can continue.

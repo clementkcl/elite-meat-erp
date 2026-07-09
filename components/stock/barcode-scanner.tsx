@@ -329,13 +329,15 @@ export function BarcodeScanner({
           : "border-white/80 shadow-[0_0_0_999px_rgba(0,0,0,0.28)]"
   const cameraFrameMessage =
     cameraFrameTone === "success"
-      ? scanSummary
+      ? scanFeedbackMessage
+        ? scanFeedbackMessage
+        : scanSummary
         ? `Saved: ${scanSummary}`
         : "Scan saved. Keep scanning."
       : cameraFrameTone === "error"
-        ? "Scan failed. Try again."
+        ? scanFeedbackMessage || "Scan failed. Try again."
         : cameraFrameTone === "warning"
-          ? "Check scan before saving."
+          ? scanFeedbackMessage || "Check scan before saving."
           : "Keep barcode inside the box."
 
   useEffect(() => {
