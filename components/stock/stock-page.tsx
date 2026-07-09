@@ -1681,7 +1681,7 @@ export async function StockPage({
 
       {route === "settings" ? (
         <>
-          <MasterDataForms />
+          <MasterDataForms brands={data.brands} />
           <SettingsTables data={data} />
         </>
       ) : null}

@@ -26,6 +26,7 @@ const data = read("lib/stock/data.ts")
 const label = read("components/stock/stock-label.tsx")
 const stockPage = read("components/stock/stock-page.tsx")
 const actions = read("lib/stock/actions.ts")
+const actionState = read("lib/stock/action-state.ts")
 const inboundRpc = read("supabase/migrations/202606100050_atomic_barcode_inbound_rpc_v1.sql")
 const inboundRuleSampleRpc = read(
   "supabase/migrations/202606250004_stock_barcode_rule_sample_v1.sql"
@@ -218,7 +219,7 @@ includesAll(
 )
 
 includesAll(
-  workflowForms + displayNames + data + stockPage + actions,
+  workflowForms + displayNames + data + stockPage + actions + actionState,
   [
     "stockProductName(",
     "stockDisplayItemName(",
@@ -259,6 +260,9 @@ includesAll(
     "allowOther",
     "data-stock-action=\"manual-product-entry\"",
     "Save product now",
+    "const resolvedBrandName = result.brandName ?? selectedManufacturerValue",
+    "displayName: resolvedBrandName",
+    "setBrandQuery(resolvedBrandName)",
     "data-stock-action=\"manual-manufacturer-entry\"",
     "data-stock-action=\"inbound-save-custom-manufacturer\"",
     "createInboundBrandAction",
@@ -267,11 +271,13 @@ includesAll(
     "formAction={quickBrandCreateAction}",
     "formNoValidate",
     "Save manufacturer now",
+    "brandName?: string",
+    "brandName:",
+    "result.brandName ??",
     "setLocalBrands((current) =>",
     "brandId: result.brandId",
     "setBrandQuery(savedName)",
     "setBrandName(\"\")",
-    "displayName: selectedManufacturerValue",
     "const inboundBrandSchema = z.object({",
     "export async function createInboundBrandAction",
     "return runStockAction(formData, stockOperatorRoles",
@@ -464,8 +470,8 @@ includesAll(
     "ruleExtractedPreview.status === \"manual_confirmation_required\"",
     "Confirm weight and save",
     "data-stock-action=\"finished-inbound-scan-stop\"",
-    "Session finished. Review only. Start a new inbound session",
-    "sessionFinishedAt\n                      ? \"Session finished. Ask manager for changes.\"",
+    "Session finished. Review only.",
+    "sessionFinishedAt\n                      ? \"Session finished. Review only.\"",
   ],
   "Continuous scanner and undo"
 )
@@ -542,6 +548,15 @@ includesAll(
     "label.barcode",
   ],
   "No-supplier-barcode manual label flow"
+)
+
+assert(
+  workflowForms.includes("const activePrintLabels = recentLabels.filter("),
+  "Summary Print Labels PDF must use all saved session labels, not internal-label mode only."
+)
+assert(
+  workflowForms.includes("Labels can be reprinted if needed."),
+  "Supplier-barcode sessions must expose safe label reprint copy."
 )
 
 const generateLabelStart = workflowForms.indexOf("function generateLabelBarcode()")

@@ -43,6 +43,7 @@ const migration044 = read("supabase/migrations/202606100044_item_master_all_role
 const migration045 = read("supabase/migrations/202606100045_item_master_default_brand_v1.sql")
 const migration010 = read("supabase/migrations/202606250010_stock_item_default_weight_v1.sql")
 const migration011 = read("supabase/migrations/202606250011_stock_item_display_name_v1.sql")
+const migration012 = read("supabase/migrations/202606250012_stock_manufacturer_merge_v1.sql")
 const seed = read("supabase/seed.sql")
 const packageJson = read("package.json")
 
@@ -99,6 +100,21 @@ includesAll(
     "Stored default display name",
   ],
   "Item master stored display-name migration"
+)
+
+includesAll(
+  migration012,
+  [
+    "create or replace function public.merge_stock_manufacturer",
+    "if not public.can_administer_stock()",
+    "update public.stock_units set brand_id = p_target_brand_id",
+    "update public.stock_movements set brand_id = p_target_brand_id",
+    "update public.barcode_weight_rules set brand_id = p_target_brand_id",
+    "set is_active = false",
+    "STOCK_MANUFACTURER_MERGED",
+    "grant execute on function public.merge_stock_manufacturer(uuid, uuid) to authenticated",
+  ],
+  "Manufacturer merge migration"
 )
 
 includesAll(
@@ -161,8 +177,25 @@ includesAll(
     "barcode_required: parsed.barcodeRequired",
     "default_low_stock_level: parsed.defaultLowStockLevel",
     "default_weight_kg: parsed.defaultWeightKg ?? null",
+    "brandName: defaultBrandName ?? undefined",
   ],
   "createItemAction item fields"
+)
+
+includesAll(
+  functionBody(actions, "mergeBrandAction"),
+  [
+    "runStockAction(formData, [\"admin\", \"director\"]",
+    "parsed.sourceBrandId === parsed.targetBrandId",
+    "Choose two different manufacturers.",
+    "merge_stock_manufacturer",
+    "p_source_brand_id: parsed.sourceBrandId",
+    "p_target_brand_id: parsed.targetBrandId",
+    "revalidatePath(\"/stock/settings\")",
+    "revalidatePath(\"/stock/inbound\")",
+    "Manufacturer merged. Source is inactive.",
+  ],
+  "Manufacturer merge action"
 )
 
 includesAll(
@@ -235,6 +268,13 @@ includesAll(
     "Active",
     "{selectedItem ? (",
     "Enter name and a numeric item code before creating the item.",
+    "function MergeManufacturerForm",
+    "Merge manufacturers",
+    "Admin cleanup for duplicate manufacturer names.",
+    "Source becomes inactive. Audit kept.",
+    "name=\"sourceBrandId\"",
+    "name=\"targetBrandId\"",
+    "action={mergeBrandAction}",
   ],
   "Item master form controls"
 )

@@ -135,6 +135,11 @@ const inboundBrandSchema = z.object({
   brandName: z.string().trim().min(2, "Manufacturer is required."),
 })
 
+const mergeBrandSchema = z.object({
+  sourceBrandId: z.string().trim().uuid(),
+  targetBrandId: z.string().trim().uuid(),
+})
+
 const barcodeInboundSchema = z.object({
   barcode: z.string().trim().min(3),
   itemId: z.string().trim().min(1),
@@ -1535,6 +1540,7 @@ export async function createItemAction(
     return success("Item created.", {
       itemId,
       brandId: defaultBrandId ?? undefined,
+      brandName: defaultBrandName ?? undefined,
     })
   })
 }
@@ -1683,12 +1689,19 @@ export async function createInboundBrandAction(
     )
 
     if (existingId) {
-      return success("Manufacturer already saved.", { brandId: existingId })
+      return success("Manufacturer already saved.", {
+        brandId: existingId,
+        brandName:
+          (await namedRecordName(context.supabase, "brands", existingId)) ??
+          normalizeOptionalName(parsed.brandName) ??
+          parsed.brandName.trim(),
+      })
     }
 
+    const brandName = normalizeOptionalName(parsed.brandName)
     const { data, error } = await context.supabase
       .from("brands")
-      .insert({ name: normalizeOptionalName(parsed.brandName) })
+      .insert({ name: brandName })
       .select("id")
       .single()
 
@@ -1707,7 +1720,41 @@ export async function createInboundBrandAction(
       { name: parsed.brandName }
     )
 
-    return success("Manufacturer saved.", { brandId })
+    return success("Manufacturer saved.", {
+      brandId,
+      brandName: brandName ?? parsed.brandName.trim(),
+    })
+  })
+}
+
+export async function mergeBrandAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(mergeBrandSchema, formData)
+
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(formData, ["admin", "director"], async (context) => {
+    if (parsed.sourceBrandId === parsed.targetBrandId) {
+      throw new Error("Choose two different manufacturers.")
+    }
+
+    const { error } = await context.supabase.rpc("merge_stock_manufacturer", {
+      p_source_brand_id: parsed.sourceBrandId,
+      p_target_brand_id: parsed.targetBrandId,
+    })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    revalidatePath("/stock/settings")
+    revalidatePath("/stock/inbound")
+
+    return "Manufacturer merged. Source is inactive."
   })
 }
 

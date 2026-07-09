@@ -1,5 +1,211 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-09 - Stock Settings manufacturer merge path
+
+Task completed:
+
+- Continued the active Stock Inbound naming goal by adding the requested admin cleanup path for duplicate manufacturers.
+- Added an idempotent `merge_stock_manufacturer` RPC migration.
+- Added an admin/director server action and a small Stock Settings form to merge one duplicate manufacturer into the manufacturer to keep.
+- Merge is conservative: it updates known stock manufacturer references, audits the merge, renames/deactivates the source manufacturer, and does not delete production rows.
+
+Files changed in this pass:
+
+- `supabase/migrations/202606250012_stock_manufacturer_merge_v1.sql`
+- `lib/stock/actions.ts`
+- `components/stock/workflow-forms.tsx`
+- `components/stock/stock-page.tsx`
+- `scripts/stock-item-master-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- `supabase/migrations/202606250012_stock_manufacturer_merge_v1.sql`
+
+Commands run and results:
+
+- `node scripts\stock-item-master-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-migration-safety.mjs` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- The merge RPC intentionally aborts if a matching barcode rule already exists on the target manufacturer; admin should review those rare conflicts manually rather than risk silent data loss.
+- Migration still needs to be applied to Supabase before the settings form can merge manufacturers on the live app.
+
+## 2026-07-09 - Stock Inbound quick product resolved manufacturer display
+
+Task completed:
+
+- Continued the active guided Stock Inbound goal with a small quick-product naming fix.
+- `createItemAction` now returns the resolved saved/reused manufacturer name with the new product response.
+- The inbound quick product setup now uses that resolved name for local display name, search text, and selected manufacturer context.
+- This keeps quick-created product display names aligned with the stored manufacturer + product rule.
+
+Files changed in this pass:
+
+- `lib/stock/actions.ts`
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-item-master-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real Supabase quick product creation still needs owner/staging QA.
+
+## 2026-07-09 - Stock Inbound finished scanner helper copy
+
+Task completed:
+
+- Continued the active guided Stock Inbound goal with a final small scanner-copy trim.
+- Changed the finished scanner disabled reason from `Session finished. Ask manager for changes.` to `Session finished. Review only.`
+- Kept session locking, stock save, barcode uniqueness, RLS, movements, and undo/delete behavior unchanged.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound custom manufacturer saved-name return
+
+Task completed:
+
+- Continued the active guided Stock Inbound goal with a small item/manufacturer naming fix.
+- `createInboundBrandAction` now returns the saved or reused manufacturer name with the manufacturer ID.
+- The inbound setup now uses that returned name instead of fabricating an uppercase local name after saving/reusing a custom manufacturer.
+- This keeps product/manufacturer separate and avoids messy local display names when the canonical duplicate lookup reuses an existing manufacturer.
+
+Files changed in this pass:
+
+- `lib/stock/action-state.ts`
+- `lib/stock/actions.ts`
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-item-master-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real Supabase save/reuse behavior still needs owner/staging QA to prove the returned manufacturer name matches existing data.
+
+## 2026-07-09 - Stock Inbound shorter locked-state helper copy
+
+Task completed:
+
+- Continued the active guided Stock Inbound goal with another small mobile-copy cleanup.
+- Shortened locked setup, finished scan, and locked barcode-rule helper messages.
+- Kept session lock, barcode rule, stock save, RLS, movement, void, and barcode uniqueness behavior unchanged.
+- Updated Stock Inbound/mobile/acceptance guards to enforce the shorter worker copy.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound summary label PDF for saved scans
+
+Task completed:
+
+- Continued the active guided Stock Inbound goal with a small summary-label fix.
+- `Print Labels PDF` on the inbound session summary now appears for any saved session labels, including supplier-barcode scans, not only internal-label sessions.
+- Supplier-barcode sessions use the short cue `Labels can be reprinted if needed.`
+- Reused the existing 50mm x 30mm label print path; no new stock logic, schema, RLS, movement, or barcode uniqueness behavior changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, and live Supabase/RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
 ## 2026-07-09 - Stock Inbound shorter session-lock copy
 
 Task completed:

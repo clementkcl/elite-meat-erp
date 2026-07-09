@@ -4,6 +4,7 @@ export type StockActionState = {
   warning?: string
   itemId?: string
   brandId?: string
+  brandName?: string
   originId?: string
   stockUnitId?: string
   voidedStockUnitId?: string

@@ -31,6 +31,7 @@ import {
   createStockTakeSessionAction,
   logInboundScanIssueAction,
   logStockScanIssueAction,
+  mergeBrandAction,
   receiveTransferAction,
   releaseInspectionStockAction,
   rejectDamageRequestAction,
@@ -1256,7 +1257,48 @@ export function ItemMasterForm({
   )
 }
 
-export function MasterDataForms() {
+function MergeManufacturerForm({ brands }: { brands: Brand[] }) {
+  const activeBrands = brands.filter((brand) => brand.active)
+
+  return (
+    <WorkflowCard
+      title="Merge manufacturers"
+      description="Admin cleanup for duplicate manufacturer names."
+      action={mergeBrandAction}
+      submitLabel="Merge manufacturer"
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="sourceBrandId">Duplicate</Label>
+          <NativeSelect id="sourceBrandId" name="sourceBrandId" required>
+            <option value="">Select duplicate</option>
+            {activeBrands.map((brand) => (
+              <option key={brand.id} value={brand.id}>
+                {brand.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="targetBrandId">Keep</Label>
+          <NativeSelect id="targetBrandId" name="targetBrandId" required>
+            <option value="">Select manufacturer to keep</option>
+            {activeBrands.map((brand) => (
+              <option key={brand.id} value={brand.id}>
+                {brand.name}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Source becomes inactive. Audit kept.
+      </p>
+    </WorkflowCard>
+  )
+}
+
+export function MasterDataForms({ brands = [] }: { brands?: Brand[] }) {
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <WorkflowCard
@@ -1292,6 +1334,7 @@ export function MasterDataForms() {
           <Input id="locationName" name="name" placeholder="JALAN CHANNEL" />
         </div>
       </WorkflowCard>
+      <MergeManufacturerForm brands={brands} />
     </div>
   )
 }
@@ -2198,6 +2241,7 @@ export function BarcodeInboundForm({
     if (result.status === "success" && result.itemId) {
       const defaultBrandId = result.brandId ?? null
       const resolvedBrandId = result.brandId ?? null
+      const resolvedBrandName = result.brandName ?? selectedManufacturerValue
       const nextBrandId =
         preset.brandId === "__other" && resolvedBrandId
           ? resolvedBrandId
@@ -2207,8 +2251,8 @@ export function BarcodeInboundForm({
         itemCode,
         category: itemCategory,
         defaultBrandId,
-        displayName: selectedManufacturerValue
-          ? `${selectedManufacturerValue} ${itemName}`
+        displayName: resolvedBrandName
+          ? `${resolvedBrandName} ${itemName}`
           : itemName,
         section: "GENERAL",
         name: itemName,
@@ -2231,11 +2275,11 @@ export function BarcodeInboundForm({
         brandId: nextBrandId,
       })
       if (preset.brandId === "__other" && resolvedBrandId) {
-        setBrandQuery(brandName.trim())
+        setBrandQuery(resolvedBrandName)
       }
       setProductQuery(
-        selectedManufacturerValue
-          ? `${selectedManufacturerValue} ${nextItem.name}`
+        resolvedBrandName
+          ? `${resolvedBrandName} ${nextItem.name}`
           : nextItem.name
       )
       setQuickItemName("")
@@ -2252,7 +2296,8 @@ export function BarcodeInboundForm({
     const result = await createInboundBrandAction(previousState, formData)
 
     if (result.status === "success" && result.brandId) {
-      const savedName = nextBrandName.replace(/\s+/g, " ").toUpperCase()
+      const savedName =
+        result.brandName ?? nextBrandName.replace(/\s+/g, " ").toUpperCase()
 
       setLocalBrands((current) =>
         current.some((brand) => brand.id === result.brandId)
@@ -3538,10 +3583,9 @@ export function BarcodeInboundForm({
   ] as const
   const scanBlocked = !scanSetupReady || !isOnline || Boolean(sessionFinishedAt)
   const quickItemCode = generatedItemCode(localItems)
-  const activePrintLabels =
-    inboundMode === "internal_label"
-      ? recentLabels.filter((label) => label.status === "SAVED")
-      : []
+  const activePrintLabels = recentLabels.filter(
+    (label) => label.status === "SAVED"
+  )
   const labelsForPrint = pendingInternalLabel
     ? [pendingInternalLabel]
     : activePrintLabels
@@ -4085,8 +4129,7 @@ export function BarcodeInboundForm({
                 aria-live="polite"
                 className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
               >
-                Setup is read-only for this session. Start a new inbound
-                session to change product, manufacturer, origin, or location.
+                Setup locked. Finish or delete this session to change setup.
                 <span className="mt-1 block text-xs font-medium">
                   {scopeLockedReason}
                 </span>
@@ -4268,8 +4311,7 @@ export function BarcodeInboundForm({
                   aria-live="polite"
                   className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
                 >
-                  Session finished. Review only. Start a new inbound session
-                  before scanning or changing weight.
+                  Session finished. Review only.
                 </div>
               ) : null}
               {scanSetupReady && !sessionFinishedAt ? (
@@ -4314,7 +4356,7 @@ export function BarcodeInboundForm({
                   {scopeLocked ? (
                     <div className="mt-2 rounded-md border border-emerald-200 bg-background/70 px-3 py-2 text-xs font-medium text-emerald-800">
                       {sessionFinishedAt
-                        ? "Session finished. Start a new session to change setup."
+                        ? "Session finished. Start new session to change setup."
                         : "Session locked. Finish first."}
                     </div>
                   ) : null}
@@ -4407,7 +4449,7 @@ export function BarcodeInboundForm({
                   !isOnline
                     ? offlineScanMessage
                     : sessionFinishedAt
-                      ? "Session finished. Ask manager for changes."
+                      ? "Session finished. Review only."
                       : !scanSetupReady
                         ? "Choose product, manufacturer, origin, and location first."
                         : ""
@@ -4938,8 +4980,7 @@ export function BarcodeInboundForm({
                   data-stock-action="locked-barcode-rule-fields"
                   className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
                 >
-                  Rule fields are locked for this inbound session. Start a new
-                  session to change barcode rule settings.
+                  Rule locked. Start new session to change rule.
                 </div>
               ) : null}
               <div className="mt-3 grid gap-4 md:grid-cols-2">
@@ -5851,7 +5892,9 @@ export function BarcodeInboundForm({
                 )}
                 {activePrintLabels.length > 0 ? (
                   <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
-                    Print and attach saved labels before moving stock.
+                    {manualMode
+                      ? "Print and attach saved labels before moving stock."
+                      : "Labels can be reprinted if needed."}
                   </div>
                 ) : null}
               </div>
@@ -6168,14 +6211,14 @@ export function BarcodeInboundForm({
                 ) : null}
               </div>
             ) : null}
-            {manualMode && activePrintLabels.length > 0 ? (
+            {activePrintLabels.length > 0 ? (
               <div
                 data-stock-action="inbound-summary-print-labels-pdf-area"
                 className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"
               >
                 <div className="font-medium">Print Labels PDF</div>
                 <div className="mt-1 text-emerald-800">
-                  {activePrintLabels.length} internal label
+                  {activePrintLabels.length} label
                   {activePrintLabels.length === 1 ? "" : "s"} ready.
                 </div>
                 <StockLabelPrintActions
