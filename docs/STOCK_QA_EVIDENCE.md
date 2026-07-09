@@ -6,6 +6,277 @@ Use this file to record real Supabase, RLS, device, and workflow evidence before
 
 Use `docs/STOCK_COMPLETION_AUDIT.md` to compare local automated evidence with the manual evidence still required.
 
+## 2026-07-10 Stock Inbound Short New-Session Notice
+
+Scope:
+
+- `/stock/inbound` Start new session feedback.
+
+Evidence captured:
+
+- The new-session setup notice now uses short worker copy: `New session. Setup kept.` or `New session. Choose setup.`
+- This removes the long product/manufacturer/origin/location sentence while keeping the same behavior.
+- Stock acceptance, mobile UX, and guided-flow coverage guards were updated.
+
+Manual QA:
+
+- Tap `Start new session` with and without a selected setup and confirm the feedback is short and clear at phone width.
+
+## 2026-07-10 Stock Inbound Saved Preset Search Restore
+
+Scope:
+
+- `/stock/inbound` setup screen after returning to the page with a saved setup preset.
+
+Evidence captured:
+
+- Product, manufacturer, and origin search fields now initialize from any restored preset, not only from unfinished-session drafts.
+- This keeps the setup screen readable when the browser remembers a previous Stock Inbound setup.
+- Focused guided-flow coverage guards the restored preset search initialization.
+
+Manual QA:
+
+- Choose an inbound setup, leave `/stock/inbound`, return later, and confirm the selected product/manufacturer/origin are visible in the search fields.
+
+## 2026-07-10 Stock Inbound Draft Search Restore
+
+Scope:
+
+- `/stock/inbound` unfinished-session restore after page refresh.
+
+Evidence captured:
+
+- Restored unfinished-session drafts now initialize the visible product, manufacturer, and origin search fields from the saved locked setup.
+- This keeps the setup screen readable after refresh instead of restoring the hidden preset while leaving search boxes blank.
+- Focused guided-flow coverage guards the visible search restore.
+
+Manual QA:
+
+- Start an inbound session, choose product/manufacturer/origin/location, save one scan or unit, refresh, and confirm the search boxes show the same setup before continuing.
+
+## 2026-07-10 Stock Inbound Draft Setup Restore
+
+Scope:
+
+- `/stock/inbound` unfinished-session restore.
+
+Evidence captured:
+
+- The unfinished inbound session draft now stores the locked item/manufacturer/origin/location preset together with the session code, start time, and mode.
+- Restoring a draft now normalizes that saved preset before showing `Continue unfinished session`, so the current session does not depend only on the separate recent-preset cache.
+- Focused guided-flow coverage and smoke coverage guard the restored draft preset.
+
+Manual QA:
+
+- Start an inbound session, choose product/manufacturer/origin/location, save one scan or unit, refresh the page, and confirm `Continue unfinished session` returns to the same setup and session code.
+
+## 2026-07-10 Stock Inbound Submit Context Deduplication
+
+Scope:
+
+- `/stock/inbound` guided inbound form submit payload.
+
+Evidence captured:
+
+- Hidden submit context now carries only custom typed `brandName` and `originName`.
+- Visible form controls are the only submit source for item, manufacturer id, origin id, location, inbound source, batch number, and barcode-rule fields.
+- Focused Stock Inbound guided-flow coverage now blocks duplicate hidden field names from returning.
+
+Manual QA:
+
+- On Barcode Rule, change weight start/digits/decimals and immediately save; confirm the saved rule uses the visible values.
+
+## 2026-07-10 Stock Inbound 390px Browser QA Attempt
+
+Scope:
+
+- `/stock/inbound` local browser check at 390px width.
+
+Evidence captured:
+
+- Local Next dev server responded from PowerShell at `http://127.0.0.1:3900/stock/inbound` with HTTP 200, redirecting unauthenticated access toward login.
+- In-app browser could not reach `127.0.0.1:3900` or `localhost:3900` and reported connection refused, so rendered Stock Inbound visual QA was not completed in this pass.
+- Temporary 390px viewport override was reset after the attempt.
+
+Manual QA:
+
+- With a logged-in browser session, open `/stock/inbound` at phone width and verify Session History, Setup, Barcode Rule, Scanner popup, Manual Weight, and Session Summary visually.
+
+## 2026-07-10 Stock Inbound Short Manual Weight Label
+
+Scope:
+
+- `/stock/inbound` manual weight entry field.
+
+Evidence captured:
+
+- Manual mode now labels the active weight field as `Weight kg` instead of the longer `Enter one unit weight kg`.
+- Supplier-barcode mode still labels the same field as `Net weight kg`.
+- Focused Stock Inbound guided-flow, mobile UX, and acceptance guards updated.
+
+Manual QA:
+
+- Open Inbound without Barcode at 390px width and confirm the weight field label stays short while the page still clearly shows the current locked setup.
+
+## 2026-07-10 Stock Inbound Short Manual Undo Label
+
+Scope:
+
+- `/stock/inbound` manual weight undo actions.
+
+Evidence captured:
+
+- Manual mode now uses `Undo Last Weight` instead of the longer `Undo Last Weight Entry`.
+- Existing current-session undo action and audit-preserving void flow are unchanged.
+- Focused Stock Inbound guided-flow coverage updated.
+
+Manual QA:
+
+- Enter two manual weights around 390px width and confirm the undo button stays readable in the scanner popup, previous-weight card, and saved-list row.
+
+## 2026-07-10 Stock Scanner Short Metric Labels
+
+Scope:
+
+- Reusable scanner popup used by `/stock/inbound`.
+
+Evidence captured:
+
+- Scanner metric cards now use shorter labels: `Last saved`, `Session total`, and `Count + weight`.
+- Existing data/action slots remain unchanged, including current setup, last scanned barcode, camera detections, Undo Last Scan, Close, and Finish Session where provided by the inbound page.
+- Focused scanner, Stock Inbound guided-flow, mobile UX, and acceptance guards updated.
+
+Manual QA:
+
+- Open `/stock/inbound`, start the phone scanner around 390px width, and confirm the top scanner cards stay compact while still showing previous saved weight and session total.
+
+## 2026-07-10 Stock Inbound Barcode Rule Optional Notes Collapse
+
+Scope:
+
+- `/stock/inbound` Barcode Rule step.
+
+Evidence captured:
+
+- Optional `Reference no.` and `Notes` fields now sit inside a collapsed `Reference and notes` section.
+- Barcode rule fields remain visible: sample barcode, net weight, weight start, digits, decimals, fixed-weight fallback, and save-rule controls.
+- Focused source guards updated in Stock Inbound guided-flow, mobile UX, and acceptance coverage.
+
+Manual QA:
+
+- Open Barcode Rule on a 390px phone viewport and confirm the first view focuses on barcode rule setup while `Reference and notes` can still be opened when needed.
+
+## 2026-07-10 Stock Inbound Short Rule Helper Text
+
+Scope:
+
+- `/stock/inbound` setup and barcode-rule helper text.
+
+Evidence captured:
+
+- Manual-label mode now says `Enter weight. Save, print.`
+- Missing barcode rule warning now says `Set rule first.`
+- Barcode rule helper text now says `First scan saves rule.` or `Next scans use rule.`
+- Display-name helper text now says `Manufacturer + product`.
+- Focused source guards updated in Stock Inbound guided-flow and mobile UX coverage.
+
+Manual QA:
+
+- Open `/stock/inbound` around 390px width and confirm setup/rule helper text stays short and readable.
+
+## 2026-07-10 Stock Inbound Short Barcode Rule Button
+
+Scope:
+
+- `/stock/inbound` setup navigation.
+
+Evidence captured:
+
+- Supplier-barcode setup now uses the shorter `Next: Barcode Rule` action label.
+- `scripts/stock-inbound-guided-flow-coverage.mjs` guards the short label.
+
+Manual QA:
+
+- Open `/stock/inbound` around 390px width and confirm setup actions fit cleanly without horizontal scrolling.
+
+## 2026-07-10 Stock Inbound Session History Compact Cap Hint
+
+Scope:
+
+- `/stock/inbound` recent session history details.
+
+Evidence captured:
+
+- The capped barcode detail hint now says `Latest 20 shown.` instead of the longer history message.
+- `scripts/stock-inbound-guided-flow-coverage.mjs` guards the compact history hint.
+
+Manual QA:
+
+- Open a recent inbound session with more than 20 barcodes on phone width and confirm the history detail stays compact with no horizontal scrolling.
+
+## 2026-07-10 Stock Inbound Active Error List Cap
+
+Scope:
+
+- `/stock/inbound` active scan/manual entry error card.
+
+Evidence captured:
+
+- Active scan errors now render the latest 12 errors instead of every error in the session.
+- The `Showing latest 12` cue now checks `sessionErrors.length`, not saved-label count.
+- `scripts/stock-inbound-guided-flow-coverage.mjs` guards the corrected error cap.
+
+Manual QA:
+
+- Trigger more than 12 blocked scans in one session and confirm the red error card stays compact on phone width.
+
+## 2026-07-10 Stock Inbound Short Summary Title
+
+Scope:
+
+- `/stock/inbound` Session Summary and printable session summary labels.
+
+Evidence captured:
+
+- The visible summary title now uses `Session Summary` instead of long page-specific titles.
+- The summary metric, print row, and active error card now use `Scan errors` instead of longer duplicate/error wording.
+- Focused Stock Inbound, mobile UX, and acceptance coverage passed with the shorter labels.
+
+Manual QA:
+
+- Finish a barcode and manual-label inbound session at phone width and confirm the summary heading and scan-error labels fit cleanly.
+
+## 2026-07-10 Stock Inbound Short Summary Labels
+
+Scope:
+
+- `/stock/inbound` session history, Barcode Rule fallback, Manual Weight, and Session Summary labels.
+
+Evidence captured:
+
+- Long worker-facing labels were shortened to `Recent sessions`, `Unfinished session`, `Manual setup`, `Selected setup`, `Use labels`, `Saved barcodes`, `Saved units`, `Scan errors`, `Voided scans`, and `Review setup`.
+- Focused stock coverage guards now check the shorter labels.
+
+Manual QA:
+
+- Open `/stock/inbound` at phone width and confirm the setup, scanner/manual entry, and summary pages still read clearly without long helper text.
+
+## 2026-07-10 Stock Inbound Decimal Rule Review Copy
+
+Scope:
+
+- `/stock/inbound` Barcode Rule page and detected-rule review.
+
+Evidence captured:
+
+- Barcode rule save/review now shows the selected decimal place as `0.1`, `0.01`, or `0.001` instead of raw internal values `1`, `2`, or `3`.
+- The detected barcode-rule preview uses the same worker-facing decimal label.
+- `scripts/stock-inbound-guided-flow-coverage.mjs` guards the decimal label mapping and summary display.
+
+Manual QA:
+
+- Open Barcode Rule, select each decimal button, and confirm the save summary and detected-rule preview show the same decimal label as the selected button.
+
 ## 2026-07-10 Stock Inbound Whole-Session Void Status
 
 Scope:
@@ -643,7 +914,7 @@ Evidence captured:
 Manual QA:
 
 - Start a supplier-barcode inbound setup with no saved rule and tap `Continue unfinished session`; confirm it opens Barcode Rule.
-- Start or resume a manual inbound session and confirm the same button opens Manual Weight Entry.
+- Start or resume a manual inbound session and confirm the same button opens Manual Weight.
 
 ## 2026-07-09 Stock Inbound Generated Label Preview Restore
 
@@ -3938,7 +4209,7 @@ Latest check results:
 Manual QA still required:
 
 - On `/stock/inbound` around 390px width, trigger duplicate, no-weight, or connection-error scan rows with a long barcode.
-- Confirm `Blocked/error scans this session` rows wrap inside the red card and do not create horizontal scrolling.
+- Confirm `Scan errors` rows wrap inside the red card, show `Latest 12 shown.` when capped, and do not create horizontal scrolling.
 
 ## 2026-06-24 Stock Worker Message Wrapping
 

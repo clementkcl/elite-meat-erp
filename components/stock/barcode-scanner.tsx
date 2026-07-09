@@ -753,7 +753,7 @@ export function BarcodeScanner({
                       className="rounded-md border-2 border-emerald-300 bg-emerald-50 px-4 py-3 text-sm break-words text-emerald-800"
                     >
                       <div className="text-xs font-semibold uppercase">
-                        Last saved item and weight
+                        Last saved
                       </div>
                       <div className="mt-1 break-words text-lg font-semibold leading-tight">
                         {scanSummary}
@@ -767,10 +767,10 @@ export function BarcodeScanner({
                       className="rounded-md border-2 border-emerald-300 bg-emerald-50 px-4 py-3 text-sm break-words text-emerald-800"
                     >
                       <div className="text-xs font-semibold uppercase">
-                        Inbound session total
+                        Session total
                       </div>
                       <div className="mt-1 text-xs font-medium">
-                        Live barcode count and session weight
+                        Count + weight
                       </div>
                       <div className="mt-1 break-words text-lg font-semibold leading-tight">
                         {scanTotalSummary}

@@ -1529,6 +1529,7 @@ type InboundSessionDraft = {
   batchNo: string
   sessionStartedAt: string
   inboundMode: InboundMode
+  preset?: Partial<InboundPreset>
 }
 
 function generateInboundBatchNo() {
@@ -1562,6 +1563,7 @@ function readInboundSessionDraft(): InboundSessionDraft | null {
       batchNo: parsed.batchNo,
       sessionStartedAt: parsed.sessionStartedAt,
       inboundMode: parsed.inboundMode,
+      preset: parsed.preset,
     }
   } catch {
     return null
@@ -2062,9 +2064,26 @@ export function BarcodeInboundForm({
     return readInboundSessionDraft()
   })
   const [barcode, setBarcode] = useState("")
-  const [preset, setPreset] = useState(() =>
-    initialInboundPreset(items, locations, brands, origins, defaultLocationId)
-  )
+  const [preset, setPreset] = useState(() => {
+    const initialPreset = initialInboundPreset(
+      items,
+      locations,
+      brands,
+      origins,
+      defaultLocationId
+    )
+
+    return initialSessionDraft?.preset
+      ? normalizeInboundPreset(
+          { ...initialPreset, ...initialSessionDraft.preset },
+          items,
+          locations,
+          brands,
+          origins,
+          defaultLocationId
+        )
+      : initialPreset
+  })
   const [batchNo, setBatchNo] = useState(
     () => initialSessionDraft?.batchNo ?? generateInboundBatchNo()
   )
@@ -2092,9 +2111,30 @@ export function BarcodeInboundForm({
   >("")
   const [brandName, setBrandName] = useState("")
   const [originName, setOriginName] = useState("")
-  const [productQuery, setProductQuery] = useState("")
-  const [brandQuery, setBrandQuery] = useState("")
-  const [originQuery, setOriginQuery] = useState("")
+  const [productQuery, setProductQuery] = useState(() => {
+    if (!preset.itemId) {
+      return ""
+    }
+
+    const item = items.find((candidate) => candidate.id === preset.itemId)
+    const brand = brands.find((candidate) => candidate.id === preset.brandId)
+
+    return item ? formatProductName(item, brand) : ""
+  })
+  const [brandQuery, setBrandQuery] = useState(() => {
+    if (!preset.brandId) {
+      return ""
+    }
+
+    return brands.find((brand) => brand.id === preset.brandId)?.name ?? ""
+  })
+  const [originQuery, setOriginQuery] = useState(() => {
+    if (!preset.originId) {
+      return ""
+    }
+
+    return origins.find((origin) => origin.id === preset.originId)?.name ?? ""
+  })
   const [quickItemName, setQuickItemName] = useState("")
   const [quickItemCategory, setQuickItemCategory] = useState("MEAT")
   const [showManualProductEntry, setShowManualProductEntry] = useState(false)
@@ -2155,7 +2195,7 @@ export function BarcodeInboundForm({
 
       window.localStorage.setItem(
         inboundSessionDraftKey,
-        JSON.stringify({ batchNo, sessionStartedAt, inboundMode })
+        JSON.stringify({ batchNo, sessionStartedAt, inboundMode, preset })
       )
     } catch {
       // Ignore unavailable storage, for example private browsing.
@@ -2678,7 +2718,7 @@ export function BarcodeInboundForm({
     setDecodeStatus(nextMode === "internal_label" ? "warning" : "")
     setDecodeMessage(
       nextMode === "internal_label"
-        ? "Enter weight. Stock saves, then print label."
+        ? "Enter weight. Save, print."
         : ""
     )
 
@@ -2700,13 +2740,13 @@ export function BarcodeInboundForm({
       (nextStep === "rule" || nextStep === "scan")
     ) {
       setDecodeStatus("warning")
-      setDecodeMessage("Use Inbound without Barcode.")
+      setDecodeMessage("Use labels flow.")
       return
     }
 
     if (inboundMode === "supplier_barcode" && nextStep === "manual") {
       setDecodeStatus("warning")
-      setDecodeMessage("Choose Inbound without Barcode first.")
+      setDecodeMessage("Choose labels first.")
       return
     }
 
@@ -2738,7 +2778,7 @@ export function BarcodeInboundForm({
       !canUseBarcodeRuleForSession
     ) {
       setDecodeStatus("warning")
-      setDecodeMessage("Set barcode rule before opening scanner.")
+      setDecodeMessage("Set rule first.")
       return
     }
 
@@ -3321,8 +3361,8 @@ export function BarcodeInboundForm({
     setInboundStep("setup")
     setSessionSetupNotice(
       scanSetupReady
-        ? `New inbound session ready. Kept setup: ${selectedProductDisplayName}, ${selectedManufacturerName}, ${selectedOriginName}, ${selectedLocation?.name ?? "selected location"}.`
-        : "New inbound session ready. Choose setup."
+        ? "New session. Setup kept."
+        : "New session. Choose setup."
     )
   }
 
@@ -3358,6 +3398,7 @@ export function BarcodeInboundForm({
     selectedManufacturerValue || "No manufacturer"
   const selectedOriginName =
     (selectedOrigin?.name ?? originName.trim()) || "No origin"
+
   const fixedWeightFallbackActive = Boolean(preset.fixedWeightKg.trim())
   const currentBarcodeWeightRule = [...barcodeWeightRules]
     .filter(
@@ -3785,6 +3826,14 @@ export function BarcodeInboundForm({
     preset.fixedWeightKg.trim() ||
     selectedItemDefaultWeightKg
   const canToggleFixedWeightFallback = Boolean(fixedWeightFallbackValue)
+  const selectedDecimalLabel =
+    preset.barcodeWeightDecimals === "1"
+      ? "0.1"
+      : preset.barcodeWeightDecimals === "2"
+        ? "0.01"
+        : preset.barcodeWeightDecimals === "3"
+          ? "0.001"
+          : "-"
   const ruleSaveSummaryRows = [
     ["Display product", selectedProductDisplayName],
     ["Product", selectedProductName],
@@ -3794,7 +3843,7 @@ export function BarcodeInboundForm({
     ["Barcode length", barcode.trim() ? String(barcode.trim().length) : "-"],
     ["Weight start position", preset.barcodeWeightStart || "-"],
     ["Weight digit length", preset.barcodeWeightLength || "-"],
-    ["Weight decimals", preset.barcodeWeightDecimals || "-"],
+    ["Weight decimals", selectedDecimalLabel],
     [
       "Extracted preview",
       ruleExtractedPreviewWeightKg
@@ -3864,7 +3913,7 @@ export function BarcodeInboundForm({
     setup: "Session Setup",
     rule: "Barcode Rule",
     scan: "Scanner",
-    manual: "Manual Weight Entry",
+    manual: "Manual Weight",
     summary: "Session Summary",
   }
   const inboundPageHelp: Record<InboundStep, string> = {
@@ -3876,9 +3925,7 @@ export function BarcodeInboundForm({
     summary: "Review session.",
   }
   const sessionStartedText = new Date(sessionStartedAt).toLocaleString()
-  const inboundSummaryTitle = manualMode
-    ? "Page 3: Inbound without barcode session summary"
-    : "Page 4: Inbound session summary"
+  const inboundSummaryTitle = "Session Summary"
   const sessionFinishedText = sessionFinishedAt
     ? new Date(sessionFinishedAt).toLocaleString()
     : "-"
@@ -3895,7 +3942,7 @@ export function BarcodeInboundForm({
       recentInboundCount.toLocaleString(),
     ],
     ["Total weight", `${recentInboundWeightKg.toFixed(3)} kg`],
-    ["Duplicate/error scans", sessionErrors.length.toLocaleString()],
+    ["Scan errors", sessionErrors.length.toLocaleString()],
     ["Scanned by", scannedByName],
     ["Inbound session code", batchNo],
     ["Started", sessionStartedText],
@@ -4044,33 +4091,8 @@ export function BarcodeInboundForm({
           className="space-y-4"
         >
           <div data-stock-action="guided-inbound-submit-context" hidden>
-            <input type="hidden" name="itemId" value={preset.itemId} />
-            <input type="hidden" name="brandId" value={preset.brandId} />
             <input type="hidden" name="brandName" value={brandName.trim()} />
-            <input type="hidden" name="originId" value={preset.originId} />
             <input type="hidden" name="originName" value={originName.trim()} />
-            <input type="hidden" name="locationId" value={preset.locationId} />
-            <input
-              type="hidden"
-              name="inboundSource"
-              value={preset.inboundSource}
-            />
-            <input type="hidden" name="batchNo" value={batchNo} />
-            <input
-              type="hidden"
-              name="barcodeWeightStart"
-              value={preset.barcodeWeightStart}
-            />
-            <input
-              type="hidden"
-              name="barcodeWeightLength"
-              value={preset.barcodeWeightLength}
-            />
-            <input
-              type="hidden"
-              name="barcodeWeightDecimals"
-              value={preset.barcodeWeightDecimals}
-            />
           </div>
           <div
             data-stock-action="guided-inbound-flow"
@@ -4164,7 +4186,7 @@ export function BarcodeInboundForm({
             >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="font-semibold">Inbound Session History</div>
+                <div className="font-semibold">Recent sessions</div>
                 <div className="text-xs text-muted-foreground">
                   10 per page.
                 </div>
@@ -4184,7 +4206,7 @@ export function BarcodeInboundForm({
                 data-stock-action="continue-current-inbound-session"
                 className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-emerald-900"
               >
-                <div className="font-medium">Current unfinished session</div>
+                <div className="font-medium">Unfinished session</div>
                 <div className="mt-1 break-all font-mono text-xs">
                   {batchNo}
                 </div>
@@ -4292,7 +4314,7 @@ export function BarcodeInboundForm({
                       </div>
                       {session.barcodes.length > 20 ? (
                         <div className="mt-1 text-muted-foreground">
-                          Showing latest 20 barcodes.
+                          Latest 20 shown.
                         </div>
                       ) : null}
                     </div>
@@ -4301,7 +4323,7 @@ export function BarcodeInboundForm({
               ))}
               {visibleSessionHistory.length === 0 ? (
                 <div className="rounded-md border bg-muted/30 px-3 py-2 text-muted-foreground">
-                  No previous inbound sessions yet.
+                  No sessions yet.
                 </div>
               ) : null}
             </div>
@@ -4429,8 +4451,8 @@ export function BarcodeInboundForm({
             >
               <div className="text-xs font-semibold uppercase text-muted-foreground">
                 {manualMode
-                  ? "Page 1: Inbound without barcode setup"
-                  : "Page 1 required setup"}
+                  ? "Manual setup"
+                  : "Setup"}
               </div>
               <div className="mt-2 grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -4623,7 +4645,7 @@ export function BarcodeInboundForm({
                         {latestScanUndoing
                           ? "Undoing..."
                           : manualMode
-                            ? "Undo Last Weight Entry"
+                            ? "Undo Last Weight"
                             : "Undo Last Scan"}
                       </Button>
                       {latestScanUndoMessage ? (
@@ -4711,7 +4733,7 @@ export function BarcodeInboundForm({
                       }
                       className="min-h-12 w-full text-base sm:w-auto"
                     >
-                      Use Inbound without Barcode
+                      Use labels
                     </Button>
                   </div>
                   <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -5227,7 +5249,7 @@ export function BarcodeInboundForm({
               }
             >
               <Label htmlFor="netWeightKg">
-                {manualMode ? "Enter one unit weight kg" : "Net weight kg"}
+                {manualMode ? "Weight kg" : "Net weight kg"}
               </Label>
               <Input
                 ref={netWeightInputRef}
@@ -5434,21 +5456,31 @@ export function BarcodeInboundForm({
                   />
                   <p className="text-xs text-muted-foreground">Auto code.</p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="referenceNo">Reference no.</Label>
-                  <Input
-                    id="referenceNo"
-                    name="referenceNo"
-                    autoComplete="off"
-                    enterKeyHint="done"
-                    placeholder="GRN-1001"
-                    disabled={scopeLocked}
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea id="notes" name="notes" disabled={scopeLocked} />
-                </div>
+                <details
+                  data-stock-action="barcode-rule-reference-notes"
+                  className="rounded-md border bg-background p-3 md:col-span-2"
+                >
+                  <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">
+                    Reference and notes
+                  </summary>
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="referenceNo">Reference no.</Label>
+                      <Input
+                        id="referenceNo"
+                        name="referenceNo"
+                        autoComplete="off"
+                        enterKeyHint="done"
+                        placeholder="GRN-1001"
+                        disabled={scopeLocked}
+                      />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="notes">Notes</Label>
+                      <Textarea id="notes" name="notes" disabled={scopeLocked} />
+                    </div>
+                  </div>
+                </details>
                 {mustSaveCurrentRule ? (
                   <input type="hidden" name="saveWeightRule" value="true" />
                 ) : null}
@@ -5470,8 +5502,8 @@ export function BarcodeInboundForm({
                 </label>
                 <p className="text-xs text-muted-foreground md:col-span-2">
                   {mustSaveCurrentRule
-                    ? "First barcode teaches rule."
-                    : "Future scans use rule."}
+                    ? "First scan saves rule."
+                    : "Next scans use rule."}
                 </p>
               </div>
             </div>
@@ -5504,7 +5536,7 @@ export function BarcodeInboundForm({
                 {selectedProductDisplayName}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                Manufacturer + product.
+                Manufacturer + product
               </div>
             </div>
             <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
@@ -5539,10 +5571,10 @@ export function BarcodeInboundForm({
                   <Button
                     type="button"
                     className="min-h-12"
-                    disabled={!barcodeRuleSetupReady}
-                    onClick={() => goInboundStep("rule")}
-                  >
-                    Next: Barcode Rule Page
+                  disabled={!barcodeRuleSetupReady}
+                  onClick={() => goInboundStep("rule")}
+                >
+                    Next: Barcode Rule
                   </Button>
                   <Button
                     type="button"
@@ -5571,7 +5603,7 @@ export function BarcodeInboundForm({
                 Barcode rule setup
               </div>
               <div className="font-medium">
-                Selected product and manufacturer
+                Selected setup
               </div>
               <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
                 <div>
@@ -5755,7 +5787,7 @@ export function BarcodeInboundForm({
                 <div>
                   Decimals:{" "}
                   <span className="font-semibold">
-                    {preset.barcodeWeightDecimals}
+                    {selectedDecimalLabel}
                   </span>
                 </div>
               </div>
@@ -5794,7 +5826,7 @@ export function BarcodeInboundForm({
                   window.setTimeout(() => netWeightInputRef.current?.focus(), 0)
                 }}
               >
-                Use Inbound without Barcode
+                Use labels
               </Button>
             </div>
           ) : null}
@@ -5885,7 +5917,7 @@ export function BarcodeInboundForm({
                 <OfflineScanAlert className="border-red-300 bg-red-50" />
               ) : null}
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                <div className="font-medium">Manual Weight Entry</div>
+                <div className="font-medium">Enter weight</div>
                 <div className="mt-2 text-xs font-medium">
                   Enter kg. Print label. Repeat.
                 </div>
@@ -5931,7 +5963,7 @@ export function BarcodeInboundForm({
                     disabled={undoPending}
                   >
                     {manualMode
-                      ? "Undo Last Weight Entry"
+                      ? "Undo Last Weight"
                       : "Undo Last Scan"}
                   </Button>
                 </form>
@@ -6238,7 +6270,7 @@ export function BarcodeInboundForm({
                       >
                         {label.stockUnitId === latestSavedScan?.stockUnitId
                           ? manualMode
-                            ? "Undo Last Weight Entry"
+                            ? "Undo Last Weight"
                             : "Undo Last Scan"
                           : manualMode
                             ? "Undo weight entry"
@@ -6299,7 +6331,7 @@ export function BarcodeInboundForm({
               </div>
               <div>
                 <div className="text-xs uppercase text-muted-foreground">
-                  Duplicate/error scans
+                  Scan errors
                 </div>
                 <div className="text-2xl font-semibold">
                   {sessionErrors.length}
@@ -6378,7 +6410,7 @@ export function BarcodeInboundForm({
             >
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <div className="font-medium">
-                  {manualMode ? "Saved units in this session" : "Saved barcodes in this session"}
+                  {manualMode ? "Saved units" : "Saved barcodes"}
                 </div>
                 <Badge variant="outline">
                   {savedSessionScans.length} saved
@@ -6426,7 +6458,7 @@ export function BarcodeInboundForm({
                 className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
               >
                 <div className="font-medium">
-                  Duplicate/error scans in this session
+                  Scan errors
                 </div>
                 <div className="mt-3 grid gap-2">
                   {sessionErrors.slice(0, 8).map((error) => (
@@ -6460,7 +6492,7 @@ export function BarcodeInboundForm({
               >
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <div className="font-medium">
-                    Voided scans kept for audit
+                    Voided scans
                   </div>
                   <Badge variant="outline">
                     {voidedSessionScans.length} voided
@@ -6607,7 +6639,7 @@ export function BarcodeInboundForm({
                 className="min-h-11 w-full whitespace-normal"
                 onClick={() => goInboundStep("setup")}
               >
-                Review setup (read-only)
+                Review setup
               </Button>
               {!manualMode ? (
                 <Button
@@ -6674,19 +6706,19 @@ export function BarcodeInboundForm({
             className="mt-4 rounded-md border border-red-200 bg-red-50 p-3"
           >
             <div className="font-medium text-red-900">
-              Blocked/error scans this session
+              Scan errors
             </div>
             <div className="mt-2 grid gap-2">
-              {sessionErrors.map((entry) => (
+              {sessionErrors.slice(0, 12).map((entry) => (
                 <div key={entry.id} className="text-sm break-words text-red-900">
                   <span className="break-all font-mono">{entry.barcode}</span> -{" "}
                   {entry.message} ({new Date(entry.time).toLocaleTimeString()})
                 </div>
               ))}
             </div>
-            {recentLabels.length > 12 ? (
+            {sessionErrors.length > 12 ? (
               <div className="mt-2 text-xs text-muted-foreground">
-                Showing latest 12. Totals include all.
+                Latest 12 shown.
               </div>
             ) : null}
           </div>
@@ -6818,7 +6850,7 @@ export function BarcodeInboundForm({
               {sessionErrors.length > 0 ? (
                 <>
                   <div className="stock-inbound-summary-subtitle">
-                    Duplicate/error scans
+                    Scan errors
                   </div>
                   <table className="stock-inbound-summary-table">
                     <thead>
@@ -6843,7 +6875,7 @@ export function BarcodeInboundForm({
               {voidedSessionScans.length > 0 ? (
                 <>
                   <div className="stock-inbound-summary-subtitle">
-                    Voided scans kept for audit
+                    Voided scans
                   </div>
                   <table className="stock-inbound-summary-table">
                     <thead>
