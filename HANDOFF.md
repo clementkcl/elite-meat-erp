@@ -1,5 +1,41 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-10 - Stock Inbound deploy handoff
+
+Task completed:
+
+- Validated the current Stock Inbound session UX changes and prepared them for remote deployment.
+- Committed the validated changes as `a900b7c9` with message `Refine stock inbound session UX`.
+- Pushed branch `review/codex-half-finished-progress` to GitHub so any connected Vercel Git deployment can start from the latest commit.
+- Vercel connector could not verify an `elite-meat-erp` project in the visible team/project list, so direct connector deployment was not run.
+- No server action, RLS policy, stock movement rule, barcode uniqueness behavior, database migration, scanner stream behavior, label printing behavior, or access control changed in this handoff update.
+
+Files changed in this pass:
+
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+SQL run order:
+
+- Unchanged. Pending display-name migration remains `supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql` after `202606250013_stock_item_merge_v1.sql`.
+
+Commands run and results:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+- `git push origin review/codex-half-finished-progress` - passed.
+
+Risks / remaining checks:
+
+- Confirm in Vercel dashboard whether the pushed branch triggered a preview or production deployment for `elite-meat-erp`.
+- The local checkout has no `.vercel/project.json`, and the connector only listed `import-control-dashboard` and `frozen-pork-whatsapp-bot`, so direct deploy target verification is still needed before running a connector/CLI deploy.
+- Live Supabase, phone camera, handheld scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
 ## 2026-07-10 - Stock Inbound whole-session void status fix
 
 Task completed:
