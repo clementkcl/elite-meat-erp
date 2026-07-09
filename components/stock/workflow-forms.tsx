@@ -424,7 +424,7 @@ function ItemSelect({
 
         return (
           <option key={item.id} value={item.id}>
-            {item.itemCode} / {item.category} / {item.section} / {displayName}
+            {displayName} / {item.itemCode}
           </option>
         )
       })}
@@ -504,7 +504,7 @@ function OriginSelect({
       required={required}
       disabled={disabled}
     >
-      <option value="">No origin</option>
+      <option value="">Select origin</option>
       {activeOrigins.map((origin) => (
         <option key={origin.id} value={origin.id}>
           {origin.name}
@@ -1757,7 +1757,9 @@ function buildInboundTemplates({
     })
   }
 
-  for (const unit of units) {
+  for (const unit of [...units].sort((a, b) =>
+    a.receivedAt.localeCompare(b.receivedAt)
+  )) {
     if (
       !unit.itemId ||
       !unit.brandId ||
@@ -2029,6 +2031,9 @@ export function BarcodeInboundForm({
   const barcodeInputRef = useRef<HTMLInputElement | null>(null)
   const netWeightInputRef = useRef<HTMLInputElement | null>(null)
   const brandSearchInputRef = useRef<HTMLInputElement | null>(null)
+  const quickProductInputRef = useRef<HTMLInputElement | null>(null)
+  const quickManufacturerInputRef = useRef<HTMLInputElement | null>(null)
+  const quickOriginInputRef = useRef<HTMLInputElement | null>(null)
   const [state, formAction, pending] = useActionState(
     inboundFormAction,
     initialStockActionState
@@ -2326,7 +2331,7 @@ export function BarcodeInboundForm({
     }
 
     const itemCode = quickItemCode
-    const itemName = quickItemName.trim()
+    const itemName = quickItemName.trim().replace(/\s+/g, " ")
     const itemCategory = quickItemCategory as Item["category"]
     const result = await createItemAction(previousState, formData)
 
@@ -2338,14 +2343,17 @@ export function BarcodeInboundForm({
         preset.brandId === "__other" && resolvedBrandId
           ? resolvedBrandId
           : preset.brandId
+      const nextDisplayName = stockDisplayItemName(
+        { section: "GENERAL", name: itemName, displayName: null },
+        resolvedBrandName ? { name: resolvedBrandName } : null,
+        itemName
+      )
       const nextItem: Item = {
         id: result.itemId,
         itemCode,
         category: itemCategory,
         defaultBrandId,
-        displayName: resolvedBrandName
-          ? `${resolvedBrandName} ${itemName}`
-          : itemName,
+        displayName: nextDisplayName,
         section: "GENERAL",
         name: itemName,
         chineseName: null,
@@ -2369,11 +2377,7 @@ export function BarcodeInboundForm({
       if (preset.brandId === "__other" && resolvedBrandId) {
         setBrandQuery(resolvedBrandName)
       }
-      setProductQuery(
-        resolvedBrandName
-          ? `${resolvedBrandName} ${nextItem.name}`
-          : nextItem.name
-      )
+      setProductQuery(nextDisplayName)
       setQuickItemName("")
     }
 
@@ -2583,6 +2587,7 @@ export function BarcodeInboundForm({
     }
 
     setShowManualProductEntry(true)
+    window.setTimeout(() => quickProductInputRef.current?.focus(), 0)
   }
 
   function selectInboundBrand(nextBrandId: string) {
@@ -2592,6 +2597,7 @@ export function BarcodeInboundForm({
       if (!brandName.trim() && brandQuery.trim()) {
         setBrandName(brandQuery.trim())
       }
+      window.setTimeout(() => quickManufacturerInputRef.current?.focus(), 0)
     } else {
       setBrandName("")
     }
@@ -2607,6 +2613,7 @@ export function BarcodeInboundForm({
       if (!originName.trim() && originQuery.trim()) {
         setOriginName(originQuery.trim())
       }
+      window.setTimeout(() => quickOriginInputRef.current?.focus(), 0)
     } else {
       setOriginName("")
     }
@@ -2661,7 +2668,7 @@ export function BarcodeInboundForm({
 
     if (nextStep === "rule" && !barcodeRuleSetupReady) {
       setDecodeStatus("warning")
-      setDecodeMessage("Choose product setup first.")
+      setDecodeMessage("Choose setup first.")
       return
     }
 
@@ -2728,7 +2735,7 @@ export function BarcodeInboundForm({
       return ""
     }
 
-    return `Barcode length is different from saved rule. Expected ${expectedBarcodeLength} digits, got ${nextBarcode.length}. Check barcode.`
+    return `Barcode length changed. Expected ${expectedBarcodeLength}, got ${nextBarcode.length}.`
   }
 
   function handleBarcodeChange(value: string, submitAfterScan = false) {
@@ -2870,7 +2877,7 @@ export function BarcodeInboundForm({
       )
       setDecodeStatus("warning")
       setDecodeMessage(
-        `${lengthWarning} Check barcode, then press Save inbound only if correct.`
+        `${lengthWarning} Save only if correct.`
       )
       return
     }
@@ -2906,6 +2913,7 @@ export function BarcodeInboundForm({
       const inference = inferBarcodeWeightRuleWithStatus({
         barcode,
         weightKgText: value,
+        decimalsText: preset.barcodeWeightDecimals,
       })
 
       if (inference.status === "ambiguous") {
@@ -2975,6 +2983,7 @@ export function BarcodeInboundForm({
     const inference = inferBarcodeWeightRuleWithStatus({
       barcode,
       weightKgText: value,
+      decimalsText: preset.barcodeWeightDecimals,
     })
 
     if (inference.status === "ambiguous") {
@@ -3080,7 +3089,10 @@ export function BarcodeInboundForm({
       }
     ).submitter
 
-    if (submitter?.dataset.stockAction === "quick-create-item") {
+    if (
+      submitter?.dataset.stockAction === "quick-create-item" ||
+      submitter?.dataset.stockAction === "quick-create-brand"
+    ) {
       pendingLabelRef.current = null
       return
     }
@@ -3253,9 +3265,11 @@ export function BarcodeInboundForm({
   const selectedLocation = locations.find(
     (location) => location.id === preset.locationId
   )
-  const selectedManufacturerValue = selectedBrand?.name ?? brandName.trim()
+  const selectedManufacturerValue = (selectedBrand?.name ?? brandName)
+    .trim()
+    .replace(/\s+/g, " ")
   const typedProductName =
-    quickItemName.trim() || productQuery.trim()
+    (quickItemName.trim() || productQuery.trim()).replace(/\s+/g, " ")
   const selectedProductName = selectedItem
     ? stockProductName(selectedItem, "No product")
     : typedProductName || "No product"
@@ -3265,9 +3279,11 @@ export function BarcodeInboundForm({
         selectedManufacturerValue ? { name: selectedManufacturerValue } : null
       )
     : typedProductName
-      ? selectedManufacturerValue
-        ? `${selectedManufacturerValue} ${typedProductName}`
-        : typedProductName
+      ? stockDisplayItemName(
+          { section: "GENERAL", name: typedProductName, displayName: null },
+          selectedManufacturerValue ? { name: selectedManufacturerValue } : null,
+          typedProductName
+        )
       : "No product selected"
   const selectedManufacturerName =
     selectedManufacturerValue || "No manufacturer"
@@ -3421,28 +3437,51 @@ export function BarcodeInboundForm({
           canonicalUiName(origin.name) === quickOriginNameKey
       )
     : false
-  const filteredItems = productSearchQuery
-    ? localItems.filter((item) => {
-        const searchableText = [
-          item.itemCode,
-          item.category,
-          item.section,
-          item.name,
-          stockProductName(item, ""),
-          formatProductName(
-            item,
-            item.defaultBrandId
-              ? localBrands.find((brand) => brand.id === item.defaultBrandId)
-              : null
-          ),
-          selectedManufacturerValue
-            ? formatProductName(item, { name: selectedManufacturerValue })
-            : "",
-        ].join(" ")
+  const filteredItems = localItems
+    .filter((item) => {
+      if (!productSearchQuery) {
+        return true
+      }
 
-        return canonicalUiName(searchableText).includes(productSearchQuery)
-      })
-    : localItems
+      const searchableText = [
+        item.itemCode,
+        item.category,
+        item.section,
+        item.name,
+        stockProductName(item, ""),
+        formatProductName(
+          item,
+          item.defaultBrandId
+            ? localBrands.find((brand) => brand.id === item.defaultBrandId)
+            : null
+        ),
+        selectedManufacturerValue
+          ? formatProductName(item, { name: selectedManufacturerValue })
+          : "",
+      ].join(" ")
+
+      return canonicalUiName(searchableText).includes(productSearchQuery)
+    })
+    .sort((a, b) => {
+      const aName = selectedManufacturerValue
+        ? formatProductName(a, { name: selectedManufacturerValue })
+        : formatProductName(
+            a,
+            a.defaultBrandId
+              ? localBrands.find((brand) => brand.id === a.defaultBrandId)
+              : null
+          )
+      const bName = selectedManufacturerValue
+        ? formatProductName(b, { name: selectedManufacturerValue })
+        : formatProductName(
+            b,
+            b.defaultBrandId
+              ? localBrands.find((brand) => brand.id === b.defaultBrandId)
+              : null
+          )
+
+      return compareText(aName, bName)
+    })
   const quickInboundItems = filteredItems
     .filter((item) => item.active)
     .sort((a, b) => {
@@ -3593,7 +3632,7 @@ export function BarcodeInboundForm({
 
   const summaryStepLockedMessage =
     recentInboundCount > 0
-      ? "Tap Finish Session to open summary."
+      ? "Finish session for summary."
       : inboundMode === "internal_label"
         ? "Save at least one unit before summary."
         : "Save at least one barcode before summary."
@@ -3615,13 +3654,7 @@ export function BarcodeInboundForm({
         `Location: ${selectedLocation?.name ?? "No location"}`,
       ].join("\n")
     : ""
-  const barcodeRuleSetupReady = Boolean(
-    preset.itemId &&
-      preset.brandId &&
-      preset.brandId !== "__other" &&
-      preset.originId &&
-      (preset.originId !== "__other" || originName.trim())
-  )
+  const barcodeRuleSetupReady = scanSetupReady
   const shouldOpenWeightRulePanel =
     barcodeRuleSetupReady && !canUseBarcodeRuleForSession && !sessionFinishedAt
   const mustSaveCurrentRule =
@@ -3740,8 +3773,8 @@ export function BarcodeInboundForm({
     ? "Inbound without Barcode"
     : "Inbound with Barcode"
   const inboundCardDescription = manualMode
-    ? "Choose setup once, then enter weights."
-    : "Choose setup once, then scan barcodes."
+    ? "Choose once. Enter weights."
+    : "Choose once. Scan barcodes."
   const activeScanStep: InboundStep = manualMode ? "manual" : "scan"
   const inboundPageNumber = Math.max(
     visibleInboundSteps.findIndex((step) => step === inboundStep) + 1,
@@ -3758,8 +3791,8 @@ export function BarcodeInboundForm({
     setup: "Choose setup once.",
     rule:
       "Scan sample, enter kg.",
-    scan: "Keep scanning. Valid scans save.",
-    manual: "Enter weight. Stock saves immediately.",
+    scan: "Keep scanning.",
+    manual: "Enter weight. Saves now.",
     summary: "Review session.",
   }
   const sessionStartedText = new Date(sessionStartedAt).toLocaleString()
@@ -4489,9 +4522,7 @@ export function BarcodeInboundForm({
                 scanFeedbackMessage={decodeMessage}
                 scanFeedbackStatus={decodeStatus}
                 scanActionSlot={
-                  (inboundStep === "rule" ||
-                    inboundStep === "scan" ||
-                    inboundStep === "manual") &&
+                  (inboundStep === "scan" || inboundStep === "manual") &&
                   !sessionFinishedAt ? (
                     <div className="space-y-2">
                       <Button
@@ -4570,7 +4601,10 @@ export function BarcodeInboundForm({
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Button
                       type="button"
-                      onClick={generateLabelBarcode}
+                      onClick={() => {
+                        switchInboundMode("internal_label")
+                        setInboundStep("manual")
+                      }}
                       disabled={
                         !isOnline ||
                         Boolean(sessionFinishedAt) ||
@@ -4579,11 +4613,11 @@ export function BarcodeInboundForm({
                       }
                       className="min-h-12 w-full text-base sm:w-auto"
                     >
-                      Generate internal label
+                      Use Inbound without Barcode
                     </Button>
                   </div>
                   <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                    No weight? Use internal label.
+                    No weight? Use labels.
                   </div>
                 </>
               ) : null}
@@ -4726,9 +4760,13 @@ export function BarcodeInboundForm({
                     variant="outline"
                     className="mt-3 min-h-11 w-full justify-start whitespace-normal text-left"
                     disabled={scopeLocked}
-                    onClick={() =>
+                    onClick={() => {
                       setQuickItemName(quickProductNameSuggestion)
-                    }
+                      window.setTimeout(
+                        () => quickProductInputRef.current?.focus(),
+                        0
+                      )
+                    }}
                   >
                     Use as product: {quickProductNameSuggestion}
                   </Button>
@@ -4745,6 +4783,7 @@ export function BarcodeInboundForm({
                     <option value="PROCESSED">PROCESSED</option>
                   </NativeSelect>
                   <Input
+                    ref={quickProductInputRef}
                     value={quickItemName}
                     onChange={(event) => setQuickItemName(event.target.value)}
                     placeholder="Product name only"
@@ -4755,6 +4794,7 @@ export function BarcodeInboundForm({
                     type="submit"
                     formAction={quickCreateAction}
                     data-stock-action="quick-create-item"
+                    formNoValidate
                     disabled={
                       quickCreatePending ||
                       quickItemName.trim().length < 2 ||
@@ -4867,7 +4907,7 @@ export function BarcodeInboundForm({
                   disabled={scopeLocked}
                   onClick={() => {
                     setBrandName(quickManufacturerNameSuggestion)
-                    selectInboundSetup("brandId", "__other")
+                    selectInboundBrand("__other")
                   }}
                 >
                   Use as manufacturer:{" "}
@@ -4886,6 +4926,7 @@ export function BarcodeInboundForm({
                     Save manufacturer first.
                   </div>
                   <Input
+                    ref={quickManufacturerInputRef}
                     name="brandName"
                     value={brandName}
                     onChange={(event) => setBrandName(event.target.value)}
@@ -4898,6 +4939,7 @@ export function BarcodeInboundForm({
                     variant="outline"
                     formAction={quickBrandCreateAction}
                     formNoValidate
+                    data-stock-action="quick-create-brand"
                     disabled={
                       scopeLocked ||
                       quickBrandCreatePending ||
@@ -4973,7 +5015,7 @@ export function BarcodeInboundForm({
                   disabled={scopeLocked}
                   onClick={() => {
                     setOriginName(quickOriginNameSuggestion)
-                    selectInboundSetup("originId", "__other")
+                    selectInboundOrigin("__other")
                   }}
                 >
                   Use search text as custom origin: {quickOriginNameSuggestion}
@@ -4981,6 +5023,7 @@ export function BarcodeInboundForm({
               ) : null}
               {preset.originId === "__other" ? (
                 <Input
+                  ref={quickOriginInputRef}
                   name="originName"
                   value={originName}
                   onChange={(event) => setOriginName(event.target.value)}
@@ -5302,7 +5345,7 @@ export function BarcodeInboundForm({
                 </label>
                 <p className="text-xs text-muted-foreground md:col-span-2">
                   {mustSaveCurrentRule
-                    ? "First barcode needs rule."
+                    ? "First barcode teaches rule."
                     : "Future scans use rule."}
                 </p>
               </div>

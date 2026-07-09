@@ -61,6 +61,8 @@ includesAll(
     "The no-barcode/internal-label step labels are guarded as a 3-step setup -> manual weight -> summary flow.",
     "No-barcode Page 2 manual weight",
     "No-barcode label path",
+    "supplier-barcode no-weight fallback now opens Inbound without Barcode",
+    "continue the next running serial instead of restarting at `0001`",
     "No-barcode Page 3 summary",
   ],
   "Guided inbound requirement matrix"

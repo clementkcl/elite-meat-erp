@@ -33,7 +33,7 @@ Run these two Stock Inbound sessions before signing off the guided workflow. Cap
 10. Confirm the page shows an extracted-weight preview and tells the worker the rule can be saved.
 11. Save the scan and rule.
 12. Scan another barcode with the same format and confirm the weight auto-extracts without another confirmation.
-13. Scan a barcode with a different length and confirm the yellow warning says `Barcode length is different from saved rule.`
+13. Scan a barcode with a different length and confirm the yellow warning says `Barcode length changed.`
 14. Scan the same barcode again and confirm the short red warning says `Duplicate barcode. Inbound is blocked.`
 15. In the scanner popup/window, use the external scanner input or a Bluetooth/USB handheld scanner that sends Enter, and confirm the latest barcode is saved.
 16. Confirm the scanner popup shows last scanned item weight, live barcode count, and live total weight.
@@ -103,7 +103,7 @@ Latest Codex QA preparation note, 2026-06-25:
 - Stock Return now focuses barcode entry after return location or condition selection; choose a condition/location and confirm scanning is ready without another tap.
 - Stock Transfer and Stock Outbound Direct Transfer now focus barcode entry after destination selection; choose a destination and confirm scanning is ready without another tap.
 - Stock Outbound Direct Sales now focuses barcode entry after customer selection; tap a quick customer or full-list customer and confirm scanning is ready without another tap.
-- Barcode Inbound now has a second `Generate internal label` button beside `Net weight kg`; use it for repeated internal-label weights without scrolling back to the top action.
+- Barcode Inbound now has one `Generate internal label` button beside `Net weight kg`; the earlier no-weight fallback opens Inbound without Barcode first.
 - Barcode Inbound recent templates now show the next action directly: saved-rule templates say `Tap to scan`, no-rule templates say `Tap to learn rule`, and the selected-template message tells workers whether to scan now or enter actual kg once.
 - Barcode Inbound now explains the `Net weight kg` field: saved-rule sessions say weight auto-fills after scan, while first-time supplier barcode sessions say to enter actual kg once to learn the rule.
 - Stock Item Master edit now uses quick item buttons from search results and keeps the full dropdown under `Full item list`; confirm tapping a quick item opens its edit fields.
@@ -166,7 +166,7 @@ Latest Codex QA preparation note, 2026-06-25:
 - Local browser/device evidence is still manual: the app starts locally in foreground, but in-app browser automation is blocked in this Windows sandbox by `CreateProcessAsUserW failed: 5`.
 - Barcode Inbound recent templates now use a 390px two-column grid and show `Tap Brand + Product to scan faster.` so workers can start repeat inbound with less scrolling.
 - Barcode Inbound now shows `Saved barcode rule ready` or `No saved barcode rule yet` after item + brand + origin are selected; confirm workers know whether to scan immediately or enter actual kg once and save the rule.
-- Barcode Inbound now shows `Barcode length is different from saved rule.` when a saved-rule scan has a different barcode length from the latest matching saved unit; confirm it appears as a yellow warning and does not block saving by itself.
+- Barcode Inbound now shows `Barcode length changed.` when a saved-rule scan has a different barcode length from the latest matching saved unit; confirm it appears as a yellow warning and does not block saving by itself.
 - Barcode Inbound blocked duplicate and no-weight scans now create failed scan logs; confirm managers can see them in barcode scan error/report surfaces after live QA data exists.
 - Stock manager dashboard now shows `Manager scan issue review` for all failed barcode scans, including duplicate, wrong-location, unknown-barcode, unavailable-stock, and barcode-rule failures; confirm `Open barcode scan error report` filters the report and shows the barcode.
 - Barcode Inbound previous-scan and recent-scan cards now wrap long product names and stack status badges on narrow phones; confirm saved-scan cards remain readable around 390px.

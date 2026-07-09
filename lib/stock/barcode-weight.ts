@@ -50,9 +50,11 @@ function enteredDecimalPlaces(value: string) {
 export function inferBarcodeWeightRuleWithStatus({
   barcode,
   weightKgText,
+  decimalsText,
 }: {
   barcode: string
   weightKgText: string
+  decimalsText?: string
 }): BarcodeWeightRuleInference {
   const normalizedBarcode = barcode.trim()
   const weightKg = parsePositiveNumber(weightKgText)
@@ -62,8 +64,16 @@ export function inferBarcodeWeightRuleWithStatus({
   }
 
   const candidates: BarcodeWeightRuleSuggestion[] = []
+  const selectedDecimals = Number(decimalsText)
   const typedDecimals = enteredDecimalPlaces(weightKgText)
-  const decimalOptions = typedDecimals ? [typedDecimals] : [1, 2, 3]
+  const decimalOptions =
+    Number.isInteger(selectedDecimals) &&
+    selectedDecimals >= 1 &&
+    selectedDecimals <= 3
+      ? [selectedDecimals]
+      : typedDecimals
+        ? [typedDecimals]
+        : [1, 2, 3]
 
   for (const decimals of decimalOptions) {
     const rawWeight = Math.round(weightKg * 10 ** decimals)

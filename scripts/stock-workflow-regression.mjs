@@ -18,6 +18,10 @@ import {
   normalizeItemCode,
 } from "../lib/stock/item-code.ts"
 import {
+  stockDisplayItemName,
+  stockProductName,
+} from "../lib/stock/display-names.ts"
+import {
   assertDamageCanBeManagerReviewed,
   assertReturnSupplierCanBeRejected,
   damageRejectionSignatureLabel,
@@ -152,6 +156,15 @@ assert.deepEqual(
   { status: "ambiguous", suggestion: null },
   "Inbound should ask for another sample when the same weight appears more than once."
 )
+assert.deepEqual(
+  inferBarcodeWeightRuleWithStatus({
+    barcode: "11126780222",
+    weightKgText: "26.78",
+    decimalsText: "3",
+  }),
+  { status: "unique", suggestion: { start: 4, length: 5, decimals: 3 } },
+  "Inbound should respect the selected barcode-rule decimal button."
+)
 
 assert.equal(
   normalizeItemCode(" 0007 "),
@@ -187,6 +200,19 @@ assert.equal(
   ]),
   "0100",
   "Generated item code should ignore old non-numeric codes and use the next numeric value."
+)
+assert.equal(
+  stockProductName({ section: "  Belly  ", name: "  Boneless  " }),
+  "Belly Boneless",
+  "Product display should collapse messy item spacing."
+)
+assert.equal(
+  stockDisplayItemName(
+    { section: "GENERAL", name: "  Belly   Boneless  ", displayName: null },
+    { name: "  Tican   " }
+  ),
+  "Tican Belly Boneless",
+  "Display name should be manufacturer plus product with clean spacing."
 )
 
 const generated = makeInternalBarcode(

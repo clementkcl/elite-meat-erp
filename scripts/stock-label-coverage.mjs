@@ -159,7 +159,7 @@ includesAll(
     "formRef.current?.requestSubmit()",
     "pendingInternalLabelRef.current && pendingLabelRef.current",
     "Saved. Enter next weight.",
-    "No weight? Use internal label.",
+    "No weight? Use labels.",
     "id=\"netWeightKg\"",
     "inputMode=\"decimal\"",
     "enterKeyHint=\"done\"",

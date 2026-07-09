@@ -358,7 +358,7 @@ includesAll(
     "displayName",
     "default_brand_id",
     "display_name",
-    "item?.displayName?.trim() || productName",
+    "normalizeDisplayText(item.displayName)",
     "barcodeRequired",
     "defaultLowStockLevel",
     "default_low_stock_level",

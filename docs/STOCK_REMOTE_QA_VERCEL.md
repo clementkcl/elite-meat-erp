@@ -46,7 +46,7 @@ Use this focused pass before the broad Stock Mobile QA list. It proves the curre
 6. Confirm the supplier-barcode path moves through setup, barcode rule, scanner, and summary.
 7. Scan or paste one supplier barcode, type its real kg once, and save the barcode rule.
 8. Scan a second same-format supplier barcode and confirm weight is auto-extracted.
-9. Scan a different-length barcode and confirm `Barcode length is different from saved rule.` appears as a warning.
+9. Scan a different-length barcode and confirm `Barcode length changed.` appears as a warning.
 10. Scan a duplicate barcode and confirm `Duplicate barcode. Inbound is blocked.` appears in red and is logged as a failed scan.
 11. Test the scanner popup external input with a handheld scanner or keyboard Enter and confirm the latest barcode is saved.
 12. Confirm live count, live total weight, previous scanned item, previous scanned barcode, and previous scanned weight stay visible.
@@ -129,7 +129,7 @@ Latest Codex QA preparation note, 2026-06-24:
 - Local browser/device evidence is still manual: the app starts locally in foreground, but in-app browser automation is blocked in this Windows sandbox by `CreateProcessAsUserW failed: 5`.
 - Barcode Inbound recent templates now use a 390px two-column grid and show `Tap Brand + Product to scan faster.` so workers can start repeat inbound with less scrolling.
 - Barcode Inbound now shows `Saved barcode rule ready` or `No saved barcode rule yet` after item + brand + origin are selected; confirm workers know whether to scan immediately or enter actual kg once and save the rule.
-- Barcode Inbound now shows `Barcode length is different from saved rule.` when a saved-rule scan has a different barcode length from the latest matching saved unit; confirm it appears as a yellow warning and does not block saving by itself.
+- Barcode Inbound now shows `Barcode length changed.` when a saved-rule scan has a different barcode length from the latest matching saved unit; confirm it appears as a yellow warning and does not block saving by itself.
 - Barcode Inbound blocked duplicate and no-weight scans now create failed scan logs; confirm managers can see them in barcode scan error/report surfaces after live QA data exists.
 - Stock manager dashboard now shows `Manager scan issue review` for all failed barcode scans, including duplicate, wrong-location, unknown-barcode, unavailable-stock, and barcode-rule failures; confirm `Open barcode scan error report` filters the report and shows the barcode.
 - Barcode Inbound previous-scan and recent-scan cards now wrap long product names and stack status badges on narrow phones; confirm saved-scan cards remain readable around 390px.

@@ -1,5 +1,9 @@
 import type { Brand, Item } from "@/lib/stock/types"
 
+function normalizeDisplayText(value: string) {
+  return value.trim().replace(/\s+/g, " ")
+}
+
 export function stockProductName(
   item: Pick<Item, "section" | "name"> | undefined,
   fallback = "Unknown product"
@@ -8,8 +12,8 @@ export function stockProductName(
     return fallback
   }
 
-  const section = item.section.trim()
-  const name = item.name.trim()
+  const section = normalizeDisplayText(item.section)
+  const name = normalizeDisplayText(item.name)
 
   if (!name) {
     return section || fallback
@@ -32,11 +36,13 @@ export function stockDisplayItemName(
   fallback = "Unknown product"
 ) {
   const productName = stockProductName(item, fallback)
-  const manufacturerName = manufacturer?.name?.trim()
+  const manufacturerName = manufacturer?.name
+    ? normalizeDisplayText(manufacturer.name)
+    : ""
 
   if (!manufacturerName) {
-    return item?.displayName?.trim() || productName
+    return item?.displayName ? normalizeDisplayText(item.displayName) : productName
   }
 
-  return `${manufacturerName} ${productName}`
+  return normalizeDisplayText(`${manufacturerName} ${productName}`)
 }

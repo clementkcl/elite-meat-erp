@@ -1987,7 +1987,7 @@ Manual QA still required:
 
 Scope:
 
-- Barcode Inbound now has a second `Generate internal label` button beside `Net weight kg`.
+- Barcode Inbound now has one `Generate internal label` button beside `Net weight kg`; the earlier no-weight fallback opens Inbound without Barcode first.
 - Repeated internal-label inbound can enter a weight, save the generated label immediately, print/attach it, and return to the same weight field for the next unit.
 - Existing generated barcode format, duplicate checks, label printing, server actions, RLS, and schema were not changed.
 
@@ -2753,7 +2753,7 @@ Manual QA still required:
 
 - Select a recent inbound template with a saved rule.
 - Scan or type a same-scope barcode with a different length.
-- Confirm the yellow message says `Barcode length is different from saved rule.` and the worker can still continue if the weight decodes correctly.
+- Confirm the yellow message says `Barcode length changed.` and the worker can still continue if the weight decodes correctly.
 
 ## 2026-06-25 Stock Inbound Blocked-Scan Issue Logging
 

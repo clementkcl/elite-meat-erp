@@ -1,5 +1,271 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-10 - Stock Inbound shorter barcode warning and rule-page scanner controls
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by tightening the saved-rule barcode-length warning.
+- The worker-facing warning now says `Barcode length changed. Expected X, got Y.` instead of the longer saved-rule wording.
+- The length-mismatch confirmation cue now says `Save only if correct.` instead of the longer instruction sentence.
+- The locked summary cue now says `Finish session for summary.` instead of the longer tap instruction.
+- The first-barcode rule cue now says `First barcode teaches rule.` so workers know why the first save is different.
+- Barcode-rule sampling no longer shows the scanner popup `Undo Last Scan` / `Finish Session` action slot; those controls stay on the real scanner/manual pages.
+- Barcode Rule Page now requires the complete Page 1 setup, including inbound location, before it opens.
+- Product dropdown options now show generated display name first and item code second, instead of category/section-heavy text.
+- Shared stock display-name formatting now collapses messy product/manufacturer spacing before rendering inbound pages, labels, stock lists, and reports.
+- Quick product creation now uses the same shared display-name helper for the newly added local product, so the setup page does not briefly show raw typed spacing after save.
+- Unsaved custom product setup now uses the shared display-name helper too, so the preview is clean before the worker presses `Save product now`.
+- Selected manufacturer text is now normalized once before setup, rule, scanner, summary, label, and report preview text uses it.
+- Product dropdown data is now copied and sorted A-Z by generated display name before rendering, instead of inheriting raw item order.
+- Inbound active-flow helper copy was shortened to `Choose once. Scan barcodes.`, `Keep scanning.`, and `Enter weight. Saves now.` for cleaner mobile worker screens.
+- Inbound session-history barcode details now sort a copied unit list by received time before rendering the compact latest-barcode view.
+- Choosing `Other / custom product` now focuses the new-product input immediately to reduce mobile taps before `Save product now`.
+- Choosing `Other / custom manufacturer` now focuses the custom manufacturer input immediately to reduce mobile taps before `Save manufacturer now`.
+- Choosing `Other / custom origin` now focuses the custom origin input immediately for the same mobile setup flow.
+- The quick `Use as product` suggestion button now focuses the product input after copying the search text.
+- Quick `Use as manufacturer` and `Use search text as custom origin` buttons now route through the same selection helpers, so they also focus the custom input.
+- Updated Stock Inbound smoke guards and owner QA docs to expect the shorter warning.
+- No schema, RLS, barcode uniqueness, stock movement, scanner, undo, label, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `lib/stock/display-names.ts`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-item-master-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `scripts/stock-workflow-regression.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts\stock-workflow-regression.mjs` - passed.
+- `node scripts\stock-item-master-coverage.mjs` - passed.
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+- `git diff --check` - passed with Windows line-ending warnings only.
+
+Risks / remaining checks:
+
+- Live phone-width, phone camera, external scanner, print/PDF, Supabase save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound required origin label
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by tightening the required origin setup copy.
+- The inbound origin dropdown now shows `Select origin` instead of `No origin`, so the required setup does not look optional.
+- Added Stock Inbound coverage for the required origin placeholder.
+- No server action, schema, RLS, barcode uniqueness, stock movement, scanner, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live phone-width, phone camera, external scanner, print/PDF, and Supabase save/undo QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound quick product submit guard
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by fixing the quick product creation submit path.
+- `Save product now` now uses `formNoValidate`, matching the quick manufacturer setup path, so browser validation from unrelated stock receipt fields cannot block product creation.
+- Added Stock Inbound coverage so quick product creation remains marked as a setup action with validation bypass.
+- No server action, schema, RLS, barcode uniqueness, stock movement, scanner, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live phone-width, phone camera, external scanner, print/PDF, and Supabase save/undo QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound barcode-rule decimals
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by making barcode-rule learning respect the selected decimal button.
+- `inferBarcodeWeightRuleWithStatus` now accepts the selected rule decimals and uses it before falling back to typed-weight decimals.
+- Stock Inbound now passes the selected `0.1 / 0.01 / 0.001` rule value into barcode-rule inference.
+- Added regression coverage proving selected `0.001` can infer a 3-decimal position rule even when the typed sample weight has fewer decimals.
+- No schema, RLS, stock movement, barcode uniqueness, scanner, or access-control logic changed.
+
+Files changed in this pass:
+
+- `lib/stock/barcode-weight.ts`
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-workflow-regression.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts\stock-workflow-regression.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live phone-width, phone camera, external scanner, print/PDF, and Supabase save/undo QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound custom manufacturer submit guard
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by fixing a setup-form submit guard for custom manufacturer creation.
+- `Save manufacturer now` is now marked as a setup action and bypasses stock-save validation, matching the existing quick product creation path.
+- This prevents the custom manufacturer save from being blocked after a worker switches to `Inbound without Barcode`.
+- Added Stock Inbound coverage so the setup action marker and submit bypass remain in place.
+- No server action, schema, RLS, barcode uniqueness, stock movement, scanner, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live phone-width, phone camera, external scanner, print/PDF, and Supabase save/undo QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound no-weight fallback button
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by fixing the supplier-barcode no-weight fallback action.
+- The early scanner-page fallback now opens `Inbound without Barcode` instead of trying to generate a label before the worker reaches the visible kg field.
+- The real `Generate internal label` action remains beside `Net weight kg`, where the worker can enter one unit weight and save stock immediately.
+- Updated Stock Inbound coverage and QA/audit docs to match the simpler worker path.
+- No server action, schema, RLS, barcode uniqueness, stock movement, scanner, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `scripts/stock-inbound-guided-completion-audit-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-label-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-completion-audit-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live phone-width, phone camera, external scanner, print/PDF, and Supabase save/undo QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound audit evidence refresh
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by refreshing the completion audit after the internal-label serial continuity fix.
+- The audit now records that resumed manual/internal-label sessions continue the next generated-label serial for the same session instead of restarting at `0001`.
+- Added a smoke guard so the audit keeps this resumed-session serial evidence.
+- No app behavior, server action, schema, RLS, barcode uniqueness, stock movement, scanner behavior, or access-control logic changed.
+
+Files changed in this pass:
+
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `scripts/stock-inbound-guided-completion-audit-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-completion-audit-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live phone-width, phone camera, external scanner, print/PDF, and Supabase save/undo QA remain manual owner checks before the full active goal can be marked complete.
+
 ## 2026-07-10 - Stock Inbound shorter active-flow copy
 
 Task completed:
