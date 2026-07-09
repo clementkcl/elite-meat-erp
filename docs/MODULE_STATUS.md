@@ -179,7 +179,7 @@ Last audited: 2026-06-24
 - Barcode scanner fields now keep the field label above the large `Scan Barcode` button at phone width, avoiding squeezed scanner controls around 390px.
 - Stock worker home shortcuts now switch to a two-column button grid at 390px width, while keeping the same six worker actions and wrapped labels.
 - Stock workflow submit buttons now default to full-width phone buttons and compact desktop buttons, making final actions easier to tap at 390px width.
-- Barcode Inbound current-session scan cards now use a full-width mobile `Undo scan` button with the hint `Undo before finishing this session.`.
+- Barcode Inbound current-session scan cards now use a full-width mobile `Undo scan` button with the hint `Undo before finish.`.
 - Stock Outbound scanned rows now use a larger full-width mobile `Remove` button with the hint `Remove a wrong scan before final confirm.`.
 - Damage/spoilage and supplier-return request forms now show `Previous damage scan` and `Previous supplier return scan` after successful request submissions.
 - Normal Stock Return now shows `Previous return scan` after a successful return so workers can verify the last barcode before scanning the next one.

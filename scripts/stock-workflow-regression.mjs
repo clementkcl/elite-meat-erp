@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
 import {
+  internalBarcodeSerial,
   makeInternalBarcode,
   makeUniqueInternalBarcode,
 } from "../lib/stock/barcode-label.ts"
@@ -227,6 +228,26 @@ assert.deepEqual(
   uniqueGenerated,
   { barcode: "202606120830000043010250", serial: 43 },
   "Generated barcode should skip existing labels and use the next serial."
+)
+assert.equal(
+  internalBarcodeSerial("INB-20260612-083000", generated),
+  42,
+  "Generated barcode serial parser should recover the running number."
+)
+assert.equal(
+  internalBarcodeSerial("INB-20260612-083000", "99990042010250"),
+  null,
+  "Generated barcode serial parser should ignore a different session code."
+)
+assert.equal(
+  internalBarcodeSerial("INB-20260612-083000", `${generated}9`),
+  null,
+  "Generated barcode serial parser should reject unexpected extra digits."
+)
+assert.equal(
+  internalBarcodeSerial("INB-20260612-083000", generated.replace("42", "4A")),
+  null,
+  "Generated barcode serial parser should reject non-numeric barcodes."
 )
 
 assert.deepEqual(

@@ -16,7 +16,7 @@ npx.cmd supabase login
 
 Codex did not run live migrations, did not run `db push`, did not run seed, and did not deploy production.
 
-## Migration 053 Through 230006 Purpose
+## Migration 053 Through 250013 Purpose
 
 Migration:
 
@@ -35,6 +35,18 @@ Migration:
 `supabase/migrations/202606230006_stock_transfer_any_location_v1.sql`
 
 `supabase/migrations/202606230007_delivery_database_storage_rls_v1.sql`
+
+`supabase/migrations/202606250004_stock_barcode_rule_sample_v1.sql`
+
+`supabase/migrations/202606250008_stock_inbound_session_void_rpc_v1.sql`
+
+`supabase/migrations/202606250010_stock_item_default_weight_v1.sql`
+
+`supabase/migrations/202606250011_stock_item_display_name_v1.sql`
+
+`supabase/migrations/202606250012_stock_manufacturer_merge_v1.sql`
+
+`supabase/migrations/202606250013_stock_item_merge_v1.sql`
 
 Purpose:
 
@@ -93,6 +105,34 @@ Migration `202606230006` adds:
 - Receive-transfer RPC replacement that keeps wrong-location receive blocked.
 - Stock-unit trigger replacement that keeps open damage/return-supplier request blocking but removes default-location-only transfer blocking.
 
+Migration `202606250004` adds:
+
+- Supplier barcode rule sample fields for guided Stock Inbound.
+- Barcode length and sample barcode persistence for item + manufacturer + origin rules.
+
+Migration `202606250008` adds:
+
+- Whole inbound session void RPC for manager/admin/director delete-session correction.
+- Audit-preserving `INBOUND_VOID` handling for all eligible saved units in a batch.
+
+Migration `202606250010` adds:
+
+- Item master default fixed-weight support for products that do not carry weight in supplier barcodes.
+
+Migration `202606250011` adds:
+
+- Item display-name backfill and helpers so product and manufacturer stay separate while pages show manufacturer + product.
+
+Migration `202606250012` adds:
+
+- Admin/director `merge_stock_manufacturer` helper for duplicate manufacturer cleanup.
+
+Migration `202606250013` adds:
+
+- Admin/director `merge_stock_item` helper for duplicate product cleanup created through `Other / custom product`.
+- Safe reference moves for stock, barcode rules, orders/reservations, retail price rules, processing records, and audit logs.
+- The duplicate source product is deactivated and renamed instead of deleted.
+
 ## CLI Login And Link Sequence
 
 Run these from the project root when you regain Supabase access:
@@ -133,7 +173,14 @@ If using SQL Editor instead of CLI:
 8. Run `supabase/migrations/202606230004_delivery_module_v1.sql`.
 9. Run `supabase/migrations/202606230006_stock_transfer_any_location_v1.sql`.
 10. Run `supabase/migrations/202606230007_delivery_database_storage_rls_v1.sql`.
-11. Run `supabase/seed.sql` only for safe demo/staging data.
+11. Continue running later migrations in filename order, including:
+    - `supabase/migrations/202606250004_stock_barcode_rule_sample_v1.sql`
+    - `supabase/migrations/202606250008_stock_inbound_session_void_rpc_v1.sql`
+    - `supabase/migrations/202606250010_stock_item_default_weight_v1.sql`
+    - `supabase/migrations/202606250011_stock_item_display_name_v1.sql`
+    - `supabase/migrations/202606250012_stock_manufacturer_merge_v1.sql`
+    - `supabase/migrations/202606250013_stock_item_merge_v1.sql`
+12. Run `supabase/seed.sql` only for safe demo/staging data.
 
 ## Verify VOIDED Enum
 
@@ -345,6 +392,45 @@ Expected result:
 - `INBOUND_VOID` movement has negative weight.
 - Audit log references original inbound movement and void movement.
 
+## Verify Guided Inbound Product Naming Helpers
+
+Run after migration `202606250011`:
+
+```sql
+select item_code, name, display_name
+from public.stock_items
+order by updated_at desc nulls last
+limit 10;
+```
+
+Expected result:
+
+- Product fields remain separate.
+- `display_name` is available for generated manufacturer + product display.
+
+## Verify Duplicate Cleanup RPCs
+
+Run after migrations `202606250012` and `202606250013`:
+
+```sql
+select proname
+from pg_proc
+where proname in (
+  'merge_stock_manufacturer',
+  'merge_stock_item'
+)
+order by proname;
+```
+
+Expected result:
+
+- Both function names return.
+
+Live QA:
+
+- Merge two safe demo duplicate manufacturers and confirm stock rows still resolve to the kept manufacturer.
+- Merge two safe demo duplicate products and confirm stock units, movements, barcode rules, order reservations, retail price rules, reports, and audit logs still resolve to the kept product.
+
 ## Migration Safety Review
 
 Before applying pending migrations:
@@ -369,7 +455,15 @@ Do not continue to production data until these are true:
 - Migration `202606230002` applies successfully.
 - Migration `202606230003` applies successfully.
 - Migration `202606230006` applies successfully.
+- Migration `202606250004` applies successfully.
+- Migration `202606250008` applies successfully.
+- Migration `202606250010` applies successfully.
+- Migration `202606250011` applies successfully.
+- Migration `202606250012` applies successfully.
+- Migration `202606250013` applies successfully.
 - `/stock/inbound` undo test creates `VOIDED`, `INBOUND_VOID`, and `BARCODE_INBOUND_VOID`.
+- `/stock/inbound` supplier-barcode rule stores barcode length and sample barcode.
+- `/stock/settings` duplicate manufacturer and product merge tests preserve stock history and audit logs.
 - `/stock/outbound` direct sample/testing creates `OUTBOUND_SAMPLE_TESTING`.
 - `/stock/receive-transfer` wrong-location receive is blocked with `Wrong location. This barcode must be received at [destination location].`
 - `/stock/transfer` destination dropdown shows stock locations and submits the selected active stock location.

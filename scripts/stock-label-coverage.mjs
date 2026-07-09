@@ -35,7 +35,10 @@ includesAll(
   [
     "export function makeInternalBarcode",
     "export function makeUniqueInternalBarcode",
+    "export function internalBarcodeSerial",
     "sessionCode?.replace(/\\D/g, \"\")",
+    "normalizedBarcode.length !== sessionPart.length + 10",
+    "!/^\\d+$/.test(normalizedBarcode)",
     "weightGrams",
     "Math.round(Number(weightKg) * 1000)",
     "serial > 9999",
@@ -60,6 +63,7 @@ includesAll(
     "Generated barcode should be blank when session code has no digits.",
     "Generated barcode should not wrap serial numbers after 9999.",
     "Generated barcode should skip existing labels and use the next serial.",
+    "Generated barcode serial parser should recover the running number.",
   ],
   "Internal barcode regression"
 )

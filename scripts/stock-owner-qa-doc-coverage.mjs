@@ -38,6 +38,9 @@ const migration230003 = read(
 const migration230006 = read(
   "supabase/migrations/202606230006_stock_transfer_any_location_v1.sql"
 )
+const migration250013 = read(
+  "supabase/migrations/202606250013_stock_item_merge_v1.sql"
+)
 const businessRules = read("docs/BUSINESS_RULES.md")
 const workflowForms = read("components/stock/workflow-forms.tsx")
 const stockLabel = read("components/stock/stock-label.tsx")
@@ -137,9 +140,15 @@ includesAll(
     "202606100055_stock_take_exceptions_v1.sql",
     "202606230002_stock_mobile_worker_mvp_v1.sql",
     "202606230006_stock_transfer_any_location_v1.sql",
+    "202606250004_stock_barcode_rule_sample_v1.sql",
+    "202606250008_stock_inbound_session_void_rpc_v1.sql",
+    "202606250011_stock_item_display_name_v1.sql",
+    "202606250012_stock_manufacturer_merge_v1.sql",
+    "202606250013_stock_item_merge_v1.sql",
     "VOIDED",
     "INBOUND_VOID",
     "void_inbound_stock_unit",
+    "merge_stock_item",
     "UNKNOWN_BARCODE",
     "WRONG_LOCATION",
     "npx.cmd supabase login",
@@ -148,6 +157,17 @@ includesAll(
     "Do not run `npx.cmd supabase db push` until the project link is confirmed",
   ],
   "Stock migration checklist"
+)
+
+includesAll(
+  migration250013,
+  [
+    "create or replace function public.merge_stock_item",
+    "public.can_administer_stock()",
+    "STOCK_ITEM_MERGED",
+    "grant execute on function public.merge_stock_item(uuid, uuid) to authenticated",
+  ],
+  "Migration 250013 product merge safety"
 )
 
 includesAll(

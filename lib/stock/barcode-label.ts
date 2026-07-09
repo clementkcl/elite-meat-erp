@@ -41,3 +41,24 @@ export function makeUniqueInternalBarcode(
 
   return { barcode: "", serial: startSerial }
 }
+
+export function internalBarcodeSerial(
+  sessionCode: string | null | undefined,
+  barcode: string
+) {
+  const sessionPart = sessionCode?.replace(/\D/g, "") ?? ""
+  const normalizedBarcode = barcode.trim()
+
+  if (
+    !sessionPart ||
+    !normalizedBarcode.startsWith(sessionPart) ||
+    normalizedBarcode.length !== sessionPart.length + 10 ||
+    !/^\d+$/.test(normalizedBarcode)
+  ) {
+    return null
+  }
+
+  const serial = Number(normalizedBarcode.slice(sessionPart.length, sessionPart.length + 4))
+
+  return Number.isInteger(serial) && serial > 0 ? serial : null
+}

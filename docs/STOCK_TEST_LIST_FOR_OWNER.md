@@ -499,7 +499,7 @@ Pass result:
 
 1. Save a unique inbound scan.
 2. Confirm `Undo Last Scan` is a full-width mobile button on the newest current-session scan card.
-3. Confirm the hint says `Undo before finishing this session.`
+3. Confirm the hint says `Undo before finish.`
 4. Click `Undo Last Scan` for that current-session scan.
 5. Enter or accept the undo reason.
 6. Confirm the UI reports that the inbound scan was undone and audit trail was kept.

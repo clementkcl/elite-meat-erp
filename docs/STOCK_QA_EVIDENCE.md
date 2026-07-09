@@ -260,7 +260,7 @@ Scope:
 Evidence captured:
 
 - Unsaved custom manufacturer text no longer counts as ready for barcode-rule, scanner, or manual-entry pages.
-- The setup page now shows `Save manufacturer before scanning.` beside the custom manufacturer save action.
+- The setup page now shows `Save manufacturer first.` beside the custom manufacturer save action.
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `npm.cmd run typecheck`, `npm.cmd run smoke`, `npm.cmd run lint`, and `npm.cmd run build`.
 
 Manual QA:
@@ -338,7 +338,7 @@ Scope:
 
 Evidence captured:
 
-- The destructive confirmation now says `Confirm manager-approved Delete Whole Session`.
+- The destructive confirmation now says `Confirm Delete Whole Session`.
 - Existing manager/admin/director server-side action gate remains unchanged.
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
 
@@ -518,7 +518,7 @@ Scope:
 Evidence captured:
 
 - Fixed-weight fallback now shows `Set default fixed kg first.`
-- Whole-session delete now shows `Confirm manager-approved Delete Whole Session`, shorter void count/weight text, and `Manager approval required. Audit kept.`
+- Whole-session delete now shows `Confirm Delete Whole Session`, shorter void count/weight text, and `Manager approval required. Audit kept.`
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
 
 Manual QA:
@@ -706,7 +706,7 @@ Evidence captured:
 
 - `components/stock/workflow-forms.tsx` adds `finishBlockedByPendingLabel`.
 - The finish button is disabled while a printed label is pending confirmation.
-- The current UI shows `Cancel pending label before finishing this session.` while the save is still pending.
+- The current UI shows `Cancel pending label first.` while the save is still pending.
 - New inbound session reset clears `pendingInternalLabel`, `pendingLabelRef`, and `pendingInternalLabelRef`.
 - `scripts/stock-mobile-ux-coverage.mjs` and `scripts/stock-acceptance-coverage.mjs` guard the finish/reset behavior.
 
@@ -5216,14 +5216,14 @@ Scope:
 
 - Stock Module Mobile UX only.
 - `/stock/inbound` current-session saved scan cards now show `Undo scan` as a full-width phone-size button.
-- A short hint tells workers: `Undo before finishing this session.`
+- A short hint tells workers: `Undo before finish.`
 - This makes current-session scan correction easier before the worker finishes the inbound session.
 - No server action, undo audit behavior, void movement rule, RLS policy, stock movement rule, schema, migration, live Supabase data, camera permission, or printer behavior was changed.
 
 Prepared / source-guarded QA coverage added:
 
 - `components/stock/workflow-forms.tsx` renders the bigger undo action and short hint.
-- `scripts/stock-mobile-ux-coverage.mjs` guards `Undo before finishing this session.`
+- `scripts/stock-mobile-ux-coverage.mjs` guards `Undo before finish.`
 - Owner and Vercel QA checklists now ask testers to confirm the larger undo button and the post-finish undo lockout.
 
 Manual QA still required:

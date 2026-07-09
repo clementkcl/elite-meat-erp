@@ -335,7 +335,7 @@ If phone camera or Bluetooth label printer cannot be tested:
 31. Confirm duplicate barcode is blocked with `Duplicate barcode. Inbound is blocked.` as a short red blocked alert.
 32. Confirm previous scan product name, previous weight, saved scan count, and saved total weight update.
 33. Confirm `Saved scans` and `Saved weight` sit side by side around 390px width.
-34. Confirm `Undo Last Scan` is a full-width mobile button on the newest saved scan and the hint says `Undo before finishing this session.`
+34. Confirm `Undo Last Scan` is a full-width mobile button on the newest saved scan and the hint says `Undo before finish.`
 35. Confirm undo changes current-session scan to `VOIDED`.
 36. Confirm `Finish Session` shows the session summary.
 37. Confirm total units, total weight, and duplicate/error scans stay readable around 390px width.

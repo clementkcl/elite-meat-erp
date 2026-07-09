@@ -154,9 +154,9 @@ includesAll(
     "Page {inboundPageNumber}/{visibleInboundSteps.length}",
     "onClick={() => goInboundStep(step)}",
     "const hasSavedSessionEntries = savedSessionScans.length > 0",
-    "Saved stock exists. Finish or Delete Whole Session.",
+    "Saved stock exists. Finish or delete.",
     "setupChangeProtectionMessage =",
-    "Review only. Finish or Delete Whole Session to change.",
+    "Review only. Finish or delete to change.",
     "data-stock-action=\"safe-back-review-warning\"",
     "Review only. Saved entries stay. Setup is locked.",
     "Scan or cancel pending label first.",
@@ -267,7 +267,7 @@ includesAll(
     "selectedProductDisplayName",
     "selectedManufacturerName",
     "Product name.",
-    "Choose manufacturer before creating product.",
+    "Choose manufacturer first.",
     "function normalizeSpacing(",
     "function canonicalLookupName(",
     "async function findNamedRecordId(",
@@ -299,7 +299,7 @@ includesAll(
     "data-stock-action=\"manual-manufacturer-entry\"",
     "data-stock-action=\"inbound-save-custom-manufacturer\"",
     "data-stock-action=\"custom-manufacturer-save-required\"",
-    "Save manufacturer before scanning.",
+    "Save manufacturer first.",
     "createInboundBrandAction",
     "useActionState(quickBrandCreateFormAction, initialStockActionState)",
     "async function quickBrandCreateFormAction",
@@ -498,8 +498,8 @@ includesAll(
     "setWholeSessionUndoConfirmOpen(false)",
     "setInboundPrintTarget(null)",
     "const finishBlockedNoSavedMessage = inboundMode === \"internal_label\"",
-    "Save at least one unit before finishing this session.",
-    "Save at least one barcode before finishing this session.",
+    "Save one unit first.",
+    "Save one barcode first.",
     "data-stock-action=\"scanner-camera-session-count-top\"",
     "Camera window scans",
     "Undo Last Scan",
@@ -615,6 +615,9 @@ includesAll(
   [
     "const nextLabel: InboundLabel =",
     'status: "PENDING"',
+    "internalBarcodeSerial(batchNo, label.barcode)",
+    "const nextSerial = Math.max(",
+    "nextSerial",
     "pendingLabelRef.current = nextLabel",
     "pendingInternalLabelRef.current = true",
     "setPendingInternalLabel(nextLabel)",
@@ -722,6 +725,28 @@ assert(
   !workflowForms.includes("function inboundTemplateStatusText"),
   "Recent inbound templates should not render extra status helper copy."
 )
+
+for (const staleCopy of [
+  "Finish inbound session before opening summary.",
+  "Cancel pending label before changing weight.",
+  "Cancel pending label before entering another weight.",
+  "Cancel pending label before generating another.",
+  "Enter weight before generating a label.",
+  "Finish or delete this session before starting a new one.",
+  "Setup locked. Finish or delete this session to change setup.",
+  "Choose a product or tap a recent template before scanning.",
+  "Choose manufacturer before creating product.",
+  "Choose stock location before scanning.",
+  "Save manufacturer before scanning.",
+  "Change only for another storage location.",
+  "Session locked. Finish before changes.",
+  "Undo before finishing this session.",
+]) {
+  assert(
+    !workflowForms.includes(staleCopy),
+    `Stock Inbound worker copy is too long: ${staleCopy}`
+  )
+}
 assert(
   !workflowForms.includes("Origin: {template.originName}"),
   "Recent inbound template cards should show only manufacturer + product."
@@ -758,7 +783,7 @@ includesAll(
     "Compact list.",
     "data-stock-action=\"inbound-session-summary-error-list\"",
     "sessionErrors.slice(0, 8).map",
-    "Showing latest 8 errors. Full list prints in session summary.",
+    "Latest 8 shown. Full list prints.",
     "data-stock-action=\"inbound-session-summary-voided-list\"",
     "const voidedSessionScans = recentLabels.filter(",
     "Voided scans kept for audit",
@@ -809,7 +834,7 @@ includesAll(
     "canManageStockTake ||",
     "canDirectorApproveStockTake",
     "data-stock-action=\"whole-session-undo-confirmation\"",
-    "Confirm manager-approved Delete Whole Session",
+    "Confirm Delete Whole Session",
     "Voids {recentInboundCount} saved",
     "kg) for {batchNo}. Audit kept.",
     "Keep session",

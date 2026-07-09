@@ -100,7 +100,10 @@ import {
   decodeBarcodeWeight,
   inferBarcodeWeightRuleWithStatus,
 } from "@/lib/stock/barcode-weight"
-import { makeUniqueInternalBarcode } from "@/lib/stock/barcode-label"
+import {
+  internalBarcodeSerial,
+  makeUniqueInternalBarcode,
+} from "@/lib/stock/barcode-label"
 import { stockDisplayItemName, stockProductName } from "@/lib/stock/display-names"
 
 type StatefulAction = (
@@ -2318,7 +2321,7 @@ export function BarcodeInboundForm({
     if (!quickProductCreateManufacturerReady) {
       return {
         status: "error",
-        message: "Choose manufacturer before creating product.",
+        message: "Choose manufacturer first.",
       } satisfies StockActionState
     }
 
@@ -2690,7 +2693,7 @@ export function BarcodeInboundForm({
 
     if (nextStep === "summary" && !sessionFinishedAt) {
       setDecodeStatus("warning")
-      setDecodeMessage("Finish inbound session before opening summary.")
+      setDecodeMessage("Finish session first.")
       return
     }
 
@@ -2893,7 +2896,7 @@ export function BarcodeInboundForm({
   function handleNetWeightChange(value: string) {
     if (pendingInternalLabel) {
       setDecodeStatus("warning")
-      setDecodeMessage("Cancel pending label before changing weight.")
+      setDecodeMessage("Cancel pending label first.")
       return
     }
 
@@ -3036,14 +3039,14 @@ export function BarcodeInboundForm({
 
     if (pendingInternalLabel) {
       setDecodeStatus("warning")
-      setDecodeMessage("Cancel pending label before entering another weight.")
+      setDecodeMessage("Cancel pending label first.")
       window.setTimeout(() => barcodeInputRef.current?.focus(), 0)
       return
     }
 
     if (!(Number(netWeightKg) > 0)) {
       setDecodeStatus("error")
-      setDecodeMessage("Enter weight before generating a label.")
+      setDecodeMessage("Enter weight first.")
       return
     }
 
@@ -3126,7 +3129,7 @@ export function BarcodeInboundForm({
 
     if (pendingInternalLabel) {
       setDecodeStatus("warning")
-      setDecodeMessage("Cancel pending label before generating another.")
+      setDecodeMessage("Cancel pending label first.")
       window.setTimeout(() => barcodeInputRef.current?.focus(), 0)
       return
     }
@@ -3141,16 +3144,21 @@ export function BarcodeInboundForm({
       ...units.map((unit) => unit.barcode),
       ...recentLabels.map((label) => label.barcode),
     ]
+    const nextSerial = Math.max(
+      labelSerialRef.current,
+      ...recentLabels
+        .map((label) => internalBarcodeSerial(batchNo, label.barcode) ?? 0)
+    ) + 1
     const generated = makeUniqueInternalBarcode(
       batchNo,
       netWeightKg,
       existingBarcodes,
-      labelSerialRef.current + 1
+      nextSerial
     )
 
     if (!generated.barcode) {
       setDecodeStatus("error")
-      setDecodeMessage("Enter weight before generating a label.")
+      setDecodeMessage("Enter weight first.")
       return
     }
 
@@ -3204,7 +3212,7 @@ export function BarcodeInboundForm({
     if (!sessionFinishedAt && recentLabels.some((label) => label.status === "SAVED")) {
       setInboundStep("summary")
       setDecodeStatus("warning")
-      setDecodeMessage("Finish or delete this session before starting a new one.")
+      setDecodeMessage("Finish or delete first.")
       return
     }
 
@@ -3514,7 +3522,7 @@ export function BarcodeInboundForm({
     }
 
     if (sessionFinishedAt) {
-      setLatestScanUndoMessage("Session is finished. Use Delete Whole Session.")
+      setLatestScanUndoMessage("Finished. Delete whole session.")
       return
     }
 
@@ -3551,21 +3559,21 @@ export function BarcodeInboundForm({
     hasSavedSessionEntries ||
     Boolean(pendingInternalLabel)
   const scopeLockedReason = sessionFinishedAt
-    ? "Session finished. Start new session to change setup."
+    ? "Finished. Start new to change."
     : pendingInternalLabel
       ? "Scan or cancel pending label first."
-      : "Saved stock exists. Finish or Delete Whole Session."
+      : "Saved stock exists. Finish or delete."
   const setupChangeProtectionMessage =
-    "Review only. Finish or Delete Whole Session to change."
+    "Review only. Finish or delete to change."
   const finishBlockedByPendingLabel = Boolean(pendingInternalLabel)
   const finishBlockedByNoSavedScan = savedSessionScans.length === 0
   const finishBlockedNoSavedMessage = inboundMode === "internal_label"
-    ? "Save at least one unit before finishing this session."
-    : "Save at least one barcode before finishing this session."
+    ? "Save one unit first."
+    : "Save one barcode first."
   function finishInboundSession() {
     if (finishBlockedByPendingLabel) {
       setDecodeStatus("warning")
-      setDecodeMessage("Cancel pending label before finishing this session.")
+      setDecodeMessage("Cancel pending label first.")
       return
     }
 
@@ -4230,7 +4238,7 @@ export function BarcodeInboundForm({
                 aria-live="polite"
                 className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
               >
-                Setup locked. Finish or delete this session to change setup.
+                Setup locked. Finish or delete first.
                 <span className="mt-1 block text-xs font-medium">
                   {scopeLockedReason}
                 </span>
@@ -4319,7 +4327,7 @@ export function BarcodeInboundForm({
                   <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800">
                 {selectedLocation
                   ? `Using location: ${selectedLocation.name}.`
-                  : "Choose stock location before scanning."}
+                  : "Choose location first."}
                 {locationDefaultedToAssigned && assignedDefaultLocation
                   ? " Profile default."
                   : ""}
@@ -4455,7 +4463,7 @@ export function BarcodeInboundForm({
                   {scopeLocked ? (
                     <div className="mt-2 rounded-md border border-emerald-200 bg-background/70 px-3 py-2 text-xs font-medium text-emerald-800">
                       {sessionFinishedAt
-                        ? "Session finished. Start new session to change setup."
+                        ? "Finished. Start new to change."
                         : "Session locked. Finish first."}
                     </div>
                   ) : null}
@@ -4659,7 +4667,7 @@ export function BarcodeInboundForm({
               />
               {!preset.itemId ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  Choose a product or tap a recent template before scanning.
+                  Choose product first.
                 </div>
               ) : null}
               {!preset.itemId ? (
@@ -4693,7 +4701,7 @@ export function BarcodeInboundForm({
                 {!quickProductCreateManufacturerReady ? (
                   <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                     <div>
-                      Choose manufacturer before creating product.
+                      Choose manufacturer first.
                     </div>
                     <Button
                       type="button"
@@ -4875,7 +4883,7 @@ export function BarcodeInboundForm({
                     data-stock-action="custom-manufacturer-save-required"
                     className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
                   >
-                    Save manufacturer before scanning.
+                    Save manufacturer first.
                   </div>
                   <Input
                     name="brandName"
@@ -4991,7 +4999,7 @@ export function BarcodeInboundForm({
               >
                     {selectedLocation
                       ? `Using location: ${selectedLocation.name}.`
-                      : "Choose stock location before scanning."}
+                      : "Choose location first."}
                     {locationDefaultedToAssigned && assignedDefaultLocation
                       ? " Profile default."
                       : ""}
@@ -5028,7 +5036,7 @@ export function BarcodeInboundForm({
                         })}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Change only for another storage location.
+                        Change location only.
                       </p>
                     </div>
                   ) : null}
@@ -5313,8 +5321,8 @@ export function BarcodeInboundForm({
             {scopeLocked ? (
               <div className="mb-1 text-xs font-medium text-amber-700">
                 {sessionFinishedAt
-                  ? "Session finished. Start new session to change setup."
-                  : "Session locked. Finish before changes."}
+                  ? "Finished. Start new to change."
+                  : "Session locked. Finish first."}
               </div>
             ) : null}
             <div
@@ -5867,7 +5875,7 @@ export function BarcodeInboundForm({
               aria-live="polite"
               className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm break-words text-amber-800"
             >
-              Cancel pending label before finishing this session.
+              Cancel pending label first.
             </div>
           ) : null}
           {finishBlockedByNoSavedScan &&
@@ -6062,7 +6070,7 @@ export function BarcodeInboundForm({
                             : "Undo scan"}
                       </Button>
                       <p className="mt-2 text-xs text-muted-foreground">
-                        Undo before finishing this session.
+                        Undo before finish.
                       </p>
                     </form>
                   ) : null}
@@ -6265,7 +6273,7 @@ export function BarcodeInboundForm({
                 </div>
                 {sessionErrors.length > 8 ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    Showing latest 8 errors. Full list prints in session summary.
+                    Latest 8 shown. Full list prints.
                   </div>
                 ) : null}
               </div>
@@ -6355,7 +6363,7 @@ export function BarcodeInboundForm({
                 className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
               >
                 <div className="font-semibold">
-                  Confirm manager-approved Delete Whole Session
+                  Confirm Delete Whole Session
                 </div>
                 <div className="mt-1">
                   Voids {recentInboundCount} saved{" "}

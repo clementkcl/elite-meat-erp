@@ -1,5 +1,86 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-10 - Stock Inbound shorter active-flow copy
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by fixing internal-label running serial continuity after reload/continue.
+- Generated internal labels now read the max existing serial for the current session code and continue from that serial, so a resumed current batch does not restart at `0001`.
+- The internal-label serial parser now accepts only exact numeric generated barcodes for the current session code before using them to continue the serial.
+- Added barcode-label regression coverage for serial parsing and Stock Inbound coverage for the resumed-session serial guard.
+- Continued the active Stock Inbound guided workflow goal by trimming remaining long worker-facing active-flow messages.
+- Shortened finished-session setup warnings, no-saved-scan finish blockers, pending-label finish blockers, session-summary error list wording, and whole-session delete confirmation copy.
+- Also shortened setup, custom manufacturer, location, summary navigation, manual-weight, generated-label, and undo hints to keep the mobile flow compact.
+- Added a Stock Inbound coverage guard so the old long helper/warning phrases cannot silently return.
+- Updated Stock Inbound/mobile coverage guards and QA evidence to match the shorter labels.
+- No server action, schema, RLS, barcode uniqueness, stock movement, scanner behavior, or access-control logic changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/MODULE_STATUS.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts\stock-workflow-regression.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live phone-width, phone camera, external scanner, print/PDF, and Supabase save/undo QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock migration checklist for guided inbound naming cleanup
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by updating the owner migration checklist for the later guided-inbound and product/manufacturer naming migrations.
+- Added SQL Editor/manual verification notes for `202606250004`, `202606250008`, `202606250010`, `202606250011`, `202606250012`, and `202606250013`.
+- Added verification steps for `merge_stock_item`, `merge_stock_manufacturer`, item display names, supplier barcode sample fields, and live duplicate-merge QA.
+- Added a smoke guard so the checklist must continue to mention the newer Stock Inbound naming/merge migrations and the admin-only audited product merge RPC.
+- No app behavior, worker flow, database schema, RLS, barcode uniqueness, stock movements, or access-control logic changed.
+
+Files changed in this pass:
+
+- `docs/STOCK_MIGRATION_CHECKLIST.md`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live Supabase migrations are still not applied from Codex. Owner must confirm the target project, run migrations in filename order, and perform the guided Stock Inbound live/device QA listed in the checklist and completion audit.
+
 ## 2026-07-10 - Stock product duplicate merge cleanup
 
 Task completed:
