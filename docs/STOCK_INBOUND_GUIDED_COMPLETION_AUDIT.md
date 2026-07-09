@@ -47,8 +47,11 @@ This audit maps the active guided Stock Inbound goal to current evidence. It is 
 
 ## Local Command Evidence
 
-Last recorded local pass in `HANDOFF.md`:
+Latest local pass in current worktree:
 
+- Commit `b9fc26c6` (`Refine stock inbound mobile scanner feedback`)
+- Branch `review/codex-half-finished-progress`
+- Current uncommitted pass: Stock Inbound short worker/rule warning copy trims
 - `npm.cmd run smoke` passed
 - `npm.cmd run lint` passed
 - `npm.cmd run typecheck` passed

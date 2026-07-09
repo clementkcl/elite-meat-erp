@@ -1664,11 +1664,9 @@ function normalizeInboundPreset(
       preset.originId && activeOriginIds.has(preset.originId)
         ? preset.originId
         : "",
-    locationId: assignedLocationId
-      ? assignedLocationId
-      : activeLocationIds.has(preset.locationId)
-        ? preset.locationId
-        : fallbackLocationId,
+    locationId: activeLocationIds.has(preset.locationId)
+      ? preset.locationId
+      : fallbackLocationId,
     fixedWeightKg: preset.fixedWeightKg ?? "",
   }
 }
@@ -2310,6 +2308,7 @@ export function BarcodeInboundForm({
     )
 
     if (result.status === "success") {
+      setSessionFinishedAt(new Date().toISOString())
       setRecentLabels((current) =>
         current.map((currentLabel) =>
           currentLabel.status === "SAVED"
@@ -2967,7 +2966,7 @@ export function BarcodeInboundForm({
 
       if (inference.status === "ambiguous") {
         const message =
-          "Weight appears twice. Sample cleared. Scan another barcode."
+          "Weight appears twice. Scan another sample."
         setDecodeStatus("warning")
         setDecodeMessage(message)
         recordSessionError(barcode, message)
@@ -3037,7 +3036,7 @@ export function BarcodeInboundForm({
 
     if (inference.status === "ambiguous") {
       const message =
-        "Weight appears twice. Sample cleared. Scan another barcode."
+        "Weight appears twice. Scan another sample."
       setDecodeStatus("warning")
       setDecodeMessage(message)
       recordSessionError(barcode, message)
@@ -5285,7 +5284,7 @@ export function BarcodeInboundForm({
                   data-stock-action="locked-barcode-rule-fields"
                   className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
                 >
-                  Rule locked. Start new session to change rule.
+                  Rule locked. Start new to change.
                 </div>
               ) : null}
               <div className="mt-3 grid gap-4 md:grid-cols-2">
@@ -5604,7 +5603,7 @@ export function BarcodeInboundForm({
                 data-stock-action="barcode-rule-scope-cue"
                 className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
               >
-                Rule is for this product, manufacturer, and origin only.
+                Rule applies here only.
               </div>
             </div>
           ) : null}
@@ -5623,7 +5622,7 @@ export function BarcodeInboundForm({
                   Handheld scanner + Enter
                 </div>
                 <div className="rounded-md border bg-background px-3 py-2">
-                  Manual typing fallback
+                  Manual typing
                 </div>
               </div>
             </div>
@@ -6417,7 +6416,7 @@ export function BarcodeInboundForm({
               </div>
               {savedSessionScans.length > 8 ? (
                 <div className="mt-2 text-xs text-muted-foreground">
-                  Showing latest 8 saved entries.
+                  Latest 8 shown.
                 </div>
               ) : null}
             </div>
@@ -6449,7 +6448,7 @@ export function BarcodeInboundForm({
                 </div>
                 {sessionErrors.length > 8 ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    Latest 8 shown. Full list prints.
+                    Latest 8 shown. Prints all.
                   </div>
                 ) : null}
               </div>
@@ -6495,7 +6494,7 @@ export function BarcodeInboundForm({
                 </div>
                 {voidedSessionScans.length > 8 ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    Showing latest 8 voided. Full audit kept.
+                    Latest 8 voided. Audit kept.
                   </div>
                 ) : null}
               </div>
@@ -6664,7 +6663,7 @@ export function BarcodeInboundForm({
                 data-stock-action="whole-session-delete-role-message"
                 className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
               >
-                Manager, admin, or director approval needed to delete whole session.
+                Manager/admin/director only.
               </div>
             ) : null}
           </div>

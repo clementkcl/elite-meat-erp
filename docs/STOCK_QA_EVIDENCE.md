@@ -6,6 +6,74 @@ Use this file to record real Supabase, RLS, device, and workflow evidence before
 
 Use `docs/STOCK_COMPLETION_AUDIT.md` to compare local automated evidence with the manual evidence still required.
 
+## 2026-07-10 Stock Inbound Whole-Session Void Status
+
+Scope:
+
+- `/stock/inbound` Session Summary `Delete Whole Session`.
+
+Evidence captured:
+
+- Successful whole-session delete now sets the session finished timestamp after voiding saved units.
+- This lets the summary status resolve to `Voided` instead of leaving an open empty session.
+- `scripts/stock-inbound-guided-flow-coverage.mjs` guards the finish-timestamp update in the whole-session undo path.
+
+Manual QA:
+
+- Finish a session with saved stock, open Delete Whole Session as manager/admin/director, confirm delete, and verify the summary shows `Voided`.
+- Confirm the voided units remain visible in the audit list and a new session starts with a new session code.
+
+## 2026-07-10 Stock Inbound Editable Location Resume
+
+Scope:
+
+- `/stock/inbound` setup location default and session resume behavior.
+
+Evidence captured:
+
+- Inbound location still defaults from the logged-in user's assigned stock location.
+- If the worker changes to another active allowed location, preset normalization now keeps that location on resume instead of forcing the assigned default back in.
+- `scripts/stock-inbound-guided-flow-coverage.mjs` guards the active saved-location preservation path.
+
+Manual QA:
+
+- Open `/stock/inbound`, change location to another allowed stock location, refresh, and confirm the selected location stays the same.
+- Start a session from that edited location and confirm saved stock uses the selected location.
+
+## 2026-07-10 Stock Inbound Rule Warning Copy
+
+Scope:
+
+- `/stock/inbound` barcode-rule learning and locked-rule helper messages.
+
+Evidence captured:
+
+- Ambiguous barcode-rule learning now says `Weight appears twice. Scan another sample.`
+- Locked barcode rule fields now say `Rule locked. Start new to change.`
+- Existing coverage scripts guard both shorter messages.
+
+Manual QA:
+
+- On Barcode Rule Page, enter a sample barcode/weight where the weight appears twice and confirm the page asks for another sample.
+- After saving stock, go back to Barcode Rule Page and confirm locked-rule copy remains short.
+
+## 2026-07-10 Stock Inbound Short Worker Copy
+
+Scope:
+
+- `/stock/inbound` guided setup, barcode rule, and session summary helper text.
+
+Evidence captured:
+
+- Barcode rule scope now says `Rule applies here only.`
+- Barcode rule input options now say `Manual typing`.
+- Summary compact-list helpers now use `Latest 8 shown.`, `Latest 8 shown. Prints all.`, and `Latest 8 voided. Audit kept.`
+- Whole-session delete role message now says `Manager/admin/director only.`
+
+Manual QA:
+
+- Open `/stock/inbound` at phone width and confirm the rule page and summary page stay short, readable, and without horizontal scrolling.
+
 ## 2026-07-10 Stock Scanner Failed-Scan Tone
 
 Scope:
@@ -281,7 +349,7 @@ Scope:
 
 Evidence captured:
 
-- Ambiguous supplier-barcode samples now say `Weight appears twice. Sample cleared. Scan another barcode.`
+- Ambiguous supplier-barcode samples now say `Weight appears twice. Scan another sample.`
 - The sample barcode and kg are cleared after an ambiguous match so the worker can scan a new sample from the same item/manufacturer/origin.
 - No server action, RLS, barcode rule storage, stock movement, scan log, or label-printing logic changed.
 

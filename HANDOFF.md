@@ -1,5 +1,208 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-10 - Stock Inbound whole-session void status fix
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by tightening whole-session delete behavior.
+- Successful whole-session delete now sets `sessionFinishedAt`, so a voided open session resolves to summary status `Voided` instead of remaining an open empty session.
+- Added Stock Inbound guided-flow coverage for the finish-timestamp update in the whole-session undo success path.
+- No server action, RLS policy, stock movement rule, barcode uniqueness behavior, database migration, scanner stream behavior, label printing behavior, or access control changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+SQL run order:
+
+- Unchanged. Pending display-name migration remains `supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql` after `202606250013_stock_item_merge_v1.sql`.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Manual Supabase QA should confirm manager/admin/director whole-session delete shows `Voided`, keeps voided audit rows, and creates `INBOUND_VOID` movement/log/audit evidence.
+- Live Supabase, phone camera, handheld scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound editable location resume fix
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by fixing location resume behavior.
+- Inbound location still defaults to the logged-in user's assigned stock location for a new setup.
+- If a worker changes to another active allowed location, `normalizeInboundPreset` now preserves that selected location on refresh/resume instead of forcing the assigned default back in.
+- Added Stock Inbound guided-flow coverage for the saved active location preservation path.
+- No server action, RLS policy, stock movement rule, barcode uniqueness behavior, database migration, scanner stream behavior, label printing behavior, or access control changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+SQL run order:
+
+- Unchanged. Pending display-name migration remains `supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql` after `202606250013_stock_item_merge_v1.sql`.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Manual Supabase QA should confirm a worker can change to another allowed location, refresh/resume the inbound setup, and save stock into the edited location.
+- Live Supabase, phone camera, handheld scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound rule warning copy trim
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by shortening two remaining barcode-rule worker messages.
+- Ambiguous barcode-rule learning now says `Weight appears twice. Scan another sample.`
+- Locked rule fields now say `Rule locked. Start new to change.`
+- Updated Stock coverage scripts, owner test list, and QA evidence for the shorter copy.
+- No server action, RLS policy, stock movement rule, barcode uniqueness behavior, database migration, scanner stream behavior, label printing behavior, or access control changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+SQL run order:
+
+- Unchanged. Pending display-name migration remains `supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql` after `202606250013_stock_item_merge_v1.sql`.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-completion-audit-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Manual rule-learning QA should confirm the shorter warning still clearly tells workers to scan another sample.
+- Live Supabase, phone camera, handheld scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound short worker copy trim
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by trimming remaining verbose worker helper text in the guided inbound pages.
+- Barcode rule scope now says `Rule applies here only.`
+- Barcode rule input options now say `Manual typing`.
+- Session summary list helpers now use shorter `Latest 8 shown.`, `Latest 8 shown. Prints all.`, and `Latest 8 voided. Audit kept.`
+- Normal workers now see `Manager/admin/director only.` when whole-session delete is unavailable.
+- Updated Stock coverage scripts and QA evidence to guard the shorter copy.
+- No server action, RLS policy, stock movement rule, barcode uniqueness behavior, database migration, scanner stream behavior, label printing behavior, or access control changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+SQL run order:
+
+- Unchanged. Pending display-name migration remains `supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql` after `202606250013_stock_item_merge_v1.sql`.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed after updating stale guard copy.
+- `node scripts\stock-acceptance-coverage.mjs` - passed after updating stale guard copy.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed after updating stale guard copy.
+- `node scripts\stock-inbound-guided-completion-audit-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Manual 390px QA should confirm the shorter text still explains the rule page, summary list, and whole-session delete role restriction clearly.
+- Live Supabase, phone camera, handheld scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound deploy evidence note
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by recording the latest checked deploy handoff evidence in the completion audit.
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md` now names commit `b9fc26c6` on branch `review/codex-half-finished-progress` as the latest local pass before deploy handoff.
+- No app behavior, server action, RLS policy, stock movement rule, database migration, scanner behavior, or label printing behavior changed.
+
+Files changed in this pass:
+
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+SQL run order:
+
+- Unchanged. Pending display-name migration remains `supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql` after `202606250013_stock_item_merge_v1.sql`.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-completion-audit-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live Supabase, phone camera, handheld scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
 ## 2026-07-10 - Stock scanner failed-scan tone guard
 
 Task completed:
@@ -961,7 +1164,7 @@ Risks / remaining checks:
 Task completed:
 
 - Continued the active Stock Inbound guided workflow goal by tightening the ambiguous barcode-rule sample message.
-- When the same entered weight appears in more than one barcode position, the worker now sees `Weight appears twice. Sample cleared. Scan another barcode.`
+- When the same entered weight appears in more than one barcode position, the worker now sees `Weight appears twice. Scan another sample.`
 - The existing behavior still refuses to learn an ambiguous rule, clears the sample, logs the scan issue, and asks for another supplier barcode.
 - No server action, RLS, stock movement, barcode uniqueness, label printing, scanner, or database behavior changed.
 

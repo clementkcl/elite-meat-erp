@@ -142,6 +142,25 @@ includesAll(
   "Inbound history setup normalization"
 )
 
+const normalizePresetStart = workflowForms.indexOf(
+  "function normalizeInboundPreset"
+)
+const normalizePresetEnd = workflowForms.indexOf(
+  "function applyMatchingWeightRule",
+  normalizePresetStart
+)
+assert(normalizePresetStart >= 0, "normalizeInboundPreset function missing")
+assert(normalizePresetEnd > normalizePresetStart, "normalizeInboundPreset boundary missing")
+includesAll(
+  workflowForms.slice(normalizePresetStart, normalizePresetEnd),
+  [
+    "locationId: activeLocationIds.has(preset.locationId)",
+    "? preset.locationId",
+    ": fallbackLocationId",
+  ],
+  "Inbound editable location preservation"
+)
+
 includesAll(
   workflowForms,
   [
@@ -438,7 +457,7 @@ includesAll(
     "data-stock-action=\"barcode-rule-input-methods\"",
     "Camera scanner",
     "Handheld scanner + Enter",
-    "Manual typing fallback",
+    "Manual typing",
     "Weight start position",
     "Weight digits",
     "Weight decimals",
@@ -473,7 +492,7 @@ includesAll(
     "[\"Barcode length\", barcode.trim() ? String(barcode.trim().length) : \"-\"]",
     "inferBarcodeWeightRuleWithStatus",
     "decimalsText: preset.barcodeWeightDecimals",
-    "Weight appears twice. Sample cleared. Scan another barcode.",
+    "Weight appears twice. Scan another sample.",
     "mustSaveCurrentRule",
     "Save first barcode + rule",
     "First barcode teaches rule.",
@@ -883,7 +902,7 @@ includesAll(
     "Compact list.",
     "data-stock-action=\"inbound-session-summary-error-list\"",
     "sessionErrors.slice(0, 8).map",
-    "Latest 8 shown. Full list prints.",
+    "Latest 8 shown. Prints all.",
     "data-stock-action=\"inbound-session-summary-voided-list\"",
     "const voidedSessionScans = recentLabels.filter(",
     "Voided scans kept for audit",
@@ -942,11 +961,12 @@ includesAll(
     "Delete Whole Session",
     "data-stock-action=\"start-new-inbound-session\"",
     "data-stock-action=\"whole-session-delete-role-message\"",
-    "Manager, admin, or director approval needed to delete whole session.",
+    "Manager/admin/director only.",
     "function startNewInboundSession",
     "Corrections need manager approval. Audit kept.",
-    "Full audit kept.",
+    "Audit kept.",
     "undoInboundSessionAction",
+    "setSessionFinishedAt(new Date().toISOString())",
     "[...stockManagerRoles, \"director\"]",
     "create or replace function public.void_inbound_stock_session",
     "'INBOUND_VOID'::public.stock_movement_type",
