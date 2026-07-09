@@ -59,6 +59,8 @@ const orderLineSchema = z
     requestedQuantity: z.coerce.number().min(0).default(0),
     estimatedWeightKg: z.coerce.number().min(0).default(0),
     processingRequired: z.coerce.boolean().default(false),
+    preferredBrandId: optionalId,
+    customization: z.record(z.string(), z.array(z.string().trim().min(1))).optional().default({}),
     remarks: z.string().trim().optional().default(""),
   })
   .refine(
@@ -76,7 +78,7 @@ const createOrderSchema = z.object({
   fromLocationId: optionalId,
   toLocationId: optionalId,
   deliveryAddress: optionalText,
-  totalOrderPrice: z.coerce.number().min(0),
+  totalOrderPrice: z.coerce.number().min(0).default(0),
   customerRemarks: optionalText,
   remarks: optionalText,
   outletId: optionalId,
@@ -104,6 +106,7 @@ const editOrderSchema = z.object({
 
 const barcodePickSchema = z.object({
   orderId: z.string().trim().min(1),
+  orderItemId: z.string().trim().min(1),
   barcode: z.string().trim().min(1, "Scan or type a barcode."),
 })
 
@@ -120,6 +123,11 @@ const manualPickSchema = z.object({
 
 const orderIdSchema = z.object({
   orderId: z.string().trim().min(1),
+})
+
+const finalPriceSchema = z.object({
+  orderId: z.string().trim().min(1),
+  totalOrderPrice: z.coerce.number().positive("Enter final total price."),
 })
 
 const releaseReservationsSchema = z.object({
@@ -156,6 +164,27 @@ type ParsedOrderLine = z.infer<typeof orderLineSchema>
 
 type ReservationLine = ParsedOrderLine & {
   orderItemId: string
+}
+
+function readCustomization(value: unknown): Record<string, string[]> {
+  const record = asRecord(value)
+  const customization: Record<string, string[]> = {}
+
+  for (const [key, optionValues] of Object.entries(record)) {
+    if (!Array.isArray(optionValues)) {
+      continue
+    }
+
+    const values = optionValues
+      .map((optionValue) => readString(optionValue))
+      .filter(Boolean)
+
+    if (values.length > 0) {
+      customization[key] = values
+    }
+  }
+
+  return customization
 }
 
 function formObject(formData: FormData) {
@@ -244,7 +273,6 @@ function revalidateOrderPaths(orderId?: string) {
     "/dashboard",
     "/orders",
     "/orders/create",
-    "/orders/new",
     "/orders/picking",
     "/orders/ready",
     "/orders/customers",
@@ -420,10 +448,15 @@ async function insertNotificationEvent(
   await context.supabase.from("order_notification_events").insert({
     order_id: orderId,
     event_type: eventType,
-    channel: "WHATSAPP",
-    status: "SKIPPED",
+    channel: "IN_APP",
+    status: "SENT",
     created_by: context.profile.id,
-    payload: { source: "manual_erp_v1", eventType, note: "WhatsApp disabled in V1" },
+    payload: {
+      source: "manual_erp_v1",
+      eventType,
+      method: "dashboard_alert",
+      note: "In-app notification only. WhatsApp is disabled in V1.",
+    },
   })
 }
 
@@ -528,14 +561,21 @@ async function availableStockWeightKg(
   supabase: SupabaseServerClient,
   itemId: string,
   locationId: string | null,
-  excludeOrderId: string | null = null
+  excludeOrderId: string | null = null,
+  preferredBrandId: string | null = null
 ) {
-  const physicalWeight = await physicalStockWeightKg(supabase, itemId, locationId)
+  const physicalWeight = await physicalStockWeightKg(
+    supabase,
+    itemId,
+    locationId,
+    preferredBrandId
+  )
   const reservedWeight = await activeReservedStockWeightKg(
     supabase,
     itemId,
     locationId,
-    excludeOrderId
+    excludeOrderId,
+    preferredBrandId
   )
 
   return physicalWeight - reservedWeight
@@ -544,7 +584,8 @@ async function availableStockWeightKg(
 async function physicalStockWeightKg(
   supabase: SupabaseServerClient,
   itemId: string,
-  locationId: string | null
+  locationId: string | null,
+  preferredBrandId: string | null = null
 ) {
   let query = supabase
     .from("stock_units")
@@ -554,6 +595,10 @@ async function physicalStockWeightKg(
 
   if (locationId) {
     query = query.eq("location_id", locationId)
+  }
+
+  if (preferredBrandId) {
+    query = query.eq("brand_id", preferredBrandId)
   }
 
   const { data, error } = await query
@@ -572,11 +617,12 @@ async function activeReservedStockWeightKg(
   supabase: SupabaseServerClient,
   itemId: string,
   locationId: string | null,
-  excludeOrderId: string | null = null
+  excludeOrderId: string | null = null,
+  preferredBrandId: string | null = null
 ) {
   let query = supabase
     .from("order_stock_reservations")
-    .select("reserved_weight_kg")
+    .select("reserved_weight_kg, preferred_brand_id")
     .eq("item_id", itemId)
     .eq("status", "ACTIVE")
     .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
@@ -595,10 +641,13 @@ async function activeReservedStockWeightKg(
     throw new Error(error.message)
   }
 
-  return asRecordArray(data).reduce(
-    (sum, row) => sum + readNumber(row.reserved_weight_kg),
-    0
-  )
+  return asRecordArray(data)
+    .filter((row) => {
+      const reservedBrandId = readString(row.preferred_brand_id)
+
+      return !preferredBrandId || !reservedBrandId || reservedBrandId === preferredBrandId
+    })
+    .reduce((sum, row) => sum + readNumber(row.reserved_weight_kg), 0)
 }
 
 async function stockUnitByBarcode(
@@ -737,7 +786,9 @@ async function reserveOrderStockLines(
     const availableWeight = await availableStockWeightKg(
       context.supabase,
       line.itemId,
-      locationId
+      locationId,
+      null,
+      line.preferredBrandId
     )
     const stockNotEnough = availableWeight < line.estimatedWeightKg
     anyStockNotEnough = anyStockNotEnough || stockNotEnough
@@ -757,6 +808,7 @@ async function reserveOrderStockLines(
         order_id: orderId,
         order_item_id: line.orderItemId,
         item_id: line.itemId,
+        preferred_brand_id: line.preferredBrandId,
         location_id: locationId,
         reserved_quantity: line.requestedQuantity,
         reserved_weight_kg: line.estimatedWeightKg,
@@ -821,6 +873,8 @@ async function reserveOrderStockForOrder(
       ),
       processingRequired: readBoolean(item.processing_required),
       remarks: readString(item.item_request_remarks, readString(item.notes)),
+      preferredBrandId: readString(item.preferred_brand_id) || null,
+      customization: readCustomization(item.customization),
     }))
 
   if (lines.length === 0) {
@@ -852,7 +906,8 @@ async function recalculateOrderStockStatus(
       context.supabase,
       itemId,
       locationId,
-      orderId
+      orderId,
+      readString(item.preferred_brand_id) || null
     )
     const stockNotEnough = availableWeight < requiredWeight
     anyStockNotEnough = anyStockNotEnough || stockNotEnough
@@ -951,6 +1006,24 @@ export async function createCustomerOrderAction(
       }
     }
 
+    for (const line of lines) {
+      if (!line.preferredBrandId) {
+        continue
+      }
+
+      const availableBrandWeight = await availableStockWeightKg(
+        context.supabase,
+        line.itemId,
+        reservationLocationId,
+        null,
+        line.preferredBrandId
+      )
+
+      if (availableBrandWeight <= 0) {
+        throw new Error("Selected brand has no stock. Choose another brand or no brand preference.")
+      }
+    }
+
     const { data: orderNoData, error: orderNoError } = await context.supabase.rpc(
       "next_customer_order_no_v1",
       { p_outlet_id: outletId }
@@ -1031,6 +1104,8 @@ export async function createCustomerOrderAction(
           requested_quantity: line.requestedQuantity,
           requested_weight_kg: line.estimatedWeightKg,
           estimated_weight_kg: line.estimatedWeightKg,
+          preferred_brand_id: line.preferredBrandId,
+          customization: line.customization,
           status: "REQUESTED",
           notes: line.remarks || null,
           item_request_remarks: line.remarks || null,
@@ -1300,6 +1375,32 @@ async function updatePickedTotals(
   }
 }
 
+async function assignReservationStockUnit(
+  context: OrdersActionContext,
+  orderId: string,
+  orderItemId: string,
+  stockUnitId: string,
+  barcode: string
+) {
+  const { error } = await context.supabase
+    .from("order_stock_reservations")
+    .update({
+      assigned_stock_unit_id: stockUnitId,
+      assigned_barcode: barcode,
+      assigned_at: new Date().toISOString(),
+      assigned_by: context.profile.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("order_id", orderId)
+    .eq("order_item_id", orderItemId)
+    .eq("status", "ACTIVE")
+    .is("assigned_stock_unit_id", null)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
 export async function pickOrderBarcodeAction(
   _state: OrdersActionState,
   formData: FormData
@@ -1319,7 +1420,7 @@ export async function pickOrderBarcodeAction(
       .select("id")
       .eq("order_id", parsed.orderId)
       .eq("barcode", parsed.barcode)
-      .eq("entry_type", "BARCODE_SCAN")
+      .limit(1)
       .maybeSingle()
 
     if (asRecord(duplicate).id) {
@@ -1328,10 +1429,18 @@ export async function pickOrderBarcodeAction(
 
     const unit = await stockUnitByBarcode(context.supabase, parsed.barcode)
     const items = await getOrderItems(context.supabase, parsed.orderId)
+    const selectedItem = items.find(
+      (item) => readString(item.id) === parsed.orderItemId
+    )
+
+    if (!selectedItem) {
+      throw new Error("Select the order item before scanning.")
+    }
 
     if (!unit) {
       await context.supabase.from("order_picking_entries").insert({
         order_id: parsed.orderId,
+        order_item_id: parsed.orderItemId,
         barcode: parsed.barcode,
         entry_type: "MISMATCH",
         mismatch_message: "Barcode not found.",
@@ -1346,9 +1455,10 @@ export async function pickOrderBarcodeAction(
         readString(item.status) !== "CANCELLED"
     )
 
-    if (!matchingItem) {
+    if (!matchingItem || readString(matchingItem.id) !== parsed.orderItemId) {
       await context.supabase.from("order_picking_entries").insert({
         order_id: parsed.orderId,
+        order_item_id: parsed.orderItemId,
         item_id: readString(unit.item_id),
         stock_unit_id: readString(unit.id),
         barcode: parsed.barcode,
@@ -1359,12 +1469,29 @@ export async function pickOrderBarcodeAction(
       throw new Error("Wrong item scanned. Mismatch recorded.")
     }
 
+    const preferredBrandId = readString(matchingItem.preferred_brand_id)
+
+    if (preferredBrandId && preferredBrandId !== readString(unit.brand_id)) {
+      await context.supabase.from("order_picking_entries").insert({
+        order_id: parsed.orderId,
+        order_item_id: readString(matchingItem.id),
+        item_id: readString(unit.item_id),
+        stock_unit_id: readString(unit.id),
+        barcode: parsed.barcode,
+        entry_type: "MISMATCH",
+        mismatch_message: "Wrong brand scanned.",
+        created_by: context.profile.id,
+      })
+      throw new Error("Wrong brand scanned. Mismatch recorded.")
+    }
+
     const pickedWeightKg = readNumber(unit.net_weight_kg)
+    const matchingOrderItemId = readString(matchingItem.id)
     const { error: entryError } = await context.supabase
       .from("order_picking_entries")
       .insert({
         order_id: parsed.orderId,
-        order_item_id: readString(matchingItem.id),
+        order_item_id: matchingOrderItemId,
         item_id: readString(unit.item_id),
         stock_unit_id: readString(unit.id),
         barcode: parsed.barcode,
@@ -1378,6 +1505,13 @@ export async function pickOrderBarcodeAction(
       throw new Error(entryError.message)
     }
 
+    await assignReservationStockUnit(
+      context,
+      parsed.orderId,
+      matchingOrderItemId,
+      readString(unit.id),
+      parsed.barcode
+    )
     await updatePickedTotals(context, matchingItem, 1, pickedWeightKg, "Barcode picked")
     revalidateOrderPaths(parsed.orderId)
 
@@ -1472,12 +1606,10 @@ export async function markCustomerOrderReadyAction(
       throw new Error("Pick every item within the 10kg tolerance before marking ready.")
     }
 
-    const deliveryRequired = readBoolean(order.delivery_required)
-    const nextStatus = deliveryRequired ? "READY_FOR_DELIVERY" : "READY_FOR_PICKUP"
     const { error } = await context.supabase
       .from("customer_orders")
       .update({
-        status: nextStatus,
+        status: "READY",
         updated_by: context.profile.id,
       })
       .eq("id", parsed.orderId)
@@ -1492,6 +1624,56 @@ export async function markCustomerOrderReadyAction(
       .eq("order_id", parsed.orderId)
       .neq("status", "CANCELLED")
 
+    await insertAuditLog(
+      context.supabase,
+      context.profile,
+      "CUSTOMER_ORDER_READY_V1",
+      "customer_orders",
+      parsed.orderId,
+      {
+        nextStatus: "READY",
+        priceRequired: true,
+      }
+    )
+    revalidateOrderPaths(parsed.orderId)
+
+    return "Picking completed. Enter final total price next."
+  })
+}
+
+export async function setCustomerOrderFinalPriceAction(
+  _state: OrdersActionState,
+  formData: FormData
+): Promise<OrdersActionState> {
+  const parsed = parseAction(finalPriceSchema, formData)
+
+  if (isOrdersActionState(parsed)) {
+    return parsed
+  }
+
+  return runOrdersAction(formData, orderRoles, "orders", async (context) => {
+    const order = await getOrder(context.supabase, parsed.orderId)
+    const status = readString(order.status)
+
+    if (status !== "READY") {
+      throw new Error(`Order is ${status || "not ready"} and cannot be priced.`)
+    }
+
+    const deliveryRequired = readBoolean(order.delivery_required)
+    const nextStatus = deliveryRequired ? "READY_FOR_DELIVERY" : "READY_FOR_PICKUP"
+    const { error } = await context.supabase
+      .from("customer_orders")
+      .update({
+        status: nextStatus,
+        total_order_price: parsed.totalOrderPrice,
+        updated_by: context.profile.id,
+      })
+      .eq("id", parsed.orderId)
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
     const linkedDelivery = deliveryRequired
       ? await createLinkedDeliveryFromOrder(context, parsed.orderId)
       : null
@@ -1500,10 +1682,11 @@ export async function markCustomerOrderReadyAction(
     await insertAuditLog(
       context.supabase,
       context.profile,
-      "CUSTOMER_ORDER_READY_V1",
+      "CUSTOMER_ORDER_FINAL_PRICE_V1",
       "customer_orders",
       parsed.orderId,
       {
+        totalOrderPrice: parsed.totalOrderPrice,
         nextStatus,
         deliveryId: linkedDelivery?.deliveryId ?? null,
         deliveryNo: linkedDelivery?.deliveryNo ?? null,
@@ -1513,8 +1696,8 @@ export async function markCustomerOrderReadyAction(
     revalidateOrderPaths(parsed.orderId)
 
     return deliveryRequired
-      ? `Order marked ready for delivery handoff. Delivery ${linkedDelivery?.deliveryNo ?? "job"} linked.`
-      : "Order marked ready for pickup."
+      ? `Final price saved. Delivery ${linkedDelivery?.deliveryNo ?? "job"} is pending delivery.`
+      : "Final price saved. Order is ready for pickup."
   })
 }
 
@@ -1532,6 +1715,7 @@ export async function createOrderDeliveryAction(
     const order = await getOrder(context.supabase, parsed.orderId)
     const fulfillmentType = readString(order.fulfillment_type, "PICKUP")
     const deliveryRequired = readBoolean(order.delivery_required)
+    const status = readString(order.status)
 
     if (
       fulfillmentType === "PICKUP" ||
@@ -1539,6 +1723,10 @@ export async function createOrderDeliveryAction(
         !["DELIVERY", "INTERNAL_TRANSFER"].includes(fulfillmentType))
     ) {
       throw new Error("Customer pickup stays in Orders and does not create a delivery job.")
+    }
+
+    if (status !== "READY_FOR_DELIVERY") {
+      throw new Error("Enter final total price before creating the delivery job.")
     }
 
     const linkedDelivery = await createLinkedDeliveryFromOrder(context, parsed.orderId)

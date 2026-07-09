@@ -22,6 +22,7 @@ const warningStatuses = new Set([
   "LATE",
   "LOADING",
   "MANAGER_REVIEWED",
+  "MISSING",
   "OPEN",
   "OUT_FOR_DELIVERY",
   "OVER_6_MONTHS",
@@ -31,6 +32,7 @@ const warningStatuses = new Set([
   "SUBMITTED",
   "TRANSFER_PENDING",
   "UNPAID",
+  "VARIANCE",
 ])
 
 const destructiveStatuses = new Set([

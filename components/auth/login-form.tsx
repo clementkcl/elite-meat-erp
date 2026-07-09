@@ -24,11 +24,13 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Sign in</CardTitle>
-        <CardDescription>Use your Elite Meat ERP account.</CardDescription>
+        <CardTitle>Staff sign in</CardTitle>
+        <CardDescription>
+          Use your assigned staff account. Your role controls what you can open.
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action={action} className="space-y-4">
+        <form action={action} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -36,6 +38,7 @@ export function LoginForm() {
               name="email"
               type="email"
               autoComplete="email"
+              className="min-h-12 text-base"
               required
             />
           </div>
@@ -46,20 +49,28 @@ export function LoginForm() {
               name="password"
               type="password"
               autoComplete="current-password"
+              className="min-h-12 text-base"
               required
             />
           </div>
 
           {state.error ? (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+            >
               {state.error}
             </div>
           ) : null}
 
-          <Button type="submit" className="w-full" disabled={pending}>
+          <Button type="submit" className="min-h-12 w-full" disabled={pending}>
             <LogIn className="size-4" />
-            {pending ? "Signing in..." : "Sign in"}
+            {pending ? "Signing in..." : "Open ERP"}
           </Button>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Missing a module after sign in? Ask your manager or admin to check
+            your role and outlet access.
+          </p>
         </form>
       </CardContent>
     </Card>

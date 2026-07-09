@@ -2,7 +2,7 @@ export type OutboundReadyOrder = {
   status?: string | null
 }
 
-const outboundAvailableStatuses = ["IN_STOCK", "TRANSFERRED", "RETURNED"]
+const outboundAvailableStatuses = ["IN_STOCK"]
 
 export function assertCustomerOrderReadyForOutbound(order: OutboundReadyOrder) {
   const status = String(order.status ?? "")

@@ -18,6 +18,16 @@ export type BarcodeWeightDecodeInput = {
   fixedWeightKgText?: string
 }
 
+export type BarcodeWeightRuleSuggestion = {
+  start: number
+  length: number
+  decimals: number
+}
+
+export type BarcodeWeightRuleInference =
+  | { status: "unique"; suggestion: BarcodeWeightRuleSuggestion }
+  | { status: "ambiguous" | "not_found"; suggestion: null }
+
 function formatWeight(value: number, decimals: number) {
   return value.toFixed(Math.max(0, Math.min(decimals, 3)))
 }
@@ -25,6 +35,101 @@ function formatWeight(value: number, decimals: number) {
 function parsePositiveNumber(value: string | undefined) {
   const parsed = Number(value)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+function enteredDecimalPlaces(value: string) {
+  const match = value.trim().match(/\.(\d+)$/)
+
+  if (!match) {
+    return null
+  }
+
+  return Math.max(1, Math.min(match[1].length, 3))
+}
+
+export function inferBarcodeWeightRuleWithStatus({
+  barcode,
+  weightKgText,
+}: {
+  barcode: string
+  weightKgText: string
+}): BarcodeWeightRuleInference {
+  const normalizedBarcode = barcode.trim()
+  const weightKg = parsePositiveNumber(weightKgText)
+
+  if (!normalizedBarcode || weightKg === null || !/^\d+$/.test(normalizedBarcode)) {
+    return { status: "not_found", suggestion: null }
+  }
+
+  const candidates: BarcodeWeightRuleSuggestion[] = []
+  const typedDecimals = enteredDecimalPlaces(weightKgText)
+  const decimalOptions = typedDecimals ? [typedDecimals] : [1, 2, 3]
+
+  for (const decimals of decimalOptions) {
+    const rawWeight = Math.round(weightKg * 10 ** decimals)
+
+    if (Math.abs(rawWeight / 10 ** decimals - weightKg) > 0.0005) {
+      continue
+    }
+
+    const rawText = String(rawWeight)
+    const length = Math.max(5, rawText.length)
+    let searchFrom = 0
+
+    while (searchFrom < normalizedBarcode.length) {
+      const index = normalizedBarcode.indexOf(rawText, searchFrom)
+
+      if (index === -1) {
+        break
+      }
+
+      const start = index - (length - rawText.length)
+
+      if (start < 0) {
+        searchFrom = index + 1
+        continue
+      }
+
+      const raw = normalizedBarcode.slice(start, index + rawText.length)
+
+      if (raw.length !== length || !/^\d+$/.test(raw)) {
+        searchFrom = index + 1
+        continue
+      }
+
+      candidates.push({
+        start: start + 1,
+        length,
+        decimals,
+      })
+      searchFrom = index + 1
+    }
+  }
+
+  const unique = new Map(
+    candidates.map((candidate) => [
+      `${candidate.start}:${candidate.length}:${candidate.decimals}`,
+      candidate,
+    ])
+  )
+
+  if (unique.size === 1) {
+    return { status: "unique", suggestion: [...unique.values()][0] }
+  }
+
+  return {
+    status: unique.size > 1 ? "ambiguous" : "not_found",
+    suggestion: null,
+  }
+}
+
+export function inferBarcodeWeightRule(input: {
+  barcode: string
+  weightKgText: string
+}): BarcodeWeightRuleSuggestion | null {
+  const result = inferBarcodeWeightRuleWithStatus(input)
+
+  return result.status === "unique" ? result.suggestion : null
 }
 
 function decodeGs1Weight(barcode: string): BarcodeWeightDecodeResult | null {

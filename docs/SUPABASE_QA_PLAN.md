@@ -24,10 +24,12 @@ Run migrations in filename order from:
 
 1. `supabase/migrations/202606100001_erp_core_stock_v1.sql`
 2. Continue every migration in filename order.
-3. End with `supabase/migrations/202606100034_order_reservation_on_picking_v1.sql`.
+3. Continue through the latest `supabase/migrations/*.sql` file in filename order.
 4. Run `supabase/seed.sql` after migrations if demo QA data is needed.
 
 Do not skip later hardening migrations. Some early policies are intentionally tightened by later migrations.
+
+QA Auth users are seeded by `supabase/seed.sql` for local/dev QA. The seed inserts confirmed Supabase Auth users, repairs matching `profiles` rows, assigns exactly one intended `profile_roles` row per QA account, and sets the documented outlet, department, stock-location, and module-access scope. These accounts use the local/dev QA password `ChangeMe-QA-2026!`; do not use or reuse that password in production.
 
 ## Roles
 
@@ -81,13 +83,22 @@ The ERP uses these roles:
 | `SUNGAI MERAH` | `stock`, `orders`, `retail`, `delivery`, `attendance`, `cleaning`, `oa_actions` |
 | `WONDERFUL` | `stock`, `orders`, `processing`, `attendance`, `cleaning`, `oa_actions` |
 | `SUNGAI MAAW` | `retail`, `orders`, `delivery`, `attendance`, `cleaning`, `oa_actions` |
-| `DIRECTOR` | No seeded outlet-module rows; admin/director global access should bypass normal outlet gating where intended |
+| `DIRECTOR` | Seeded for admin/director/global QA; admin/director global access should bypass normal outlet gating where intended |
+
+### Seeded Order Outlet Codes
+
+| Outlet | Order code |
+| --- | --- |
+| JALAN CHANNEL | `10` |
+| SUNGAI MERAH | `11` |
+| WONDERFUL | `12` |
+| SUNGAI MAAW | `13` |
+| QA NO ORDERS | `98` |
+| DIRECTOR | `99` |
 
 ## Test User Matrix
 
-Create Auth users manually in Supabase Auth. For each user, create a matching `profiles` row where `profiles.id = auth.users.id`, then assign exactly one intended role in `profile_roles`.
-
-Use a predictable password only in staging, for example `ChangeMe-QA-2026!`. Do not create these users in production until the matrix is approved.
+Run the local/dev seed to create or repair Auth users. Each user below should be able to sign in with the local/dev password `ChangeMe-QA-2026!` after `supabase db reset` or `supabase db seed` on a safe non-production database.
 
 ### Operational Role / Scope Matrix
 
@@ -133,6 +144,7 @@ These users verify global or approval behavior and should be kept separate from 
 | `qa.account.global@example.test` | `account` | `DIRECTOR` | `Accounting` | `DIRECTOR` | Finance invoice entry/payment, OA payment, payslip upload |
 | `qa.admin@example.test` | `admin` | `DIRECTOR` | `Admin` | `DIRECTOR` | Global settings, user/scope management, admin review, protected management |
 | `qa.director@example.test` | `director` | `DIRECTOR` | `Management` | `DIRECTOR` | Global dashboards/reports/approvals; routine operational entry denied where intended |
+| `qa.noorders@example.test` | `retail_team_general_worker` | `QA NO ORDERS` | `Retail` | `QA NO ORDERS` | Negative test user; Orders/Delivery/Retail/Processing module access denied |
 
 ### Cross-Scope Denial Pairs
 
@@ -267,8 +279,9 @@ Use these pairs for every RLS table listed below. User A should be allowed to re
 - [ ] Stock-capable scoped user can read own-location stock units and movements.
 - [ ] Stock-capable scoped user can scan inbound/outbound/transfer/return/stock-take only for own location.
 - [ ] Customer order operator can create orders in their scoped outlet.
-- [ ] Customer order operator can add an order item without creating an `order_stock_reservations` row.
-- [ ] Customer order operator can start picking/preparation and the RPC creates a matching `order_stock_reservations` row.
+- [ ] Order V1 reserves stock immediately when a confirmed Manual ERP order is created.
+- [ ] Customer order operator can add order lines only through scoped order creation/update flows.
+- [ ] Stock-not-enough orders are still created and appear in picking.
 - [ ] Account can upload AR/AP invoice files and enter manual fields.
 - [ ] Account can mark director-approved OA/finance items paid.
 - [ ] Admin can manage settings, users, roles, outlet modules, configurable lists, and protected records.
@@ -276,7 +289,7 @@ Use these pairs for every RLS table listed below. User A should be allowed to re
 
 ## RLS Denied Checklist
 
-- [ ] Retail worker cannot read or edit another outlet's retail sales, cash sessions, closing, expenses, or customers.
+- [ ] Retail worker cannot read or edit another outlet's retail sales, expenses, cleaning, processing, uploaded files, or cash closing.
 - [ ] Retail worker cannot edit past-day retail sales/cash records.
 - [ ] Delivery worker cannot read or update another delivery outlet/team's delivery orders.
 - [ ] Delivery role cannot create or prepare general customer orders.
@@ -290,6 +303,7 @@ Use these pairs for every RLS table listed below. User A should be allowed to re
 - [ ] Staff cannot see another staff member's payslip.
 - [ ] Non-admin cannot update `profiles`, `profile_roles`, `outlet_module_access`, customer categories, customer price rules, claim categories, leave types, or barcode rules.
 - [ ] Negative users in module-disabled outlets are blocked from the disabled module routes and server actions.
+- [ ] `qa.noorders@example.test` cannot read, create, pick, ready, cancel, or complete customer orders because the `QA NO ORDERS` outlet has Orders disabled.
 
 ## Storage Upload Workflows
 
@@ -358,22 +372,18 @@ Finance invoice upload is the current import-document proxy for MVP import/conta
 - [ ] Out-of-scope delivery user cannot upload proof or complete another outlet/team delivery.
 - [ ] Director can view proof-linked records but cannot run routine delivery proof/status actions as an operator.
 
-## Order Reservation Creation Checklist
+## Order V1 Immediate Reservation Checklist
 
-- [ ] Apply migrations through `202606100034_order_reservation_on_picking_v1.sql`.
-- [ ] Confirm obsolete RPC is not callable: `public.add_customer_order_item_with_reservation`.
-- [ ] Confirm active RPC exists: `public.prepare_customer_order_item_with_reservation`.
-- [ ] Add an item to a `NEW` customer order as an allowed scoped order user.
-- [ ] Confirm exactly one `customer_order_items` row is created.
-- [ ] Confirm no matching `order_stock_reservations` row is created from item entry.
-- [ ] Prepare/pick the order item as an allowed scoped order user.
-- [ ] Confirm exactly one matching `order_stock_reservations` row is created during preparation.
-- [ ] Confirm order status becomes `PREPARING`.
-- [ ] Attempt to add an item after stock is reserved and confirm no item row is created.
-- [ ] Attempt to prepare the same item twice and confirm no second reservation row is created.
-- [ ] Attempt to add or prepare an item as an out-of-scope user and confirm no item/reservation row is created.
-- [ ] Attempt to add or prepare an item with zero quantity and zero weight and confirm no item/reservation row is created.
-- [ ] Confirm server action returns a staff-readable error if the RPC fails.
+- [ ] Apply all migrations in filename order.
+- [ ] Confirm `public.next_customer_order_no_v1`, `public.reserve_order_stock_v1`, `public.release_order_reservations_v1`, `public.expire_order_reservations_v1`, and `public.recalculate_order_stock_status_v1` exist.
+- [ ] Create a pickup order as an allowed scoped order user.
+- [ ] Confirm order status is immediately confirmed and the order number uses `ORD-YYYYMMDD[OutletCode][RunningNo]`.
+- [ ] Confirm matching `customer_order_items` and active `order_stock_reservations` rows are created during order creation.
+- [ ] Confirm reservation expiry is set to end of local business day.
+- [ ] Create a stock-not-enough order and confirm the order still exists, has stock warning state, and appears in picking.
+- [ ] Cancel an order and confirm active reservations move to `RELEASED`.
+- [ ] Attempt to create, reserve, pick, or cancel an order as an out-of-scope user and confirm no out-of-scope rows are created or changed.
+- [ ] Attempt to create an order with zero estimated quantity/weight and confirm the server action returns a staff-readable error.
 
 ## Barcode Camera Device QA
 
@@ -452,8 +462,8 @@ Workflows using barcode scanner fields:
 - [ ] No normal user can see another outlet/team/location's operational data.
 - [ ] All required uploads create both Storage objects and `files` metadata rows.
 - [ ] Delivery completion is blocked without proof in both standalone and customer-order paths.
-- [ ] Order item entry does not reserve stock.
-- [ ] Picking/preparation and stock reservation are atomic through the RPC.
+- [ ] Manual ERP order creation reserves stock immediately.
+- [ ] Picking assigns exact barcodes or records required-reason manual weights after reservation.
 - [ ] Barcode scanning works on at least one Android or iPhone and one Windows laptop.
 - [ ] Manual barcode fallback works on all scanner pages.
 - [ ] Any accepted Storage policy risk is explicitly signed off before production.

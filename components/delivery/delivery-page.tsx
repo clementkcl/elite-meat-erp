@@ -40,7 +40,6 @@ export type DeliveryRoute =
 type TableRow = Record<string, string | number | boolean>
 
 const deliveryRoles: UserRole[] = [
-  "delivery_team_general_worker",
   "delivery_manager",
   "admin",
   "director",
@@ -59,36 +58,34 @@ const deliveryOperatorRoles: UserRole[] = [
 
 const deliveryManagerRoles: UserRole[] = ["delivery_manager", "admin"]
 const deliveryPaymentRoles: UserRole[] = [
-  "delivery_team_general_worker",
   "delivery_manager",
-  "account",
   "admin",
 ]
 
 const titles: Record<DeliveryRoute, { title: string; description: string }> = {
   dashboard: {
     title: "Delivery Dashboard",
-    description: "Dispatch workload, vehicle readiness, payment follow-up, and status mix.",
+    description: "Legacy delivery dashboard. Use /delivery for the canonical V1 manager dashboard.",
   },
   orders: {
-    title: "Delivery Orders",
-    description: "Track progress, proof of delivery, and full order history.",
+    title: "Legacy Delivery Orders",
+    description: "Legacy standalone delivery-order records. Canonical V1 deliveries use /delivery, /delivery/driver, and /delivery/[id].",
   },
   "new-order": {
-    title: "New Delivery Order",
-    description: "Record customer delivery details, first item, vehicle, driver, and payment terms.",
+    title: "Legacy New Delivery Order",
+    description: "Legacy standalone entry. Canonical V1 delivery jobs are created from Orders or manual deliveries in the V1 service.",
   },
   driver: {
     title: "Driver View",
-    description: "Update route progress and record delivery location checkpoints.",
+    description: "Legacy driver job view. Canonical V1 drivers use /delivery/driver.",
   },
   vehicles: {
-    title: "Vehicles",
-    description: "Maintain active lorries, vans, and delivery capacity.",
+    title: "Legacy Vehicles",
+    description: "Legacy vehicle maintenance. Canonical V1 vehicle access is scoped through Delivery V1 queries and RLS.",
   },
   payments: {
-    title: "Delivery Payments",
-    description: "Record cash, credit, and online transfer collection status.",
+    title: "Legacy Delivery Payments",
+    description: "Legacy delivery payment records. Driver V1 does not expose collection, credit, finance, or accounting data.",
   },
 }
 
@@ -271,18 +268,29 @@ function PageHeader({
   demoMode: boolean
 }) {
   const title = titles[route]
+  const isLegacySurface = route !== "dashboard"
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          {title.title}
-        </h1>
-        <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          {title.description}
-        </p>
+    <div className="space-y-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            {title.title}
+          </h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            {title.description}
+          </p>
+        </div>
+        {demoMode ? <Badge variant="warning">Demo data</Badge> : null}
       </div>
-      {demoMode ? <Badge variant="warning">Demo data</Badge> : null}
+      {isLegacySurface ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Delivery V1 canonical workflow is based on deliveries, delivery orders,
+          delivery items, proofs, status logs, address suggestions, and expenses.
+          Keep this legacy page for historical records only unless a manager has
+          confirmed the old standalone workflow is still needed.
+        </div>
+      ) : null}
     </div>
   )
 }

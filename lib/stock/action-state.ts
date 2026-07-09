@@ -3,6 +3,8 @@ export type StockActionState = {
   message: string
   warning?: string
   itemId?: string
+  brandId?: string
+  originId?: string
   stockUnitId?: string
   voidedStockUnitId?: string
 }

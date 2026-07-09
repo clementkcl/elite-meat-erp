@@ -383,6 +383,27 @@ export type Delivery = {
   createdAt: string
 }
 
+export type DeliveryUpcomingOrder = {
+  id: string
+  orderNo: string
+  status: string
+  customerName: string
+  customerPhone: string
+  deliveryAddress: string
+  customerRemarks: string
+  requiredAt: string | null
+  totalEstimatedWeightKg: number
+  pickedWeightKg: number
+  progressPercent: number
+  items: DeliveryUpcomingOrderItem[]
+}
+
+export type DeliveryUpcomingOrderItem = {
+  id: string
+  itemLabel: string
+  customization: Record<string, string[]>
+}
+
 export type DeliveryLinkedOrder = {
   id: string
   deliveryId: string

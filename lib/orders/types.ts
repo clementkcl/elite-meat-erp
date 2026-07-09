@@ -84,6 +84,17 @@ export type OrderScopeOption = {
   name: string
 }
 
+export type OrderBrandOption = OrderScopeOption & {
+  itemId: string
+  availableWeightKg: number
+}
+
+export type OrderCustomizationGroup = {
+  name: string
+  options: string[]
+  defaultOptions: string[]
+}
+
 export type StockItemOption = {
   id: string
   itemCode: string
@@ -94,6 +105,7 @@ export type StockItemOption = {
   orderUnit: OrderUnit
   requiresEstimatedKg: boolean
   processingRequiredDefault: boolean
+  customizationGroups: OrderCustomizationGroup[]
 }
 
 export type OrderStockLocationOption = OrderScopeOption & {
@@ -161,6 +173,9 @@ export type CustomerOrderItem = {
   remainingWeightKg: number
   withinTolerance: boolean
   processingRequired: boolean
+  preferredBrandId: string | null
+  preferredBrandName: string
+  customization: Record<string, string[]>
   stockNotEnough: boolean
   preparedByName: string
   preparedAt: string | null
@@ -273,6 +288,7 @@ export type OrdersPageData = {
     salespeople: OrderScopeOption[]
   }
   stockItems: StockItemOption[]
+  brandOptions: OrderBrandOption[]
   dashboard: {
     kpis: OrderDashboardKpi[]
     alerts: OrderAlert[]

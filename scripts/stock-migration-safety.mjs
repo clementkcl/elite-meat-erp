@@ -19,7 +19,8 @@ function stockMigrationFiles() {
     .readdirSync(migrationsDir)
     .filter((file) =>
       /^2026061000(28|31|37|38|39|40|41|42|43|44|45|46|47|48|49|50|51|52|53|54|55)_.*\.sql$/.test(file) ||
-      /^20260623000(1|2|3|6)_.*\.sql$/.test(file)
+      /^20260623000(1|2|3|6)_.*\.sql$/.test(file) ||
+      /^20260625000(4|5|6|7|8|9)_.*\.sql$/.test(file)
     )
     .sort()
 }
@@ -54,6 +55,11 @@ assert(
 assert(
   files.includes("202606230006_stock_transfer_any_location_v1.sql"),
   "Stock migration safety must include the stock transfer any active location migration."
+)
+
+assert(
+  files.includes("202606250009_stock_scan_issue_review_scope_v1.sql"),
+  "Stock migration safety must include the stock scan issue review scope migration."
 )
 
 const destructivePatterns = [

@@ -1,5 +1,5 @@
-import { OrdersPage } from "@/components/orders/orders-page"
+import { redirect } from "next/navigation"
 
 export default function PrepareOrdersPage() {
-  return <OrdersPage route="picking" />
+  redirect("/orders/picking")
 }

@@ -93,13 +93,12 @@ For Stock-only completion evidence, also run `docs/STOCK_QA_RUNBOOK.md` and fill
 
 ## Retail
 
-- Happy path: retail user records daily sales for today with admin-configured payment type and cash received.
-- Happy path: retail user opens and closes cash session for today; a different manager/admin/director approves.
-- Happy path: retail user submits outlet expense with type, amount, receipt image path, date, and payment method; a different manager checks it; admin/director approves it; account/admin marks it paid.
-- Happy path: POS sale consumes barcode or no-barcode stock and records payment.
+- Happy path: retail user records today's Daily Sales draft when allowed; manager confirms it before Cash Closing.
+- Happy path: retail manager submits one Cash Closing for today from confirmed Daily Sales and cash expenses.
+- Happy path: retail user submits outlet expense with amount, category, payment method, and required receipt; a manager reviews it.
 - Blocked path: retail expense submitter cannot check their own submitted expense.
 - Blocked path: retail user attempts to edit past-day sales/cash; action and RLS must block it.
-- Blocked path: retail user from Outlet A cannot see Outlet B sales, cash sessions, payments, expenses, or daily closing.
+- Blocked path: retail user from Outlet A cannot see Outlet B sales, expenses, cleaning, processing, files, or cash closing.
 - Blocked path: retail user cannot delete sales/payment/closing rows.
 
 ## Processing

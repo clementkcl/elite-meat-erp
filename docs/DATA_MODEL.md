@@ -45,6 +45,7 @@ Migration `202606100037_stock_inbound_labels_rules_v1.sql` extends item master w
 Migration `202606100044_item_master_all_roles_v1.sql` adds `public.can_edit_item_master()` and updates `items` RLS so every ERP role can create/edit item master records when they can access the Stock module. Item deletion remains admin/director only through `public.can_administer_stock()`.
 
 Migration `202606100045_item_master_default_brand_v1.sql` adds `items.default_brand_id`, replaces the old category/section/name uniqueness with category/default-brand/section/name uniqueness, and indexes the default brand for item master lookup.
+Migration `202606250010_stock_item_default_weight_v1.sql` adds optional `items.default_weight_kg` for fixed-weight barcode fallback and label workflows.
 Migration `202606100046_customer_return_inspection_status_v1.sql` adds `HOLD` and `INSPECTION` stock-unit statuses so customer returns can be kept out of sellable stock until checked.
 Migration `202606100047_atomic_transfer_receive_rpcs_v1.sql` adds atomic transfer and receive-transfer RPCs so unit status/location, movement rows, scan logs, and audit logs succeed or fail together.
 Migration `202606100048_atomic_stock_return_rpc_v1.sql` adds an atomic normal stock-return RPC so returning a barcode to `IN_STOCK` cannot happen without movement, scan-log, and audit-log rows.

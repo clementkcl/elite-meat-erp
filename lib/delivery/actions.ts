@@ -67,9 +67,7 @@ const deliveryServiceManagerRoles: UserRole[] = [
 ]
 
 const deliveryPaymentRoles: UserRole[] = [
-  "delivery_team_general_worker",
   "delivery_manager",
-  "account",
   "admin",
 ]
 
@@ -388,7 +386,14 @@ function revalidateDeliveryPaths() {
     "/delivery/vehicles",
     "/delivery/payments",
     "/delivery/expenses",
+    "/orders",
+    "/orders/ready",
+    "/orders/picking",
   ].forEach((path) => revalidatePath(path))
+}
+
+function revalidateLinkedOrderPaths(orderIds: string[]) {
+  orderIds.forEach((orderId) => revalidatePath(`/orders/${orderId}`))
 }
 
 async function runDeliveryAction(
@@ -1019,20 +1024,45 @@ async function getDeliveryOrderLinks(
   return Array.isArray(data) ? data.map(asRecord) : []
 }
 
+function deliveryOrderStatusForLifecycle(status: DeliveryLifecycleStatus) {
+  if (status === "AVAILABLE" || status === "ACCEPTED") {
+    return "PENDING"
+  }
+
+  return status
+}
+
+function customerOrderStatusForDelivery(status: DeliveryLifecycleStatus) {
+  if (status === "OUT_FOR_DELIVERY" || status === "DELIVERED" || status === "FAILED") {
+    return status
+  }
+
+  return null
+}
+
 async function updateLinkedCustomerOrders(
   context: DeliveryActionContext,
   deliveryId: string,
-  status: "OUT_FOR_DELIVERY" | "DELIVERED" | "FAILED"
+  status: DeliveryLifecycleStatus
 ) {
   const links = await getDeliveryOrderLinks(context.supabase, deliveryId)
+  const deliveryOrderStatus = deliveryOrderStatusForLifecycle(status)
+  const customerOrderStatus = customerOrderStatusForDelivery(status)
+
   const { error: deliveryOrderError } = await context.supabase
     .from("delivery_orders")
-    .update({ status })
+    .update({ status: deliveryOrderStatus })
     .eq("delivery_id", deliveryId)
 
   if (deliveryOrderError) {
     throw new Error(deliveryOrderError.message)
   }
+
+  if (!customerOrderStatus) {
+    return links
+  }
+
+  const linkedCustomerOrderIds: string[] = []
 
   for (const link of links) {
     const customerOrderId = readString(link.source_customer_order_id)
@@ -1043,13 +1073,60 @@ async function updateLinkedCustomerOrders(
 
     const { error } = await context.supabase
       .from("customer_orders")
-      .update({ status, updated_by: context.profile.id })
+      .update({ status: customerOrderStatus, updated_by: context.profile.id })
       .eq("id", customerOrderId)
 
     if (error) {
       throw new Error(error.message)
     }
+
+    linkedCustomerOrderIds.push(customerOrderId)
   }
+
+  revalidateLinkedOrderPaths(linkedCustomerOrderIds)
+
+  return links
+}
+
+async function completeLinkedCustomerOrderProofs(
+  context: DeliveryActionContext,
+  deliveryId: string,
+  fileId: string,
+  gps: ReturnType<typeof normalizeGps>
+) {
+  if (gps.gpsUnavailable || gps.latitude === null || gps.longitude === null) {
+    return
+  }
+
+  const links = await getDeliveryOrderLinks(context.supabase, deliveryId)
+  const linkedCustomerOrderIds: string[] = []
+
+  for (const link of links) {
+    const customerOrderId = readString(link.source_customer_order_id)
+
+    if (!customerOrderId) {
+      continue
+    }
+
+    const { error } = await context.supabase.rpc(
+      "complete_customer_order_delivery_with_proof",
+      {
+        p_order_id: customerOrderId,
+        p_file_id: fileId,
+        p_receiver_name: "",
+        p_latitude: gps.latitude,
+        p_longitude: gps.longitude,
+      }
+    )
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    linkedCustomerOrderIds.push(customerOrderId)
+  }
+
+  revalidateLinkedOrderPaths(linkedCustomerOrderIds)
 }
 
 async function createDeliveryAddressSuggestion(
@@ -1186,6 +1263,10 @@ async function createProofAndComplete(
   )
 
   await updateLinkedCustomerOrders(context, deliveryId, outcome)
+
+  if (outcome === "DELIVERED") {
+    await completeLinkedCustomerOrderProofs(context, deliveryId, fileId, normalizedGps)
+  }
 
   if (normalizedGps.gpsUnavailable) {
     await insertAuditLog(
@@ -1407,6 +1488,7 @@ export async function acceptDelivery(deliveryId: string, vehicleId?: string | nu
       },
       "Delivery accepted."
     )
+    await updateLinkedCustomerOrders(context, parsedDeliveryId, "ACCEPTED")
 
     await insertAuditLog(
       context.supabase,
@@ -1439,6 +1521,7 @@ export async function markDeliveryLoaded(deliveryId: string) {
       { loaded_at: new Date().toISOString() },
       "Driver confirmed loading."
     )
+    await updateLinkedCustomerOrders(context, parsedDeliveryId, "LOADED")
 
     await insertAuditLog(
       context.supabase,
@@ -2317,36 +2400,15 @@ export async function uploadProofOfDeliveryAction(
     }
 
     const cleanName = safeFileName(fileValue.name) || "proof"
-    const objectPath = `delivery/proof/${parsed.orderId}/${Date.now()}-${cleanName}`
-    const { error: uploadError } = await context.supabase.storage
-      .from("erp-files")
-      .upload(objectPath, fileValue, {
-        contentType: fileValue.type || "application/octet-stream",
-        upsert: false,
-      })
-
-    if (uploadError) {
-      throw new Error(uploadError.message)
-    }
-
-    const { data: fileData, error: fileError } = await context.supabase
-      .from("files")
-      .insert({
-        owner_id: context.profile.id,
-        bucket_id: "erp-files",
-        object_path: objectPath,
-        module: "delivery",
-        mime_type: fileValue.type || null,
-        size_bytes: fileValue.size,
-      })
-      .select("id")
-      .single()
-
-    if (fileError) {
-      throw new Error(fileError.message)
-    }
-
-    const fileId = String(asRecord(fileData).id ?? "")
+    const objectPath = `${parsed.orderId}/proof/${Date.now()}-${cleanName}`
+    const fileId = await uploadDeliveryFile(
+      context.supabase,
+      context.profile,
+      fileValue,
+      objectPath,
+      "delivery",
+      "delivery-proofs"
+    )
     const nextStatus = parsed.deliveryOutcome
     const { error: orderError } = await context.supabase
       .from("delivery_orders")

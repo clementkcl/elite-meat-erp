@@ -1,12 +1,16 @@
 import type { ModuleKey } from "@/lib/auth/access"
 
 export const userRoles = [
+  "owner",
+  "sales",
   "retail_team_general_worker",
   "retail_manager",
   "delivery_team_general_worker",
   "delivery_manager",
   "processing_team_general_worker",
   "processing_manager",
+  "sales_staff",
+  "customer_service",
   "account",
   "admin",
   "director",

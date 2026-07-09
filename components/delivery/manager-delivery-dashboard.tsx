@@ -380,6 +380,99 @@ function ReviewDeliveryList({
   )
 }
 
+function DeliveryIssueReviewGuide({ data }: { data: DeliveryDashboardData }) {
+  const issueBuckets = [
+    {
+      label: "Failed proof",
+      count: data.reviews.failedDeliveries.length,
+      next: "Open failed delivery",
+    },
+    {
+      label: "GPS/address",
+      count:
+        data.reviews.gpsUnavailable.length + data.reviews.addressSuggestions.length,
+      next: "Check driver note",
+    },
+    {
+      label: "Late or slow",
+      count: data.reviews.lateDeliveries.length + data.reviews.slowDeliveries.length,
+      next: "Call driver",
+    },
+  ]
+  const totalIssues = issueBuckets.reduce((sum, bucket) => sum + bucket.count, 0)
+  const priorityBucket = issueBuckets.find((bucket) => bucket.count > 0)
+  const clearSteps =
+    totalIssues > 0
+      ? ["Open first issue below", "Review proof or note", "Record follow-up", "Continue next bucket"]
+      : ["Issue queue clear", "Check driver workload", "Review delivery list", "Return to normal reports"]
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Delivery issues to clear today</CardTitle>
+        <CardDescription>
+          Review failed proof, GPS/address, late, and slow delivery items before normal reports.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <div className="font-semibold">
+            {totalIssues > 0
+              ? `${totalIssues} delivery issue${totalIssues === 1 ? "" : "s"} need follow-up`
+              : "No delivery issues need follow-up right now"}
+          </div>
+          <div className="mt-1 text-muted-foreground">
+            Failed deliveries still need manager review and stock return follow-up.
+            Address or GPS suggestions stay pending until a manager approves or rejects them.
+          </div>
+        </div>
+        <div
+          className={
+            totalIssues > 0
+              ? "rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950"
+              : "rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950"
+          }
+        >
+          <div className="font-semibold">
+            {priorityBucket
+              ? `Start here: ${priorityBucket.label}`
+              : "Issue queue clear"}
+          </div>
+          <div className="mt-1">
+            {priorityBucket
+              ? `${priorityBucket.next}. Clear this bucket before normal delivery reports.`
+              : "No failed proof, GPS/address, late, or slow delivery issue needs action right now."}
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-4">
+            {clearSteps.map((step, index) => (
+              <div key={step} className="rounded-md border bg-background/80 px-3 py-2">
+                <div className="text-xs font-medium opacity-70">
+                  Step {index + 1}
+                </div>
+                <div className="mt-1 font-semibold">{step}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {issueBuckets.map((bucket, index) => (
+            <div key={bucket.label} className="rounded-md border p-3 text-sm">
+              <div className="text-xs font-medium text-muted-foreground">
+                Check {index + 1}
+              </div>
+              <div className="mt-1 font-semibold">{bucket.label}</div>
+              <div className="mt-1 text-2xl font-semibold tabular-nums">
+                {bucket.count}
+              </div>
+              <div className="mt-1 text-muted-foreground">{bucket.next}</div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function AddressSuggestionReview({ data }: { data: DeliveryDashboardData }) {
   const suggestions = data.reviews.addressSuggestions
 
@@ -523,6 +616,8 @@ export function ManagerDeliveryDashboard({
           <DeliveryList deliveries={data.deliveries} />
         </CardContent>
       </Card>
+
+      <DeliveryIssueReviewGuide data={data} />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <ReviewDeliveryList

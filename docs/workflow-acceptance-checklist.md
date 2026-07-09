@@ -48,7 +48,7 @@ Use this as the acceptance gate before internal pilot use.
 ## Orders
 
 - [ ] Sidebar shows Orders for eligible retail/processing/admin/director users.
-- [ ] Orders routes load: `/orders`, `/orders/new`, `/orders/[id]`, and `/orders/prepare`.
+- [ ] Orders routes load: `/orders`, `/orders/create`, `/orders/[id]`, and `/orders/picking`.
 - [ ] User can create pickup and delivery orders with customer, dates, fulfillment type, delivery flag, remarks, creator, and scope.
 - [ ] User can create internal transfer orders.
 - [ ] Admin/director-created orders require an outlet scope so assigned outlet users can see them.

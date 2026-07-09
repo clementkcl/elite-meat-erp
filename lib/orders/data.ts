@@ -1,4 +1,5 @@
 import {
+  asRecord,
   asRecordArray,
   readBoolean,
   readNullableString,
@@ -24,6 +25,7 @@ import {
   type CustomerOrderItemStatus,
   type CustomerOrderStatus,
   type ManualPickReason,
+  type OrderBrandOption,
   type OrderAlert,
   type OrderDashboardKpi,
   type OrderFilters,
@@ -41,6 +43,11 @@ import {
 
 const readyStatuses = ["READY", "READY_FOR_PICKUP", "READY_FOR_DELIVERY"]
 const pickToleranceKg = 10
+const fallbackCustomization = {
+  "Cut Style": ["Standard"],
+  Thickness: ["Standard"],
+  Packing: ["Standard"],
+}
 
 function isOrderStatus(value: string): value is CustomerOrderStatus {
   return customerOrderStatuses.includes(value as CustomerOrderStatus)
@@ -106,6 +113,35 @@ function itemLabel(item: Record<string, unknown> | undefined) {
   return `${readString(item.category)} / ${readString(item.section)} / ${readString(item.name)}`
 }
 
+function readStringList(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((entry) => readString(entry)).filter(Boolean)
+    : []
+}
+
+function readCustomization(value: unknown): Record<string, string[]> {
+  const entries = Object.entries(asRecord(value))
+    .map(([key, options]) => [key, readStringList(options)] as const)
+    .filter(([key, options]) => key && options.length > 0)
+
+  return Object.fromEntries(entries)
+}
+
+function itemCustomizationGroups(item: Record<string, unknown> | undefined) {
+  const savedOptions = readCustomization(item?.order_customization_options)
+  const options =
+    Object.keys(savedOptions).length > 0 ? savedOptions : fallbackCustomization
+  const defaults = readCustomization(item?.order_default_customization)
+
+  return Object.entries(options).map(([name, choices]) => ({
+    name,
+    options: choices,
+    defaultOptions: defaults[name]?.length
+      ? defaults[name]
+      : [choices[0]].filter(Boolean),
+  }))
+}
+
 async function loadRows(table: string) {
   const supabase = await createSupabaseServerClient()
 
@@ -136,6 +172,18 @@ async function loadOptionalRows(table: string) {
   }
 
   return asRecordArray(data)
+}
+
+async function expireReservationsForDashboard() {
+  const supabase = await createSupabaseServerClient()
+
+  if (!supabase) {
+    return
+  }
+
+  await supabase.rpc("expire_order_reservations_v1", {
+    p_now: new Date().toISOString(),
+  })
 }
 
 function displayStatus(
@@ -178,35 +226,9 @@ function displayStatus(
   return status
 }
 
-function hasOverdueCredit(
-  customer: Record<string, unknown>,
-  invoices: Record<string, unknown>[]
-) {
-  const customerName = readString(customer.name).toLowerCase()
-  const customerCode = readString(customer.customer_code).toLowerCase()
-
-  return invoices.some((invoice) => {
-    const paymentStatus = readString(invoice.payment_status)
-    const status = readString(invoice.status)
-    const counterparty = readString(invoice.counterparty).toLowerCase()
-    const dueDate = readNullableString(invoice.due_date)
-    const overdueByDate = dueDate ? dueDate < tableDate(new Date().toISOString()) : false
-
-    return (
-      status !== "PAID" &&
-      status !== "VOID" &&
-      status !== "REJECTED" &&
-      (paymentStatus === "OVERDUE" || overdueByDate) &&
-      (counterparty.includes(customerName) ||
-        (customerCode.length > 0 && counterparty.includes(customerCode)))
-    )
-  })
-}
-
 function mapCustomer(
   row: Record<string, unknown>,
-  categories: Record<string, unknown>[],
-  invoices: Record<string, unknown>[]
+  categories: Record<string, unknown>[]
 ): CustomerOption {
   return {
     id: readString(row.id),
@@ -215,7 +237,7 @@ function mapCustomer(
     address: readString(row.address),
     categoryName: findName(categories, readNullableString(row.category_id), "Retail"),
     creditTermDays: readNumber(row.credit_term_days),
-    hasOverdueCredit: hasOverdueCredit(row, invoices),
+    hasOverdueCredit: readBoolean(row.has_overdue_credit),
     remarks: readString(row.remarks),
   }
 }
@@ -300,7 +322,8 @@ function mapOrderItem(
   row: Record<string, unknown>,
   orders: CustomerOrder[],
   stockItems: Record<string, unknown>[],
-  profiles: Record<string, unknown>[]
+  profiles: Record<string, unknown>[],
+  brands: Record<string, unknown>[]
 ): CustomerOrderItem {
   const itemId = readString(row.item_id)
   const statusValue = readString(row.status, "REQUESTED")
@@ -331,6 +354,9 @@ function mapOrderItem(
       (preparedWeightKg > 0 &&
         Math.abs(preparedWeightKg - targetWeight) <= pickToleranceKg),
     processingRequired: readBoolean(row.processing_required),
+    preferredBrandId: readNullableString(row.preferred_brand_id),
+    preferredBrandName: findName(brands, readNullableString(row.preferred_brand_id), ""),
+    customization: readCustomization(row.customization),
     stockNotEnough: readBoolean(row.stock_not_enough),
     preparedByName: findProfileName(profiles, readNullableString(row.prepared_by)),
     preparedAt: readNullableString(row.prepared_at),
@@ -456,16 +482,62 @@ function mapNotification(
 ): OrderNotificationEvent {
   const orderId = readString(row.order_id)
   const eventType = readString(row.event_type, "READY_TO_PICKUP")
+  const rawChannel = readString(row.channel, "IN_APP").toUpperCase()
+  const channel = rawChannel === "WHATSAPP" ? "IN_APP" : rawChannel
+  const rawStatus = readString(row.status, "SENT").toUpperCase()
 
   return {
     id: readString(row.id),
     orderId,
     orderNo: orders.find((order) => order.id === orderId)?.orderNo ?? "-",
     eventType: isEventType(eventType) ? eventType : "READY_TO_PICKUP",
-    channel: readString(row.channel, "WHATSAPP"),
-    status: readString(row.status, "PENDING"),
+    channel,
+    status: channel === "IN_APP" && rawStatus === "SKIPPED" ? "SHOWN" : rawStatus,
     createdAt: readString(row.created_at, new Date().toISOString()),
   }
+}
+
+function brandOptions(
+  stockItems: Record<string, unknown>[],
+  brands: Record<string, unknown>[],
+  stockUnits: Record<string, unknown>[],
+  reservations: Record<string, unknown>[]
+): OrderBrandOption[] {
+  return stockItems.flatMap((item) => {
+    const itemId = readString(item.id)
+
+    return brands
+      .filter((brand) => readBoolean(brand.is_active, true))
+      .map((brand) => {
+        const brandId = readString(brand.id)
+        const physical = stockUnits
+          .filter(
+            (unit) =>
+              readString(unit.item_id) === itemId &&
+              readString(unit.brand_id) === brandId &&
+              ["IN_STOCK", "RETURNED"].includes(readString(unit.status))
+          )
+          .reduce((sum, unit) => sum + readNumber(unit.net_weight_kg), 0)
+        const reserved = reservations
+          .filter(
+            (reservation) =>
+              readString(reservation.item_id) === itemId &&
+              readString(reservation.status) === "ACTIVE" &&
+              (!readString(reservation.preferred_brand_id) ||
+                readString(reservation.preferred_brand_id) === brandId)
+          )
+          .reduce((sum, reservation) => sum + readNumber(reservation.reserved_weight_kg), 0)
+
+        return {
+          id: brandId,
+          itemId,
+          name: readString(brand.name),
+          availableWeightKg: Math.max(physical - reserved, 0),
+        }
+      })
+      .filter((brand) => brand.id && brand.name)
+      .sort((a, b) => a.name.localeCompare(b.name))
+  })
 }
 
 function stockItemOptions(rows: Record<string, unknown>[]) {
@@ -484,6 +556,7 @@ function stockItemOptions(rows: Record<string, unknown>[]) {
         orderUnit: isOrderUnit(orderUnit) ? orderUnit : "KG",
         requiresEstimatedKg: readBoolean(row.order_requires_estimated_kg, true),
         processingRequiredDefault: readBoolean(row.processing_required_default),
+        customizationGroups: itemCustomizationGroups(row),
       }
     })
 }
@@ -524,12 +597,26 @@ function filterOrders(orders: CustomerOrder[], filters: OrderFilters) {
 
 function buildReports(
   orders: CustomerOrder[],
-  items: CustomerOrderItem[]
+  items: CustomerOrderItem[],
+  linkedDeliveries: OrderLinkedDelivery[] = []
 ): OrderReportRow[] {
   const byCustomer = new Map<string, OrderReportRow>()
   const byStatus = new Map<string, OrderReportRow>()
   const byStaff = new Map<string, OrderReportRow>()
   const byItem = new Map<string, OrderReportRow>()
+  const pendingReadyFailed = new Map<string, OrderReportRow>()
+  const deliveryPerformance = new Map<string, OrderReportRow>()
+  const orderById = new Map(orders.map((order) => [order.id, order]))
+  const weightByOrderId = new Map<string, number>()
+
+  items.forEach((item) => {
+    const current = weightByOrderId.get(item.orderId) ?? 0
+
+    weightByOrderId.set(
+      item.orderId,
+      current + (item.estimatedWeightKg || item.requestedWeightKg)
+    )
+  })
 
   orders.forEach((order) => {
     const customerKey = order.customerName || "Walk-in"
@@ -567,7 +654,7 @@ function buildReports(
       byStaff.get(order.createdByName) ??
       ({
         id: `staff-${order.createdByName}`,
-        reportName: "Orders by staff",
+        reportName: "Orders by salesperson/staff",
         primary: order.createdByName,
         secondary: order.outletName,
         count: 0,
@@ -577,6 +664,36 @@ function buildReports(
     staffRow.count += 1
     staffRow.totalPrice += order.totalOrderPrice
     byStaff.set(order.createdByName, staffRow)
+
+    const workflowBucket =
+      order.displayStatus === "READY"
+        ? "Ready"
+        : order.displayStatus === "FAILED"
+          ? "Failed"
+          : ["CONFIRMED", "STOCK_NOT_ENOUGH", "PICKING"].includes(
+                order.displayStatus
+              )
+            ? "Pending"
+            : null
+
+    if (workflowBucket) {
+      const workflowRow =
+        pendingReadyFailed.get(workflowBucket) ??
+        ({
+          id: `workflow-${workflowBucket.toLowerCase()}`,
+          reportName: "Pending/ready/failed orders",
+          primary: workflowBucket,
+          secondary: "Operational order queue",
+          count: 0,
+          weightKg: 0,
+          totalPrice: 0,
+        } satisfies OrderReportRow)
+
+      workflowRow.count += 1
+      workflowRow.weightKg += weightByOrderId.get(order.id) ?? 0
+      workflowRow.totalPrice += order.totalOrderPrice
+      pendingReadyFailed.set(workflowBucket, workflowRow)
+    }
   })
 
   items.forEach((item) => {
@@ -596,11 +713,34 @@ function buildReports(
     byItem.set(item.itemLabel, itemRow)
   })
 
+  linkedDeliveries.forEach((delivery) => {
+    const order = orderById.get(delivery.orderId)
+    const status = delivery.status.replaceAll("_", " ")
+    const performanceRow =
+      deliveryPerformance.get(status) ??
+      ({
+        id: `delivery-performance-${status.toLowerCase().replaceAll(" ", "-")}`,
+        reportName: "Delivery performance",
+        primary: status,
+        secondary: "Orders handed to Delivery Module",
+        count: 0,
+        weightKg: 0,
+        totalPrice: 0,
+      } satisfies OrderReportRow)
+
+    performanceRow.count += 1
+    performanceRow.weightKg += weightByOrderId.get(delivery.orderId) ?? 0
+    performanceRow.totalPrice += order?.totalOrderPrice ?? 0
+    deliveryPerformance.set(status, performanceRow)
+  })
+
   return [
     ...byCustomer.values(),
     ...byItem.values(),
     ...byStaff.values(),
+    ...pendingReadyFailed.values(),
     ...byStatus.values(),
+    ...deliveryPerformance.values(),
   ].map((row) => ({
     ...row,
     weightKg: roundWeight(row.weightKg),
@@ -611,7 +751,8 @@ function buildReports(
 function buildDashboard(
   orders: CustomerOrder[],
   items: CustomerOrderItem[],
-  customers: CustomerOption[]
+  customers: CustomerOption[],
+  linkedDeliveries: OrderLinkedDelivery[] = []
 ) {
   const today = tableDate(new Date().toISOString())
   const todayOrders = orders.filter((order) => order.orderDate === today)
@@ -641,9 +782,7 @@ function buildDashboard(
   })
   const deliveryFailed = orders.filter((order) => order.status === "FAILED")
   const creditOverdue = customers.filter((customer) => customer.hasOverdueCredit)
-  const deliveryReady = orders.filter(
-    (order) => order.status === "READY_FOR_DELIVERY"
-  )
+  const orderReady = orders.filter((order) => readyStatuses.includes(order.status))
   const kpis: OrderDashboardKpi[] = [
     {
       label: "Today Orders",
@@ -668,7 +807,7 @@ function buildDashboard(
     {
       label: "Ready",
       value: String(readyOrders.length),
-      detail: "Pickup or delivery handoff",
+      detail: "Pickup or delivery next",
     },
     {
       label: "Out for Delivery",
@@ -702,10 +841,13 @@ function buildDashboard(
       tone: "warning" as const,
       href: `/orders/${item.orderId}`,
     })),
-    ...deliveryReady.slice(0, 8).map((order) => ({
+    ...orderReady.slice(0, 8).map((order) => ({
       id: `ready-${order.id}`,
       label: "Order ready",
-      detail: `${order.orderNo} is ready for delivery handoff`,
+      detail:
+        order.fulfillmentType === "DELIVERY"
+          ? `${order.orderNo} is ready for delivery`
+          : `${order.orderNo} is ready for pickup or transfer`,
       tone: "success" as const,
       href: `/orders/${order.id}`,
     })),
@@ -727,7 +869,7 @@ function buildDashboard(
   return {
     kpis,
     alerts,
-    reports: buildReports(orders, items),
+    reports: buildReports(orders, items, linkedDeliveries),
   }
 }
 
@@ -754,7 +896,7 @@ function demoData(filters: OrderFilters): OrdersPageData {
       categoryName: "Wholesale",
       creditTermDays: 14,
       hasOverdueCredit: true,
-      remarks: "Credit warning only.",
+      remarks: "Call receiver before pickup.",
     },
   ]
   const orders: CustomerOrder[] = [
@@ -809,7 +951,7 @@ function demoData(filters: OrderFilters): OrdersPageData {
       customerId: "customer-credit",
       customerName: "Wholesale Credit Demo",
       customerPhone: "0198765432",
-      customerRemarks: "Credit warning only.",
+      customerRemarks: "Call receiver before pickup.",
       orderDate: today,
       requiredDate: today,
       requiredAt,
@@ -866,6 +1008,9 @@ function demoData(filters: OrderFilters): OrdersPageData {
       remainingWeightKg: 20,
       withinTolerance: false,
       processingRequired: false,
+      preferredBrandId: null,
+      preferredBrandName: "",
+      customization: {},
       stockNotEnough: false,
       preparedByName: "-",
       preparedAt: null,
@@ -891,6 +1036,9 @@ function demoData(filters: OrderFilters): OrdersPageData {
       remainingWeightKg: 48,
       withinTolerance: false,
       processingRequired: true,
+      preferredBrandId: null,
+      preferredBrandName: "",
+      customization: {},
       stockNotEnough: true,
       preparedByName: "Demo Admin",
       preparedAt: now.toISOString(),
@@ -900,6 +1048,23 @@ function demoData(filters: OrderFilters): OrdersPageData {
     },
   ]
   const filteredOrders = filterOrders(orders, filters)
+  const linkedDeliveries = ([
+    {
+      id: "delivery-link-demo",
+      orderId: "order-demo-1",
+      deliveryId: "delivery-demo-1",
+      deliveryNo: "DL-20260623-DEMO",
+      status: "AVAILABLE",
+      driverId: null,
+      driverName: "-",
+      proofStatus: "NO_PROOF",
+      proofCount: 0,
+      actionHref: "/delivery",
+      createdAt: now.toISOString(),
+    },
+  ] satisfies OrderLinkedDelivery[]).filter((delivery) =>
+    filteredOrders.some((order) => order.id === delivery.orderId)
+  )
 
   return {
     demoMode: true,
@@ -943,23 +1108,7 @@ function demoData(filters: OrderFilters): OrdersPageData {
       },
     ],
     notifications: [],
-    linkedDeliveries: ([
-      {
-        id: "delivery-link-demo",
-        orderId: "order-demo-1",
-        deliveryId: "delivery-demo-1",
-        deliveryNo: "DL-20260623-DEMO",
-        status: "AVAILABLE",
-        driverId: null,
-        driverName: "-",
-        proofStatus: "NO_PROOF",
-        proofCount: 0,
-        actionHref: "/delivery",
-        createdAt: now.toISOString(),
-      },
-    ] satisfies OrderLinkedDelivery[]).filter((delivery) =>
-      filteredOrders.some((order) => order.id === delivery.orderId)
-    ),
+    linkedDeliveries,
     customers,
     scopeOptions: {
       outlets: [{ id: "outlet-demo", name: "Demo Outlet" }],
@@ -981,14 +1130,21 @@ function demoData(filters: OrderFilters): OrdersPageData {
       orderUnit: item.category === "PROCESSED" ? "PACKET" : "KG",
       requiresEstimatedKg: true,
       processingRequiredDefault: item.category === "PROCESSED",
+      customizationGroups: itemCustomizationGroups({}),
     })),
-    dashboard: buildDashboard(filteredOrders, items, customers),
+    brandOptions: demoItems.flatMap((item) => [
+      { id: "brand-demo-tican", itemId: item.id, name: "TICAN", availableWeightKg: 250 },
+      { id: "brand-demo-other", itemId: item.id, name: "Other", availableWeightKg: 0 },
+    ]),
+    dashboard: buildDashboard(filteredOrders, items, customers, linkedDeliveries),
   }
 }
 
 export async function getOrdersPageData(
   filters: OrderFilters = {}
 ): Promise<OrdersPageData> {
+  await expireReservationsForDashboard()
+
   const results = await Promise.all([
     loadRows("customer_orders"),
     loadRows("customer_order_items"),
@@ -1000,10 +1156,10 @@ export async function getOrdersPageData(
     loadRows("outlets"),
     loadRows("departments"),
     loadRows("profiles"),
-    loadRows("files"),
     loadRows("customers"),
     loadRows("customer_categories"),
-    loadRows("finance_invoices"),
+    loadRows("brands"),
+    loadRows("stock_units"),
   ])
 
   if (
@@ -1032,21 +1188,17 @@ export async function getOrdersPageData(
     outletRows,
     departmentRows,
     profileRows,
-    fileRows,
     customerRows,
     customerCategoryRows,
-    invoiceRows,
+    brandRows,
+    stockUnitRows,
   ] = results.map((result) => result.rows ?? [])
 
   const customers = customerRows
     .filter((row) => readBoolean(row.is_active, true))
-    .map((row) => mapCustomer(row, customerCategoryRows, invoiceRows))
+    .map((row) => mapCustomer(row, customerCategoryRows))
     .sort((a, b) => a.name.localeCompare(b.name))
-  const filePaths = new Map(
-    fileRows
-      .filter((row) => readString(row.module) === "orders")
-      .map((row) => [readString(row.id), readString(row.object_path)])
-  )
+  const filePaths = new Map<string, string>()
   const orders = filterOrders(
     orderRows
       .map((row) =>
@@ -1056,7 +1208,7 @@ export async function getOrdersPageData(
     filters
   )
   const items = orderItemRows
-    .map((row) => mapOrderItem(row, orders, stockItemRows, profileRows))
+    .map((row) => mapOrderItem(row, orders, stockItemRows, profileRows, brandRows))
     .filter((item) => orders.some((order) => order.id === item.orderId))
   const reservations = reservationRows
     .map((row) => mapReservation(row, orders, stockItemRows, locationRows))
@@ -1115,7 +1267,8 @@ export async function getOrdersPageData(
       })),
     },
     stockItems: stockItemOptions(stockItemRows),
-    dashboard: buildDashboard(orders, items, customers),
+    brandOptions: brandOptions(stockItemRows, brandRows, stockUnitRows, reservationRows),
+    dashboard: buildDashboard(orders, items, customers, linkedDeliveries),
   }
 }
 

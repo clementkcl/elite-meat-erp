@@ -41,11 +41,11 @@ Do this only on a safe staging/demo Supabase project unless you have already rev
 7. Confirm saved scan count, saved total weight, previous scan weight, and recent scan row update after save.
 8. Try the same barcode again and confirm duplicate barcode is blocked with a clear message.
 9. Try a barcode with no confident weight and confirm the app blocks it and tells staff to use barcode label printing.
-10. Click Undo scan on a current-session scan, then confirm the row status becomes `VOIDED` and the session total updates.
+10. Click `Undo Last Scan` on the newest current-session scan, then confirm the row status becomes `VOIDED` and the session total updates.
 
 ## Additional Checks
 
-- Click Finish Inbound Session and confirm summary shows total barcode units, total weight, item, brand, origin, location, scanned by, start/end time, and duplicate/error scans.
+- Click `Finish Session` and confirm summary shows total barcode units, total weight, item, brand, origin, location, scanned by, start/end time, and duplicate/error scans.
 - After finishing, confirm normal worker undo controls are no longer available in that session.
 - Open `/stock/movements` and verify inbound movements are visible.
 - If undo was tested, verify an `INBOUND_VOID` movement appears.
@@ -74,4 +74,4 @@ For undo:
 
 - Real phone camera behavior must be tested from the deployed HTTPS app.
 - The separate barcode label printing page is not split out yet; label generation is still available inside `/stock/inbound`, and reprint is available from `/stock/units/[id]`.
-- Worker undo after Finish Inbound Session is hidden in the UI, but full database enforcement across browser refreshes would need a persisted inbound-session table.
+- Worker undo after `Finish Session` is hidden in the UI, but full database enforcement across browser refreshes would need a persisted inbound-session table.

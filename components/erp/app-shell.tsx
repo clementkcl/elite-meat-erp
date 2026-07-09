@@ -11,6 +11,7 @@ import {
   Home,
   LogOut,
   Menu,
+  MessageCircle,
   PackageCheck,
   Receipt,
   Settings,
@@ -107,6 +108,22 @@ const orderRoles: UserRole[] = [
 const orderOperatorRoles: UserRole[] = orderRoles.filter(
   (role) => role !== "director"
 )
+
+const workerRoles: UserRole[] = [
+  "retail_team_general_worker",
+  "delivery_team_general_worker",
+  "processing_team_general_worker",
+]
+
+const whatsappCrmRoles: UserRole[] = [
+  "owner",
+  "sales",
+  "sales_staff",
+  "customer_service",
+  "account",
+  "admin",
+  "director",
+]
 
 const dashboardNav: NavItem[] = [
   {
@@ -241,6 +258,16 @@ const orderNav: NavItem[] = [
   },
 ]
 
+const whatsappCrmNav: NavItem[] = [
+  {
+    href: "/whatsapp-crm",
+    label: "WhatsApp CRM",
+    icon: MessageCircle,
+    roles: whatsappCrmRoles,
+    moduleKey: "whatsapp_crm",
+  },
+]
+
 const attendanceNav: NavItem[] = [
   {
     href: "/attendance/today",
@@ -261,7 +288,7 @@ const oaNav: NavItem[] = [
 
 const retailNav: NavItem[] = [
   {
-    href: "/retail/dashboard",
+    href: "/retail",
     label: "Retail",
     icon: Building2,
     moduleKey: "retail",
@@ -318,6 +345,7 @@ const settingsNav: NavItem[] = [
 
 const moduleNav: NavItem[] = [
   ...orderNav,
+  ...whatsappCrmNav,
   ...attendanceNav,
   ...oaNav,
   ...retailNav,
@@ -351,6 +379,64 @@ const moduleNav: NavItem[] = [
   ...accountingNav,
   ...directorNav,
   ...settingsNav,
+]
+
+const mobileWorkerActionNav: NavItem[] = [
+  {
+    href: "/dashboard",
+    label: "Home",
+    icon: Home,
+    roles: workerRoles,
+  },
+  {
+    href: "/attendance/clock",
+    label: "Clock",
+    icon: CalendarCheck,
+    roles: workerRoles,
+    moduleKey: "attendance",
+  },
+  {
+    href: "/stock",
+    label: "Stock",
+    icon: Boxes,
+    roles: workerRoles,
+    moduleKey: "stock",
+  },
+  {
+    href: "/orders/create",
+    label: "Order",
+    icon: ClipboardList,
+    roles: workerRoles,
+    moduleKey: "orders",
+  },
+  {
+    href: "/delivery/driver",
+    label: "Delivery",
+    icon: Truck,
+    roles: ["delivery_team_general_worker"],
+    moduleKey: "delivery",
+  },
+  {
+    href: "/processing/dashboard",
+    label: "Processing",
+    icon: PackageCheck,
+    roles: ["processing_team_general_worker"],
+    moduleKey: "processing",
+  },
+  {
+    href: "/cleaning/tasks",
+    label: "Cleaning",
+    icon: ClipboardList,
+    roles: ["retail_team_general_worker", "processing_team_general_worker"],
+    moduleKey: "cleaning",
+  },
+  {
+    href: "/oa-actions/dashboard",
+    label: "OA",
+    icon: ClipboardList,
+    roles: workerRoles,
+    moduleKey: "oa_actions",
+  },
 ]
 
 const routeAccess: RouteAccess[] = [
@@ -415,19 +501,7 @@ const routeAccess: RouteAccess[] = [
     roles: orderOperatorRoles,
   },
   {
-    prefix: "/orders/new",
-    moduleKey: "orders",
-    moduleName: "Create Order",
-    roles: orderOperatorRoles,
-  },
-  {
     prefix: "/orders/picking",
-    moduleKey: "orders",
-    moduleName: "Order Picking",
-    roles: orderOperatorRoles,
-  },
-  {
-    prefix: "/orders/prepare",
     moduleKey: "orders",
     moduleName: "Order Picking",
     roles: orderOperatorRoles,
@@ -450,9 +524,21 @@ const routeAccess: RouteAccess[] = [
     moduleName: "Orders",
     roles: orderRoles,
   },
+  {
+    prefix: "/whatsapp-crm",
+    moduleKey: "whatsapp_crm",
+    moduleName: "WhatsApp CRM",
+    roles: whatsappCrmRoles,
+  },
   { prefix: "/attendance", moduleKey: "attendance", moduleName: "Attendance" },
   { prefix: "/oa-actions", moduleKey: "oa_actions", moduleName: "OA Actions" },
   { prefix: "/oa", moduleKey: "oa_actions", moduleName: "OA Actions" },
+  {
+    prefix: "/retail/settings",
+    moduleKey: "retail",
+    moduleName: "Retail Settings",
+    roles: ["retail_manager", "admin", "director"],
+  },
   {
     prefix: "/retail",
     moduleKey: "retail",
@@ -488,6 +574,48 @@ const routeAccess: RouteAccess[] = [
       "admin",
       "director",
     ],
+  },
+  {
+    prefix: "/delivery/dashboard",
+    moduleKey: "delivery",
+    moduleName: "Delivery Dashboard",
+    roles: ["delivery_manager", "admin", "director"],
+  },
+  {
+    prefix: "/delivery/expenses",
+    moduleKey: "delivery",
+    moduleName: "Delivery Expenses",
+    roles: ["delivery_manager", "admin", "director"],
+  },
+  {
+    prefix: "/delivery/orders",
+    moduleKey: "delivery",
+    moduleName: "Delivery Orders",
+    roles: ["delivery_manager", "admin", "director"],
+  },
+  {
+    prefix: "/delivery/new-order",
+    moduleKey: "delivery",
+    moduleName: "New Delivery Order",
+    roles: ["delivery_manager", "admin"],
+  },
+  {
+    prefix: "/delivery/vehicles",
+    moduleKey: "delivery",
+    moduleName: "Delivery Vehicles",
+    roles: ["delivery_manager", "admin", "director"],
+  },
+  {
+    prefix: "/delivery/payments",
+    moduleKey: "delivery",
+    moduleName: "Delivery Payments",
+    roles: ["delivery_manager", "admin"],
+  },
+  {
+    prefix: "/delivery/driver",
+    moduleKey: "delivery",
+    moduleName: "Driver Delivery",
+    roles: ["delivery_team_general_worker", "delivery_manager", "admin"],
   },
   {
     prefix: "/delivery",
@@ -575,6 +703,10 @@ function canAccessRoute(profile: CurrentProfile, route: RouteAccess | undefined)
   return roleAllowed && canAccessModule(profile, route.moduleKey)
 }
 
+function hasWorkerRole(profile: CurrentProfile) {
+  return workerRoles.some((role) => profile.roles.includes(role))
+}
+
 function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
   const pathname = usePathname()
   const Icon = item.icon
@@ -604,6 +736,47 @@ function NavLink({ item, onClick }: { item: NavItem; onClick?: () => void }) {
   )
 }
 
+function MobileWorkerActionBar({ items }: { items: NavItem[] }) {
+  const pathname = usePathname()
+
+  if (items.length === 0) {
+    return null
+  }
+
+  return (
+    <nav
+      aria-label="Worker quick actions"
+      className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 pb-2 pt-2 shadow-lg backdrop-blur lg:hidden"
+    >
+      <div className="flex gap-2 overflow-x-auto">
+        {items.map((item) => {
+          const Icon = item.icon
+          const active =
+            pathname === item.href ||
+            (item.href !== "/dashboard" && pathname.startsWith(item.href))
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex min-h-14 min-w-16 flex-col items-center justify-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors",
+                active
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                  : "bg-background text-muted-foreground"
+              )}
+            >
+              <Icon className="size-4" />
+              <span className="max-w-16 truncate">{item.label}</span>
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}
+
 function SidebarContent({
   profile,
   close,
@@ -615,6 +788,7 @@ function SidebarContent({
     { label: "Dashboard", items: dashboardNav },
     { label: "Stock", items: stockNav },
     { label: "Orders", items: orderNav },
+    { label: "WhatsApp CRM", items: whatsappCrmNav },
     { label: "Attendance", items: attendanceNav },
     { label: "OA Actions", items: oaNav },
     { label: "Retail", items: retailNav },
@@ -710,6 +884,9 @@ export function AppShell({
   const pageLabel = currentPageLabel(pathname)
   const routeGate = routeAccessForPath(pathname)
   const canAccessCurrentRoute = canAccessRoute(profile, routeGate)
+  const mobileWorkerActions = hasWorkerRole(profile)
+    ? mobileWorkerActionNav.filter((item) => canSee(profile, item))
+    : []
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-background">
@@ -789,7 +966,12 @@ export function AppShell({
             </form>
           </div>
         </header>
-        <main className="mx-auto flex w-full max-w-[92rem] min-w-0 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+        <main
+          className={cn(
+            "mx-auto flex w-full max-w-[92rem] min-w-0 flex-col gap-5 px-4 pb-5 pt-5 sm:px-6 lg:px-8 lg:py-7",
+            mobileWorkerActions.length > 0 && "pb-28 lg:pb-7"
+          )}
+        >
           {canAccessCurrentRoute ? (
             children
           ) : (
@@ -797,6 +979,7 @@ export function AppShell({
           )}
         </main>
       </div>
+      <MobileWorkerActionBar items={mobileWorkerActions} />
     </div>
   )
 }

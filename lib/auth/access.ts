@@ -1,6 +1,7 @@
 export const moduleKeys = [
   "stock",
   "orders",
+  "whatsapp_crm",
   "retail",
   "processing",
   "delivery",
@@ -31,7 +32,11 @@ export function canAccessModule(
     return true
   }
 
-  if (profile.roles.includes("admin") || profile.roles.includes("director")) {
+  if (
+    profile.roles.includes("owner") ||
+    profile.roles.includes("admin") ||
+    profile.roles.includes("director")
+  ) {
     return true
   }
 

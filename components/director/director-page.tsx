@@ -36,6 +36,15 @@ type TableRow = Record<string, string | number | boolean>
 
 const directorRoles: UserRole[] = ["director", "admin"]
 
+type DirectorOverviewItem = {
+  label: string
+  value: string
+  detail: string
+  href: string
+  action: string
+  tone?: "default" | "warning" | "danger"
+}
+
 type ReportPeriod = {
   start: string
   end: string
@@ -45,7 +54,8 @@ type ReportPeriod = {
 const titles: Record<DirectorRoute, { title: string; description: string }> = {
   dashboard: {
     title: "Director Dashboard",
-    description: "Executive view of approvals, finance exposure, and report snapshots.",
+    description:
+      "All-in-one company overview for sales, stock, orders, delivery, attendance, cleaning, processing, approvals, finance, and alerts.",
   },
   approvals: {
     title: "Director Approvals",
@@ -196,6 +206,409 @@ function KpiCards({
           </CardContent>
         </Card>
       ))}
+    </div>
+  )
+}
+
+function findKpi(
+  kpis: { label: string; value: string; detail: string }[],
+  label: string
+) {
+  return kpis.find((kpi) => kpi.label === label) ?? {
+    label,
+    value: "-",
+    detail: "No data loaded",
+  }
+}
+
+function buildDirectorOverviewItems({
+  kpis,
+  pendingApprovals,
+}: {
+  kpis: { label: string; value: string; detail: string }[]
+  pendingApprovals: number
+}): DirectorOverviewItem[] {
+  const sales = findKpi(kpis, "Sales this month")
+  const stockWeight = findKpi(kpis, "Stock total weight")
+  const lowStock = findKpi(kpis, "Low stock items")
+  const pendingDelivery = findKpi(kpis, "Pending delivery")
+  const absent = findKpi(kpis, "Absent staff this month")
+  const late = findKpi(kpis, "Late staff this month")
+  const cleaning = findKpi(kpis, "Cleaning completion")
+  const processing = findKpi(kpis, "Processing yield/loss")
+  const ar = findKpi(kpis, "AR outstanding")
+  const ap = findKpi(kpis, "AP outstanding")
+  const containers = findKpi(kpis, "Container ETA approaching")
+
+  return [
+    {
+      label: "Sales",
+      value: sales.value,
+      detail: "Current-month retail sales summary.",
+      href: "/retail/reports",
+      action: "Open sales reports",
+    },
+    {
+      label: "Stock",
+      value: stockWeight.value,
+      detail: `${lowStock.value} low-stock rows need checking.`,
+      href: "/stock/dashboard",
+      action: "Check stock",
+      tone: lowStock.value === "0" ? "default" : "warning",
+    },
+    {
+      label: "Orders",
+      value: pendingDelivery.value,
+      detail: "Customer orders not delivered or cancelled.",
+      href: "/orders",
+      action: "Review orders",
+      tone: pendingDelivery.value === "0" ? "default" : "warning",
+    },
+    {
+      label: "Delivery",
+      value: pendingDelivery.value,
+      detail: "Delivery work still open for follow-up.",
+      href: "/delivery",
+      action: "Check delivery",
+      tone: pendingDelivery.value === "0" ? "default" : "warning",
+    },
+    {
+      label: "Attendance",
+      value: `${absent.value} absent / ${late.value} late`,
+      detail: "Staff attendance gaps this month.",
+      href: "/attendance/today",
+      action: "View attendance",
+      tone: absent.value === "0" && late.value === "0" ? "default" : "warning",
+    },
+    {
+      label: "Cleaning",
+      value: cleaning.value,
+      detail: "Required cleaning completion by due date.",
+      href: "/retail/cleaning/history",
+      action: "Check cleaning",
+    },
+    {
+      label: "Processing",
+      value: processing.value,
+      detail: "Yield and loss summary; abnormal yield is alert-only.",
+      href: "/processing/dashboard",
+      action: "Review processing",
+    },
+    {
+      label: "OA approvals",
+      value: String(pendingApprovals),
+      detail: "OA, finance, and outlet expense decisions waiting.",
+      href: "/director-reports/approvals",
+      action: "Open approvals",
+      tone: pendingApprovals > 0 ? "danger" : "default",
+    },
+    {
+      label: "Finance/accounting",
+      value: `${ar.value} AR / ${ap.value} AP`,
+      detail: `${containers.value} containers have ETA within 7 days.`,
+      href: "/accounting-finance/dashboard",
+      action: "Review finance",
+      tone: containers.value === "0" ? "default" : "warning",
+    },
+    {
+      label: "Alerts",
+      value: String(
+        [
+          lowStock,
+          pendingDelivery,
+          absent,
+          late,
+          containers,
+        ].filter((kpi) => kpi.value !== "0").length +
+          (pendingApprovals > 0 ? 1 : 0)
+      ),
+      detail: "Open company-level exceptions first.",
+      href: "/director-reports/approvals",
+      action: "Open alerts first",
+      tone: "danger",
+    },
+  ]
+}
+
+function buildDirectorAlertItems({
+  kpis,
+  pendingApprovals,
+}: {
+  kpis: { label: string; value: string; detail: string }[]
+  pendingApprovals: number
+}): DirectorOverviewItem[] {
+  const lowStock = findKpi(kpis, "Low stock items")
+  const pendingDelivery = findKpi(kpis, "Pending delivery")
+  const absent = findKpi(kpis, "Absent staff this month")
+  const late = findKpi(kpis, "Late staff this month")
+  const containers = findKpi(kpis, "Container ETA approaching")
+  const ar = findKpi(kpis, "AR outstanding")
+
+  return [
+    {
+      label: "Approval waiting",
+      value: String(pendingApprovals),
+      detail: "Director decisions needed now.",
+      href: "/director-reports/approvals",
+      action: "Review approvals",
+      tone: pendingApprovals > 0 ? "danger" : "default",
+    },
+    {
+      label: "Low stock",
+      value: lowStock.value,
+      detail: lowStock.detail,
+      href: "/stock/dashboard",
+      action: "Check stock",
+      tone: lowStock.value === "0" ? "default" : "warning",
+    },
+    {
+      label: "Delivery follow-up",
+      value: pendingDelivery.value,
+      detail: pendingDelivery.detail,
+      href: "/delivery",
+      action: "Check delivery",
+      tone: pendingDelivery.value === "0" ? "default" : "warning",
+    },
+    {
+      label: "Attendance gaps",
+      value: `${absent.value} absent / ${late.value} late`,
+      detail: "Attendance exceptions to review.",
+      href: "/attendance/today",
+      action: "View attendance",
+      tone: absent.value === "0" && late.value === "0" ? "default" : "warning",
+    },
+    {
+      label: "Finance exposure",
+      value: ar.value,
+      detail: "Outstanding receivables still unpaid.",
+      href: "/accounting-finance/dashboard",
+      action: "Review AR",
+      tone: "warning",
+    },
+    {
+      label: "Container ETA",
+      value: containers.value,
+      detail: containers.detail,
+      href: "/accounting-finance/containers",
+      action: "Check containers",
+      tone: containers.value === "0" ? "default" : "warning",
+    },
+  ]
+}
+
+function itemToneClass(tone: DirectorOverviewItem["tone"]) {
+  if (tone === "danger") {
+    return "border-red-200 bg-red-50"
+  }
+
+  if (tone === "warning") {
+    return "border-amber-200 bg-amber-50"
+  }
+
+  return "border-border bg-background"
+}
+
+function itemBadgeVariant(tone: DirectorOverviewItem["tone"]) {
+  if (tone === "danger") {
+    return "destructive"
+  }
+
+  if (tone === "warning") {
+    return "warning"
+  }
+
+  return "secondary"
+}
+
+function DirectorCompanyOverview({
+  items,
+  alerts,
+  period,
+}: {
+  items: DirectorOverviewItem[]
+  alerts: DirectorOverviewItem[]
+  period: ReportPeriod
+}) {
+  const directorReviewSteps = [
+    "Open alerts first",
+    "Review approvals",
+    "Check operations",
+    "Save/share report",
+  ]
+  const directorAlertSteps = [
+    "Find urgent exception",
+    "Open owner module",
+    "Record follow-up",
+  ]
+
+  return (
+    <section
+      aria-labelledby="director-company-overview"
+      className="space-y-4 rounded-lg border bg-card p-4 shadow-sm"
+    >
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">
+            Director company overview
+          </p>
+          <h2
+            id="director-company-overview"
+            className="text-xl font-semibold tracking-tight"
+          >
+            All-in-one company view
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Sales, stock, orders, delivery, attendance, cleaning, processing, OA
+            approvals, finance/accounting, and alerts for {period.label}.
+          </p>
+        </div>
+        <Badge variant="warning" className="w-fit">
+          Alerts first
+        </Badge>
+      </div>
+
+      <div className="rounded-lg border bg-muted/30 p-3">
+        <div className="text-sm font-semibold">Director daily review order</div>
+        <div className="mt-1 text-sm text-muted-foreground">
+          Use the same order each day before reading normal reports.
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-4">
+          {directorReviewSteps.map((step, index) => (
+            <div key={step} className="rounded-md border bg-background px-3 py-3">
+              <div className="text-xs font-medium text-muted-foreground">
+                Step {index + 1}
+              </div>
+              <div className="mt-1 text-sm font-semibold">{step}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {items.map((item) => (
+            <div
+              key={item.label}
+              className={`flex min-h-40 flex-col justify-between rounded-lg border p-4 ${itemToneClass(
+                item.tone
+              )}`}
+            >
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-sm font-semibold">{item.label}</h3>
+                  <Badge variant={itemBadgeVariant(item.tone)}>
+                    {item.tone === "danger"
+                      ? "Act"
+                      : item.tone === "warning"
+                        ? "Check"
+                        : "View"}
+                  </Badge>
+                </div>
+                <div className="text-2xl font-semibold tabular-nums">
+                  {item.value}
+                </div>
+                <p className="text-sm text-muted-foreground">{item.detail}</p>
+              </div>
+              <Button
+                asChild
+                variant={item.tone === "danger" ? "default" : "outline"}
+                size="sm"
+                className="mt-4 min-h-11 w-full justify-center"
+              >
+                <Link href={item.href}>{item.action}</Link>
+              </Button>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold">Director alerts first</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Company-level exceptions to clear before normal reports.
+              </p>
+            </div>
+            <Badge variant="destructive">Alerts</Badge>
+          </div>
+          <div className="mt-4 rounded-md border bg-background p-3">
+            <div className="text-sm font-semibold">Director alert handling</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Clear urgent exceptions before reading normal KPI reports.
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {directorAlertSteps.map((step) => (
+                <div key={step} className="rounded-md border bg-muted/30 px-3 py-2">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    Next
+                  </div>
+                  <div className="mt-1 text-sm font-semibold">{step}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4 space-y-3">
+            {alerts.map((alert) => (
+              <div
+                key={alert.label}
+                className="rounded-md border bg-background p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">{alert.label}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {alert.detail}
+                    </div>
+                  </div>
+                  <div className="text-right text-lg font-semibold tabular-nums">
+                    {alert.value}
+                  </div>
+                </div>
+                <Button
+                  asChild
+                  variant="link"
+                  size="sm"
+                  className="mt-2 h-auto min-h-0 p-0"
+                >
+                  <Link href={alert.href}>{alert.action}</Link>
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function DirectorApprovalClearGuide({ pendingCount }: { pendingCount: number }) {
+  if (pendingCount > 0) {
+    return null
+  }
+
+  const steps = [
+    "Check operations",
+    "Check finance aging",
+    "Save/share report",
+  ]
+
+  return (
+    <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+      <div className="font-semibold">No director approvals waiting</div>
+      <div className="mt-1">
+        OA, finance, and outlet expense decisions are clear. Continue with the
+        company overview, finance aging, and report snapshot.
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {steps.map((step, index) => (
+          <div key={step} className="rounded-md border bg-white px-3 py-2">
+            <div className="text-xs font-medium text-emerald-900/70">
+              Next {index + 1}
+            </div>
+            <div className="mt-1 font-semibold">{step}</div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -441,6 +854,14 @@ export async function DirectorPage({ route }: { route: DirectorRoute }) {
     invoices: financePending,
     expenses: retailPending,
   })
+  const overviewItems = buildDirectorOverviewItems({
+    kpis: directorKpis,
+    pendingApprovals: pendingRows.length,
+  })
+  const alertItems = buildDirectorAlertItems({
+    kpis: directorKpis,
+    pendingApprovals: pendingRows.length,
+  })
 
   return (
     <div className="space-y-5">
@@ -455,6 +876,11 @@ export async function DirectorPage({ route }: { route: DirectorRoute }) {
 
       {route === "dashboard" ? (
         <>
+          <DirectorCompanyOverview
+            items={overviewItems}
+            alerts={alertItems}
+            period={reportPeriod}
+          />
           <KpiCards kpis={directorKpis} />
           <Card>
             <CardHeader>
@@ -462,6 +888,7 @@ export async function DirectorPage({ route }: { route: DirectorRoute }) {
               <CardDescription>OA, finance, and retail items waiting for decision.</CardDescription>
             </CardHeader>
             <CardContent>
+              <DirectorApprovalClearGuide pendingCount={pendingRows.length} />
               <DataTable columns={approvalColumns} data={pendingRows} />
             </CardContent>
           </Card>
@@ -511,6 +938,7 @@ export async function DirectorPage({ route }: { route: DirectorRoute }) {
               <CardDescription>All director-facing approval items.</CardDescription>
             </CardHeader>
             <CardContent>
+              <DirectorApprovalClearGuide pendingCount={pendingRows.length} />
               <DataTable columns={approvalColumns} data={pendingRows} />
             </CardContent>
           </Card>

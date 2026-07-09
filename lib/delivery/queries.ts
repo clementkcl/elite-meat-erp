@@ -35,6 +35,7 @@ import {
   type DeliveryLinkedOrder,
   type DeliveryProof,
   type DeliveryStatusTimelineEntry,
+  type DeliveryUpcomingOrder,
   type Vehicle,
 } from "@/lib/delivery/types"
 
@@ -57,6 +58,25 @@ function isDeliveryFailedReason(value: string): value is DeliveryFailedReason {
 
 function todayIsoDate() {
   return new Date().toISOString().slice(0, 10)
+}
+
+function readCustomization(value: unknown): Record<string, string[]> {
+  const record = asRecord(value)
+  const customization: Record<string, string[]> = {}
+
+  Object.entries(record).forEach(([key, options]) => {
+    if (!Array.isArray(options)) {
+      return
+    }
+
+    const values = options.map((option) => String(option).trim()).filter(Boolean)
+
+    if (values.length > 0) {
+      customization[key] = values
+    }
+  })
+
+  return customization
 }
 
 async function getQueryContext(): Promise<DeliveryQueryContext | null> {
@@ -378,6 +398,124 @@ export async function getAvailableDeliveries(): Promise<Delivery[]> {
   return mapDeliveries(context.supabase, asRecordArray(data))
 }
 
+export async function getUpcomingOrderDeliveries(): Promise<DeliveryUpcomingOrder[]> {
+  const context = await getQueryContext()
+
+  if (!context) {
+    return []
+  }
+
+  const today = todayIsoDate()
+  const { data, error } = await context.supabase
+    .from("customer_orders")
+    .select(
+      "id, order_no, status, customer_name, customer_phone, customer_remarks, delivery_address, required_at, required_date"
+    )
+    .eq("delivery_required", true)
+    .in("status", ["NEW", "PREPARING", "READY"])
+    .or(`required_date.eq.${today},required_date.is.null`)
+    .order("required_at", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: true })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const orders = asRecordArray(data)
+  const orderIds = orders.map((order) => readString(order.id)).filter(Boolean)
+
+  if (orderIds.length === 0) {
+    return []
+  }
+
+  const { data: itemData, error: itemError } = await context.supabase
+    .from("customer_order_items")
+    .select("id, order_id, item_id, estimated_weight_kg, requested_weight_kg, prepared_weight_kg, customization")
+    .in("order_id", orderIds)
+    .neq("status", "CANCELLED")
+
+  if (itemError) {
+    throw new Error(itemError.message)
+  }
+
+  const itemRows = asRecordArray(itemData)
+  const stockItemIds = Array.from(
+    new Set(itemRows.map((item) => readString(item.item_id)).filter(Boolean))
+  )
+  const stockItemNames = new Map<string, string>()
+
+  if (stockItemIds.length > 0) {
+    const { data: stockItems, error: stockItemsError } = await context.supabase
+      .from("items")
+      .select("id, item_code, name")
+      .in("id", stockItemIds)
+
+    if (stockItemsError) {
+      throw new Error(stockItemsError.message)
+    }
+
+    asRecordArray(stockItems).forEach((item) => {
+      const itemId = readString(item.id)
+      const itemCode = readString(item.item_code)
+      const itemName = readString(item.name, "Item")
+
+      if (itemId) {
+        stockItemNames.set(itemId, itemCode ? `${itemCode} - ${itemName}` : itemName)
+      }
+    })
+  }
+
+  const weights = new Map<string, { estimated: number; picked: number }>()
+  const upcomingItems = new Map<
+    string,
+    DeliveryUpcomingOrder["items"]
+  >()
+
+  itemRows.forEach((item) => {
+    const orderId = readString(item.order_id)
+    const current = weights.get(orderId) ?? { estimated: 0, picked: 0 }
+    const stockItemId = readString(item.item_id)
+    const items = upcomingItems.get(orderId) ?? []
+
+    current.estimated += readNumber(
+      item.estimated_weight_kg,
+      readNumber(item.requested_weight_kg)
+    )
+    current.picked += readNumber(item.prepared_weight_kg)
+    weights.set(orderId, current)
+    items.push({
+      id: readString(item.id),
+      itemLabel: stockItemNames.get(stockItemId) ?? "Order item",
+      customization: readCustomization(item.customization),
+    })
+    upcomingItems.set(orderId, items)
+  })
+
+  return orders.map((order) => {
+    const orderId = readString(order.id)
+    const weight = weights.get(orderId) ?? { estimated: 0, picked: 0 }
+    const progressPercent =
+      weight.estimated > 0
+        ? Math.min(100, Math.round((weight.picked / weight.estimated) * 100))
+        : 0
+
+    return {
+      id: orderId,
+      orderNo: readString(order.order_no),
+      status: readString(order.status),
+      customerName: readString(order.customer_name, "Customer"),
+      customerPhone: readString(order.customer_phone),
+      deliveryAddress: readString(order.delivery_address),
+      customerRemarks: readString(order.customer_remarks),
+      requiredAt: readString(order.required_at, readString(order.required_date)) || null,
+      totalEstimatedWeightKg: weight.estimated,
+      pickedWeightKg: weight.picked,
+      progressPercent,
+      items: upcomingItems.get(orderId) ?? [],
+    }
+  })
+}
+
 function mapAddressSuggestion(
   row: Record<string, unknown>
 ): DeliveryDashboardAddressSuggestion {
@@ -434,15 +572,31 @@ export async function getDeliveryVehicles(): Promise<Vehicle[]> {
     return []
   }
 
-  const { data, error } = await context.supabase
+  let query = context.supabase
     .from("vehicles")
     .select("*")
     .eq("is_active", true)
     .order("vehicle_no", { ascending: true })
 
+  if (!hasAnyRole(context.profile, ["admin", "director"])) {
+    if (!context.profile.departmentId) {
+      return []
+    }
+
+    query = query.eq("delivery_team_id", context.profile.departmentId)
+  }
+
+  const { data, error } = await query
+
   if (error) {
     throw new Error(error.message)
   }
+
+  const canSeeGpsMetadata = hasAnyRole(context.profile, [
+    "delivery_manager",
+    "admin",
+    "director",
+  ])
 
   return asRecordArray(data).map((vehicle) => ({
     id: readString(vehicle.id),
@@ -451,9 +605,13 @@ export async function getDeliveryVehicles(): Promise<Vehicle[]> {
     capacityKg: readNumber(vehicle.capacity_kg),
     active: readBoolean(vehicle.is_active, true),
     deliveryTeamId: readNullableString(vehicle.delivery_team_id),
-    gpsProviderId: readNullableString(vehicle.gps_provider_id),
-    gpsProviderVehicleRef: readString(vehicle.gps_provider_vehicle_ref),
-    gpsEnabled: readBoolean(vehicle.gps_enabled),
+    gpsProviderId: canSeeGpsMetadata
+      ? readNullableString(vehicle.gps_provider_id)
+      : null,
+    gpsProviderVehicleRef: canSeeGpsMetadata
+      ? readString(vehicle.gps_provider_vehicle_ref)
+      : "",
+    gpsEnabled: canSeeGpsMetadata ? readBoolean(vehicle.gps_enabled) : false,
   }))
 }
 
@@ -461,6 +619,12 @@ export async function getDeliveryDrivers() {
   const context = await getQueryContext()
 
   if (!context) {
+    return []
+  }
+
+  if (
+    !hasAnyRole(context.profile, ["delivery_manager", "admin", "director"])
+  ) {
     return []
   }
 

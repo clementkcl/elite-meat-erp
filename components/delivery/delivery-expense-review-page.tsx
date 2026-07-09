@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Check, Receipt, X } from "lucide-react"
-import { useActionState } from "react"
+import { useActionState, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -181,6 +181,7 @@ function ExpenseReviewControls({ expense }: { expense: DeliveryExpense }) {
     reviewDeliveryExpenseAction,
     initialDeliveryActionState
   )
+  const [decision, setDecision] = useState<"APPROVED" | "REJECTED" | null>(null)
 
   if (expense.status !== "PENDING") {
     return (
@@ -197,6 +198,7 @@ function ExpenseReviewControls({ expense }: { expense: DeliveryExpense }) {
   return (
     <form action={action} className="space-y-3 rounded-md border p-3">
       <input type="hidden" name="expenseId" value={expense.id} />
+      <ExpenseReviewReadiness expense={expense} decision={decision} />
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor={`review-note-${expense.id}`}>Review note</Label>
@@ -212,18 +214,24 @@ function ExpenseReviewControls({ expense }: { expense: DeliveryExpense }) {
           <Textarea
             id={`reject-reason-${expense.id}`}
             name="rejectedReason"
-            placeholder="Required only when rejecting"
+            required={decision === "REJECTED"}
+            placeholder={
+              decision === "REJECTED"
+                ? "Required before rejecting"
+                : "Required only when rejecting"
+            }
             className="min-h-20"
           />
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid gap-2 sm:grid-cols-2">
         <Button
           type="submit"
           name="status"
           value="APPROVED"
           disabled={pending}
-          className="min-h-11"
+          onClick={() => setDecision("APPROVED")}
+          className="min-h-12 w-full"
         >
           <Check className="size-4" />
           Approve
@@ -234,14 +242,103 @@ function ExpenseReviewControls({ expense }: { expense: DeliveryExpense }) {
           value="REJECTED"
           disabled={pending}
           variant="destructive"
-          className="min-h-11"
+          onClick={() => setDecision("REJECTED")}
+          className="min-h-12 w-full"
         >
           <X className="size-4" />
           Reject
         </Button>
       </div>
       <Message state={state} />
+      {state.status === "error" ? <ExpenseReviewErrorGuide /> : null}
     </form>
+  )
+}
+
+function ExpenseReviewReadiness({
+  expense,
+  decision,
+}: {
+  expense: DeliveryExpense
+  decision: "APPROVED" | "REJECTED" | null
+}) {
+  const checks = [
+    {
+      label: "Receipt checked",
+      detail: expense.receiptUrl
+        ? "Open receipt photo before approving."
+        : "Receipt is unavailable; reject or ask driver to resubmit.",
+      ready: Boolean(expense.receiptUrl),
+    },
+    {
+      label: "Scope checked",
+      detail: expense.deliveryId
+        ? "Linked delivery can be opened for context."
+        : "Standalone expense uses outlet/team scope.",
+      ready: true,
+    },
+    {
+      label: "Decision selected",
+      detail:
+        decision === "APPROVED"
+          ? "Approving releases the standalone expense from pending review."
+          : decision === "REJECTED"
+            ? "Reject with a reason the driver can understand."
+            : "Tap Approve or Reject after checking proof.",
+      ready: Boolean(decision),
+    },
+  ]
+
+  return (
+    <div className="rounded-md border bg-muted/30 p-3">
+      <div className="text-sm font-semibold">Expense review readiness</div>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Pending &gt; Manager review &gt; Approved or Rejected. Delivery expenses
+        stay separate from OA claims in V1.
+      </p>
+      <div className="mt-3 grid gap-2">
+        {checks.map((check) => (
+          <div key={check.label} className="rounded-md border bg-background p-3">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Check
+                className={
+                  check.ready
+                    ? "size-4 shrink-0 text-emerald-700"
+                    : "size-4 shrink-0 text-amber-700"
+                }
+              />
+              {check.label}
+            </div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              {check.detail}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ExpenseReviewErrorGuide() {
+  const steps = ["Open receipt", "Check scope", "Add reject reason if needed"]
+
+  return (
+    <div className="rounded-md border border-red-200 bg-red-50 p-3">
+      <p className="text-sm font-semibold text-red-900">
+        Expense review not saved yet
+      </p>
+      <p className="mt-1 text-sm text-red-900/75">
+        Fix the blocked review step, then try again. The expense may be outside
+        your outlet or delivery team.
+      </p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {steps.map((step) => (
+          <div key={step} className="rounded-md border bg-background/80 p-3">
+            <div className="text-sm font-semibold">{step}</div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -306,6 +403,73 @@ function ExpenseCard({ expense }: { expense: DeliveryExpense }) {
           ) : null}
         </div>
         <ExpenseReviewControls expense={expense} />
+      </CardContent>
+    </Card>
+  )
+}
+
+function ExpenseReviewGuide({ expenses }: { expenses: DeliveryExpense[] }) {
+  const pending = expenses.filter((expense) => expense.status === "PENDING")
+  const firstPending = pending[0]
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Expense review queue</CardTitle>
+        <CardDescription>
+          Review pending driver receipt claims before normal delivery reports.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="rounded-md border bg-muted/30 p-3">
+          <div className="text-sm font-semibold">
+            {firstPending ? "Start here" : "Queue clear"}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {firstPending
+              ? "Open the first pending receipt, check delivery or scope, then approve or reject."
+              : "No pending delivery expenses need action for the current filters."}
+          </p>
+        </div>
+        {firstPending ? (
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">Driver</div>
+              <div className="mt-1 text-sm font-semibold">
+                {firstPending.driverName}
+              </div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                {firstPending.vehicleNo}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">Claim</div>
+              <div className="mt-1 text-sm font-semibold">
+                {label(firstPending.expenseType)}
+              </div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                {formatMoney(firstPending.amount)}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">Next action</div>
+              <div className="mt-1 text-sm font-semibold">
+                Open receipt proof
+              </div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                Pending standalone review
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-3">
+            {["Return to Dashboard", "Check filters", "Review later"].map((step) => (
+              <div key={step} className="rounded-md border p-3">
+                <div className="text-sm font-semibold">{step}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -382,6 +546,7 @@ export function DeliveryExpenseReviewPage({
       </div>
 
       <ExpenseFilters filters={filters} drivers={drivers} vehicles={vehicles} />
+      <ExpenseReviewGuide expenses={expenses} />
 
       <div className="space-y-3">
         {expenses.length === 0 ? (

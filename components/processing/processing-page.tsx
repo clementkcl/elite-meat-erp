@@ -1,5 +1,11 @@
 import Link from "next/link"
-import { AlertTriangle, ClipboardCheck, PackageCheck, Scale } from "lucide-react"
+import {
+  AlertTriangle,
+  ClipboardCheck,
+  PackageCheck,
+  Scale,
+  ScanBarcode,
+} from "lucide-react"
 
 import {
   RetailProcessingBatchForm,
@@ -40,6 +46,12 @@ const processingOperatorRoles: UserRole[] = [
   "processing_team_general_worker",
   "processing_manager",
   "admin",
+]
+
+const processingReviewRoles: UserRole[] = [
+  "processing_manager",
+  "admin",
+  "director",
 ]
 
 function dateText(value: string | null) {
@@ -132,6 +144,69 @@ function KpiCards({ kpis }: { kpis: ProcessingKpi[] }) {
         )
       })}
     </div>
+  )
+}
+
+function ProcessingWorkerFastPath() {
+  const steps = [
+    "Record raw",
+    "Record finished",
+    "Check yield",
+    "Submit",
+    "Barcode inbound",
+  ]
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Processing worker fast path</CardTitle>
+        <CardDescription>
+          Record one processing or packing job, submit it, then inbound the
+          finished stock barcode.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-2 sm:grid-cols-5">
+          {steps.map((step, index) => (
+            <div
+              key={step}
+              className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium"
+            >
+              {index + 1}. {step}
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Button asChild className="min-h-12 w-full justify-start">
+            <a href="#record-processing">
+              <ClipboardCheck className="size-4" />
+              Record processing
+            </a>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            className="min-h-12 w-full justify-start"
+          >
+            <Link href="/processing/batches">Check batches</Link>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            className="min-h-12 w-full justify-start"
+          >
+            <Link href="/stock/inbound">
+              <ScanBarcode className="size-4" />
+              Barcode inbound
+            </Link>
+          </Button>
+        </div>
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Finished stock still needs barcode inbound after packing. Abnormal
+          yield below 85% is alert only.
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -333,12 +408,14 @@ export async function ProcessingPage({ view }: { view: ProcessingView }) {
   const profile = await requireCurrentProfile()
   const data = await getProcessingPageData()
   const canOperate = hasAnyRole(profile, processingOperatorRoles)
+  const canReview = hasAnyRole(profile, processingReviewRoles)
   const visibleBatches =
     view === "dashboard" ? data.batches.slice(0, 6) : data.batches
 
   return (
     <div className="space-y-5">
       <PageHeader demoMode={data.demoMode} profile={profile} view={view} />
+      {canOperate ? <ProcessingWorkerFastPath /> : null}
       <KpiCards kpis={data.kpis} />
 
       {view === "dashboard" ? (
@@ -352,23 +429,31 @@ export async function ProcessingPage({ view }: { view: ProcessingView }) {
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline">
-              <Link href="/orders/prepare">Prepare customer orders</Link>
+              <Link href="/orders/picking">Prepare customer orders</Link>
             </Button>
           </CardContent>
         </Card>
       ) : null}
 
-      {canOperate ? (
-        <div className="grid gap-4 xl:grid-cols-2">
-          <RetailProcessingBatchForm
-            outlets={data.outlets}
-            stockLocations={data.stockLocations}
-            items={data.items}
-            brands={data.brands}
-            origins={data.origins}
-            profile={profile}
-          />
-          <RetailProcessingReviewForm batches={data.sourceBatches} />
+      {canOperate || canReview ? (
+        <div
+          className={cn(
+            "grid gap-4",
+            canOperate && canReview && "xl:grid-cols-2"
+          )}
+        >
+          {canOperate ? (
+            <section id="record-processing" className="scroll-mt-4">
+              <RetailProcessingBatchForm
+                outlets={data.outlets}
+                items={data.items}
+                profile={profile}
+              />
+            </section>
+          ) : null}
+          {canReview ? (
+            <RetailProcessingReviewForm batches={data.sourceBatches} />
+          ) : null}
         </div>
       ) : null}
 

@@ -31,8 +31,13 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 ### Stock / Inventory
 
 - Item master supports editable numeric-only `item_code`, category, default brand, section, name, Chinese name, Iban name, barcode requirement, active status, and default low stock level.
+- Item master supports an optional default fixed weight in kg for products that should use fixed-weight barcode fallback.
 - Item master product identity is category plus default brand plus product section/name. Brand is still captured on barcode stock units, barcode rules, prices, damage/return requests, and stock-take scope for actual stock traceability.
 - Item master create/edit is allowed for every ERP role when that user's outlet has Stock module access. Item master delete remains admin/director only.
+- Mobile item creation should keep item code, category, and product name as the visible required setup; optional brand, section, alternate names, low-stock level, and barcode-required settings can be opened only when needed.
+- Barcode Inbound quick product creation should save the selected existing manufacturer, or resolve a typed custom manufacturer, as the item default manufacturer while still keeping product and manufacturer as separate fields.
+- Item master editing should start with no selected item, so workers must intentionally choose a product before update fields appear. Active status and barcode-required toggles stay under advanced item settings.
+- Item master editing should provide item-code/product search before the edit dropdown so workers do not scroll long item lists on mobile.
 - Old non-numeric item codes are converted to the next numeric `0001`-style code by the stock inbound/label migration before the numeric-only item-code constraint is applied.
 - Stock inbound, outbound, and transfer are allowed for outlet staff with stock module access.
 - Create/edit item master is allowed for every ERP role with Stock module access. Item deletion is admin/director only.
@@ -41,41 +46,52 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 - Duplicate item code and duplicate inbound barcode are blocked.
 - Item master updates must fail clearly if the selected item no longer exists or the user's role cannot update it.
 - Barcode stock is the main stock model for MVP. Every stock unit should have a barcode.
-- If an item has no supplier/import barcode, staff generate and print an internal numeric barcode label first, attach it, then inbound/outbound the item normally.
+- If an item has no supplier/import barcode, staff enter weight, generate an internal numeric barcode label, save stock immediately, then print and attach the label.
 - Legacy loose/non-barcode tables still exist for compatibility and older records, but new MVP stock flow should use barcode labels instead of creating a separate no-barcode balance.
 - New no-barcode inbound is disabled in the Stock module; `/stock/no-barcode-inbound` redirects to Barcode Inbound.
 - Inbound writes stock units, stock movements, and barcode scan logs.
 - Stock-unit fields should not be directly edited after inbound; corrections must use movement, adjustment, void, inspection release, return, or stock-take workflows.
 - Barcode inbound writes the stock unit, movement row, scan log, audit log, and optional item+brand+origin weight rule atomically through a database RPC.
+- Barcode inbound blocked scans for duplicate barcode and barcode-rule/no-weight failure write failed scan-log records for manager review.
 - Continuous barcode inbound shows the current scan preset, saved scan count, saved total weight, and recent inbound scans/labels for the current worker session.
 - Barcode inbound starts with recent item+brand+origin templates so workers can reuse a saved setup and scan immediately.
 - Barcode inbound auto-generates a batch number when the page opens; workers do not need to press Start Batch.
 - Inbound location defaults to the user's assigned stock location, but remains editable subject to role/location restrictions.
 - Brand and origin are required for barcode inbound.
+- Stock barcode fields support external scanner keyboard input by treating Enter in the barcode field like a scan.
 - If a scanned barcode cannot decode weight confidently, workers must use generated barcode label printing rather than saving the supplier barcode with a manually typed weight.
+- If the worker enters actual kg and no matching supplier barcode weight position can be inferred, Stock Inbound should tell the worker to generate an internal label instead.
+- After an internal-label inbound save, the form should return focus to the weight field so workers can enter the next weight under the same item/brand/origin/location session.
 - Low-confidence fixed-weight fallback still asks staff to confirm or correct the weight before saving.
+- If an inbound barcode length differs from the recent saved format for the selected item + brand + origin rule, workers see a warning but the scan is not blocked.
 - Current-session inbound undo voids the stock unit and writes an `INBOUND_VOID` movement, scan log, and audit log. It must not delete stock units or movements silently.
+- Whole inbound session undo is manager/admin/director only, must validate the batch server-side, and must void all eligible saved scans atomically while keeping `INBOUND_VOID` movements, scan logs, and audit logs.
 - After a worker finishes an inbound session, normal workers should ask a manager/admin to correct mistakes.
 - Expiry date is not required.
 - Inbound date is recorded on barcode stock units and used to estimate stock age.
 - Stock dashboard/report surfaces show stock age alerts above 6 months and 12 months.
 - Transfers should not change stock location until receive-transfer scan.
+- Transfer Out should show the worker's assigned stock location as the source and block choosing that same location as destination before scanning.
+- Receive-transfer shows pending transfer barcodes for the selected receiving location; the selected location defaults to the logged-in user's assigned stock location.
 - Returns restore stock unit status to `IN_STOCK`.
 - Normal stock return updates the barcode unit, movement row, scan log, and audit log atomically through a database RPC.
+- Normal stock return should let workers choose a simple return condition before scanning; the condition is recorded in the movement notes.
 - Customer return after sale goes to `HOLD` or `INSPECTION` first before becoming sellable stock again.
 - Manager/admin inspection release is required before customer-return inspection stock becomes `IN_STOCK`.
+- Normal workers should not see the inspection-release form on the Return/Damage page; it is a manager/admin task.
 - Inspection release updates the barcode unit, movement row, scan log, and audit log atomically through a database RPC.
 - Failed delivery return automatically restores linked barcode stock to `IN_STOCK`.
 - No-barcode failed delivery return is not required for MVP because no-barcode stock should be converted to barcode stock before operational movement.
 - Damaged/spoiled stock requires staff request with photo, department manager review, then director approval before deduction.
 - Damage/spoilage reasons are expired, broken packaging, smell, wrong temperature, customer rejected, and other.
 - Return supplier stock requires staff request, `HOLD_RETURN_SUPPLIER` status while pending, department manager approval, then stock deduction. Rejected return-supplier requests release the barcode back to `IN_STOCK`.
-- Stock take sessions are created by department managers/admin for one location and one item+brand scope.
+- Stock take sessions can be started by stock workers/managers/admin for one location and one item+brand scope.
 - Staff can scan/count barcode stock for the scoped stock take session.
 - While a stock take is open, inbound/outbound/transfer/return actions for the selected item+brand in that location show a warning only for the mobile MVP.
 - Stock take counting is barcode scanning only.
 - Unknown barcodes scanned during stock take are recorded as pending exceptions and create new barcode stock units only after manager review and director approval.
 - Barcodes that belong to another location are recorded as wrong-location exceptions and move automatically to the stock take location only after director approval.
+- Stock take review must show pending unknown-barcode and wrong-location exceptions before final approval so managers/directors know what will be resolved.
 - Stock take adjustment needs department manager approval first, then director final approval.
 - Manager and director electronic signatures are required for stock take review/final approval.
 - Stock take adjustments happen only after both approval steps.
@@ -85,12 +101,15 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 - Stock report filters include date range, outlet/location, item, brand, origin, status, user, and movement type where the underlying report row has that data.
 - Damage/spoilage and return-supplier report rows should include linked barcode stock-unit weight when available.
 - Stock reports support CSV export, print/PDF-ready view, and WhatsApp-ready summary text.
-- Stock dashboard KPIs include total stock weight, barcode units, today inbound, today outbound, pending transfers, legacy no-barcode visibility, stock-take variance, negative-stock alerts, stock-age alerts, pending damage approvals, pending stock-take approvals, duplicate scan attempts, and barcode decode errors.
+- Stock dashboard KPIs include total stock weight, barcode units, today inbound, today outbound, pending transfers, legacy no-barcode visibility, stock-take variance, negative-stock alerts, stock-age alerts, pending damage approvals, pending stock-take approvals, all failed scan issues for review, duplicate scan attempts, and barcode decode errors.
+- Manager stock dashboards show recent failed scan issues for review, including duplicate barcode, wrong location, unknown barcode, unavailable stock, and barcode rule failures. The full barcode scan error report remains the audit trail.
 - Stock dashboard shortcuts link stock operators/admins to inbound, outbound, transfer, receive-transfer, and return workflows. Director/view-only users should not see routine operation shortcuts.
 
 ### Barcode Rules
 
 - Barcode weight rules differ by item, brand, and origin.
+- Stock Inbound should clearly show whether a saved barcode rule is ready for the selected item + brand + origin, or whether the worker should scan once, enter actual kg, and save the rule.
+- When no saved barcode rule exists for the selected item + brand + origin, Stock Inbound should keep rule saving on so the first successful scan can teach future scans.
 - Brand and origin are selected from dropdown lists, with Other/custom entry allowed during inbound.
 - Weight is normally encoded in kilograms.
 - GS1 AI `3102` means kilograms with 2 decimals.
@@ -98,8 +117,9 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 - Some barcode formats do not include `3102` or `3103`; saved position rules are used for those.
 - Position rules support 1, 2, or 3 decimals.
 - Some items use fixed weight; fixed-weight fallback requires manual confirmation.
+- Fixed-weight fallback should prefer the item master default fixed weight when one is set, then allow staff to correct or confirm the scan weight.
 - If barcode weight cannot be decoded confidently, staff must see a clear error and manually confirm weight before saving.
-- Internal generated barcode labels are numeric only and are based on date, numeric item code, weight in grams, and a serial number. The barcode itself does not include `KG` text.
+- Internal generated barcode labels are numeric only and are based on the inbound session code digits, running number, and weight in grams. The barcode itself does not include `KG` text.
 - Internal generated barcode labels must skip existing stock-unit barcodes and labels generated during the current inbound session before printing.
 - Thermal label output is 50mm x 30mm with company name, product name, weight, and machine-readable Code 128 barcode. Browser print/export is used to save labels as PDF, one label per page.
 - Historical barcode labels can be reprinted from the stock-unit detail page.
@@ -140,6 +160,7 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 - Outbound types are `SALES`, `TRANSFER`, `PROCESSING`, `DAMAGE`/`SPOILED`, and `RETURN_SUPPLIER`.
 - Direct outbound is allowed for `SALES`, `PROCESSING`, `TRANSFER`, and `SAMPLE_TESTING` stock movement.
 - Direct outbound always requires remarks.
+- Direct Sales outbound requires staff to choose a customer before scanning; the selected customer is recorded in movement notes.
 - Damage/spoilage and supplier-return choices from the outbound screen create request workflows instead of immediate deduction.
 - Damage/spoilage request stock remains `IN_STOCK` but an open request makes the barcode unavailable for normal outbound until rejected or approved.
 - Return-supplier request stock becomes `HOLD_RETURN_SUPPLIER` and is unavailable for normal outbound until rejected or approved.
@@ -168,22 +189,34 @@ Elite Meat ERP is modeled for a frozen pork / meat processing business with outl
 
 ### Delivery
 
-- Delivery orders track customer location, address, vehicle, driver, status, payment type/status, source, proof photo path, and driver location.
-- Delivery statuses are Pending, Out for Delivery, Delivered, Failed, and Cancelled.
-- Any staff with delivery access can update delivery status.
-- Proof file must be an image and must include receiver name and GPS location.
-- When proof is uploaded successfully, delivery is automatically marked `DELIVERED`.
-- After successful customer-order delivery, customer latitude/longitude is updated from delivery GPS when the order is linked to a customer.
-- Failed delivery proof is uploaded through the proof workflow, not a plain status update. It requires image proof, receiver/contact name, and GPS.
+- Delivery V1 canonical records are `deliveries`, `delivery_orders`, `delivery_items`, `delivery_proofs`, `delivery_status_logs`, `delivery_address_suggestions`, and `delivery_expenses`.
+- Legacy standalone `delivery_jobs`, `delivery_job_orders`, and older `delivery_orders` payment/status pages still exist for historical compatibility and should not be treated as the canonical V1 driver workflow.
+- Delivery V1 statuses are Available, Accepted, Loaded, Out for Delivery, Delivered, Failed, and Cancelled.
+- Drivers update delivery status through the sequence Accept Delivery -> Loaded -> Start Delivery -> proof upload.
+- Proof file must be an image. No receiver name, customer signature, or GPS accuracy is required in V1.
+- GPS is attempted during proof upload; completion is still allowed when GPS is denied or unavailable, and GPS unavailable is logged.
+- When delivered proof is uploaded successfully, delivery is automatically marked `DELIVERED`.
+- Failed delivery proof is uploaded through the proof workflow, not a plain status update. It requires image proof and a failed reason; remarks are required only for `Other`.
+- Proof GPS and driver address issues create manager-review address/GPS suggestions. They must not automatically overwrite official customer latitude/longitude.
 - Failed customer-order delivery returns linked barcode stock from sales outbound batches back to `IN_STOCK`, writes `RETURN` stock movements and scan logs, and records failed-return status on the order.
 - Failed standalone delivery has no order-stock linkage in MVP, so it is marked `NO_STOCK_LINK` and requires manual stock follow-up.
 - Failed delivery must not release or delete active stock reservations silently.
-- Driver can record payment collection by cash, bank transfer, or e-wallet.
+- Delivery completion does not deduct stock; Stock outbound/loading handles stock movement before delivery completion.
+- Driver V1 must not show price, cost, customer credit, stock value, profit, payment collection, finance, or accounting data.
+- Delivery expenses use standalone Pending/Approved/Rejected review in V1; they are not wired into OA/claim approval yet.
 - Orders-module delivery handoff is supported for `READY_FOR_DELIVERY` customer orders.
 
 ### Retail
 
-- Retail supports sales, sale lines, payments, cash sessions, daily sales, daily closings, expenses, price rules, cleaning, and processing surfaces.
+- Retail Module V1 is a daily outlet control module around AutoCount, not a replacement POS.
+- Retail V1 home is a role-based task launcher with large buttons. Workers see daily task shortcuts only; managers see outlet control tasks; admin/director see all-outlet report/export tasks.
+- Retail V1 daily sales are AutoCount summary totals by payment type, not item-by-item ERP sales.
+- Retail workers may save same-day Daily Sales drafts when allowed. Retail managers/admin/directors confirm Daily Sales before Cash Closing can use the numbers.
+- Retail V1 does not deduct stock automatically from retail sales.
+- Retail V1 processing records raw weight, finished weight, yield, and loss, but does not automatically create stock inbound/outbound or finished product barcode labels.
+- Retail processing is report-only in V1. Workers submit records immediately; managers read processing records in reports and do not review/reject them.
+- Retail outlet staff use their assigned outlet/team scope; only admin/director can view all outlets.
+- Retail V1 supports Daily Sales, Expenses, Cleaning, Processing, Cash Closing, focused reports, and limited settings for expense categories, cleaning tasks, processing BOMs, and audit. Full POS, cash sessions, retail price rules, and barcode sales are excluded from Retail V1.
 - Retail operators are restricted to same-day sales/cash edits.
 - Daily closings and outlet expenses require a different checker/approver than the submitter.
 - Payment types are admin-configurable.

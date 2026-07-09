@@ -114,6 +114,10 @@ function kg(value: number) {
   })} kg`
 }
 
+function orderPriceText(value: number) {
+  return value > 0 ? money(value) : "Price required"
+}
+
 function orderRows(
   orders: CustomerOrder[],
   estimatedWeights: Map<string, number>
@@ -126,7 +130,7 @@ function orderRows(
     required: dateText(order.requiredAt ?? order.requiredDate),
     outletName: order.outletName,
     totalEstimatedWeightKg: kg(estimatedWeights.get(order.id) ?? 0),
-    totalOrderPrice: money(order.totalOrderPrice),
+    totalOrderPrice: orderPriceText(order.totalOrderPrice),
     stock: order.stockNotEnough ? "Not enough" : "Reserved",
     displayStatus: order.displayStatus,
     createdByName: order.createdByName,
@@ -197,14 +201,12 @@ export function OrdersTableClient({
   reservations,
   pickingEntries,
   notifications,
-  reports,
 }: {
   orders: CustomerOrder[]
   items: CustomerOrderItem[]
   reservations: OrderStockReservation[]
   pickingEntries: OrderPickingEntry[]
   notifications: OrderNotificationEvent[]
-  reports: OrderReportRow[]
 }) {
   const estimatedWeights = totalEstimatedWeightByOrder(items)
 
@@ -261,7 +263,7 @@ export function OrdersTableClient({
                     <div>
                       <div className="text-muted-foreground">Total price</div>
                       <div className="font-medium tabular-nums">
-                        {money(order.totalOrderPrice)}
+                        {orderPriceText(order.totalOrderPrice)}
                       </div>
                     </div>
                     <div>
@@ -296,7 +298,7 @@ export function OrdersTableClient({
                         variant="outline"
                         className="min-h-11 flex-1"
                       >
-                        <Link href="/orders/ready">Ready</Link>
+                        <Link href="/orders/ready">Price / Ready</Link>
                       </Button>
                     ) : null}
                   </div>
@@ -353,18 +355,10 @@ export function OrdersTableClient({
 
       <Card>
         <CardHeader>
-          <CardTitle>Reports</CardTitle>
-          <CardDescription>Customer, item, staff, and status summaries.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DataTable columns={reportColumns} data={reportRows(reports)} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Notification hooks</CardTitle>
-          <CardDescription>Skipped placeholders for future WhatsApp.</CardDescription>
+          <CardTitle>In-app notifications</CardTitle>
+          <CardDescription>
+            Order events surfaced in the app and dashboard alerts.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <DataTable
@@ -374,5 +368,21 @@ export function OrdersTableClient({
         </CardContent>
       </Card>
     </>
+  )
+}
+
+export function OrderReportsClient({ reports }: { reports: OrderReportRow[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Reports</CardTitle>
+        <CardDescription>
+          Customer, item, staff, queue, status, and delivery performance summaries.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <DataTable columns={reportColumns} data={reportRows(reports)} />
+      </CardContent>
+    </Card>
   )
 }

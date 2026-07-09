@@ -81,7 +81,8 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
   }
 
   if (!data) {
-    return demoProfile
+    console.error("Profile row missing for authenticated user", user.id)
+    return null
   }
 
   const profile = asRecord(data)
@@ -107,11 +108,14 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
       .eq("outlet_id", outletId)
       .eq("is_enabled", true)
 
-    moduleAccess = moduleError
-      ? [...moduleKeys]
-      : asRecordArray(moduleRows)
-          .map((entry) => readString(entry.module_key))
-          .filter(isModuleKey)
+    if (moduleError) {
+      console.error("Module access load failed", moduleError.message)
+      moduleAccess = []
+    } else {
+      moduleAccess = asRecordArray(moduleRows)
+        .map((entry) => readString(entry.module_key))
+        .filter(isModuleKey)
+    }
   }
   const [departmentName, branchName, outletName, stockLocationName] =
     await Promise.all([

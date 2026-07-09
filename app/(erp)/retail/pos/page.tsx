@@ -1,5 +1,5 @@
-import { RetailPage } from "@/components/retail/retail-page"
+import { redirect } from "next/navigation"
 
 export default function RetailPosPage() {
-  return <RetailPage route="pos" />
+  redirect("/retail/sales")
 }

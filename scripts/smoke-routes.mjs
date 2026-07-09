@@ -86,6 +86,67 @@ assert(
     !authSession.includes("profile_roles("),
   "Profile loader must load profile_roles separately instead of embedding profile_roles inside profiles"
 )
+const missingProfileBlockStart = authSession.indexOf("if (!data)")
+const missingProfileBlockEnd = authSession.indexOf("const profile = asRecord(data)", missingProfileBlockStart)
+const missingProfileBlock = authSession.slice(missingProfileBlockStart, missingProfileBlockEnd)
+assert(
+  missingProfileBlockStart >= 0 &&
+    missingProfileBlockEnd > missingProfileBlockStart &&
+    missingProfileBlock.includes("return null") &&
+    !missingProfileBlock.includes("return demoProfile"),
+  "Authenticated users without profile rows must fail closed instead of receiving demo admin/director access"
+)
+const moduleAccessBlockStart = authSession.indexOf("const { data: moduleRows, error: moduleError }")
+const moduleAccessBlockEnd = authSession.indexOf("const [departmentName", moduleAccessBlockStart)
+const moduleAccessBlock = authSession.slice(moduleAccessBlockStart, moduleAccessBlockEnd)
+assert(
+  moduleAccessBlockStart >= 0 &&
+    moduleAccessBlockEnd > moduleAccessBlockStart &&
+    moduleAccessBlock.includes("if (moduleError)") &&
+    moduleAccessBlock.includes("moduleAccess = []") &&
+    !moduleAccessBlock.includes("? [...moduleKeys]"),
+  "Module access lookup errors must fail closed instead of granting every module"
+)
+
+const moduleAccessState = read("components/erp/module-access-state.tsx")
+assert(
+  moduleAccessState.includes("is not available for your account") &&
+    moduleAccessState.includes("Your role, outlet, department, or module access does not allow this page. No work was changed.") &&
+    moduleAccessState.includes("Go back to Home") &&
+    moduleAccessState.includes("Ask manager or admin") &&
+    moduleAccessState.includes("Check role, outlet, and module access") &&
+    moduleAccessState.includes("Back to Home") &&
+    moduleAccessState.includes('href="/dashboard"') &&
+    moduleAccessState.includes("min-h-12 w-full text-base"),
+  "Module access blocked state must explain permission/scope requirements and provide a large home action"
+)
+
+const loginPage = read("app/(auth)/login/page.tsx")
+const loginForm = read("components/auth/login-form.tsx")
+assert(
+  loginPage.includes("Start your work day from one ERP.") &&
+    loginPage.includes("Staff, managers, account, admin, and director users sign in here.") &&
+    loginPage.includes("outlet, department, and stock") &&
+    loginPage.includes("const staffWorkflows") &&
+    loginPage.includes('label: "Clock"') &&
+    loginPage.includes('label: "Stock"') &&
+    loginPage.includes('label: "Orders"') &&
+    loginPage.includes('label: "Delivery"') &&
+    loginPage.includes('label: "Processing"') &&
+    loginPage.includes("<ShieldCheck") &&
+    !loginPage.includes("Sign in as owner, admin, sales, customer service, or account staff."),
+  "Login page must keep worker-first staff entry copy and remove old sales/customer-service framing"
+)
+assert(
+  loginForm.includes("Staff sign in") &&
+    loginForm.includes("Your role controls what you can open.") &&
+    loginForm.includes('className="min-h-12 text-base"') &&
+    loginForm.includes('role="alert"') &&
+    loginForm.includes('className="min-h-12 w-full"') &&
+    loginForm.includes("Missing a module after sign in?") &&
+    loginForm.includes("Open ERP"),
+  "Login form must keep touch-friendly controls, clear role copy, and accessible error state"
+)
 
 const debugProfilePage = read("app/(erp)/debug/profile/page.tsx")
 for (const fragment of [
@@ -165,7 +226,7 @@ for (const fragment of [
   "Iban name",
   'placeholder="0007"',
   "Product name",
-  "Default brand",
+  "Default manufacturer",
   "Default low stock kg",
   "itemCodeEdited",
   "const canCreateItem",
@@ -175,7 +236,7 @@ for (const fragment of [
   "updateItemAction",
   "name=\"isActive\"",
   "Enter name and a numeric item code before creating the item.",
-  "Select an item before updating item master details.",
+  "Select a product before updating product master details.",
   "defaultValue={selectedItem.itemCode}",
   "defaultValue={selectedItem.defaultBrandId ?? \"\"}",
   "Confirm outbound batch",
@@ -183,20 +244,24 @@ for (const fragment of [
   "const confirmDisabled",
   "setBarcodes([])",
   "disabled={confirmDisabled}",
-  "Select order first.",
+  "Outbound Without Order",
   "Scan at least one barcode.",
-  "Confirm substitution. No reason needed.",
-  "No customer name",
+  "Choose customer",
+  "Choose customer before scanning.",
+  "Choose customer first, then scan sales stock.",
+  "Wrong location. Use stock from",
+  "Barcode is ${unit.status}.",
   "No photo",
-  "Photo required. Stock goes to approval.",
-  "const activeItems = items.filter((item) => item.active)",
-  "const activeBrands = brands.filter((brand) => brand.active)",
-  "const activeOrigins = origins.filter((origin) => origin.active)",
-  "const activeLocations = locations.filter((location) => location.active)",
+  "Photo required. Request only; stock is not deducted now.",
+  "const activeItems = items",
+  "const activeBrands = brands",
+  "const activeOrigins = origins",
+  "const activeLocations = locations",
+  "compareText(a.name, b.name)",
   "function normalizeInboundPreset",
   "initialInboundPreset(items, locations, brands, origins, defaultLocationId)",
   "allowOther",
-  "Other / custom brand",
+  "Other / custom manufacturer",
   "Other / custom origin",
   "customer_return",
   "transfer_received",
@@ -216,11 +281,12 @@ for (const fragment of [
   "canOperate ?",
   "canManage ?",
   "canDirectorApprove ?",
-  "Choose one location, item, and brand.",
-  "Barcode progress",
-  "Weight progress",
+  "Choose item first.",
+  "Counted quantity",
+  "Counted weight",
+  "Missing expected count",
   "Barcode-only count",
-  "Wrong item/brand blocked.",
+  "Wrong item/manufacturer blocked.",
   "Missing barcode adjustment waits for manager",
   "Manager signature:",
   "Director signature:",
@@ -249,10 +315,10 @@ for (const fragment of [
   assert(itemCodeRules.includes(fragment), `Item code rules missing: ${fragment}`)
 }
 assert(
-  workflowForms.includes('order.status === "READY_FOR_PICKUP"') &&
-    workflowForms.includes('order.status === "READY_FOR_DELIVERY"') &&
-    workflowForms.includes("No ready orders yet."),
-  "Outbound form must only list ready orders"
+  workflowForms.includes("Direct stock outbound only. Order picking stays in Orders.") &&
+    workflowForms.includes('href="/orders/picking"') &&
+    workflowForms.includes("Direct sales stock out"),
+  "Stock outbound must stay direct-only and route order picking to Orders"
 )
 const barcodeWeight = read("lib/stock/barcode-weight.ts")
 assert(
@@ -386,6 +452,76 @@ assert(
   stockActions.includes("Barcode already exists"),
   "Duplicate inbound barcode must be blocked"
 )
+assert(
+  stockActions.includes("export async function logStockScanIssueAction") &&
+    stockActions.includes("export async function logInboundScanIssueAction") &&
+    stockActions.includes("function inferStockIssueType") &&
+    stockActions.includes("throw new Error(fallbackError.message)") &&
+    stockActions.includes("throw new Error(error.message)") &&
+    stockActions.includes("already recorded") &&
+    stockActions.includes("already scanned") &&
+    stockActions.includes("SPOILED_DAMAGED_REVIEW") &&
+    stockActions.includes("TRANSFER_MISSING_ITEM") &&
+    stockActions.includes("TRANSFER_UNEXPECTED_ITEM") &&
+    stockActions.includes("UNKNOWN_BARCODE_STOCK_TAKE") &&
+    stockActions.includes("STOCK_TAKE_MISMATCH") &&
+    stockActions.includes("movementTypeForUnavailableAction") &&
+    workflowForms.includes("logWorkerScanIssue") &&
+    workflowForms.includes("loggedOutboundIssueKeysRef") &&
+    workflowForms.includes("loggedTransferIssueKeysRef") &&
+    workflowForms.includes("loggedReturnIssueKeysRef") &&
+    workflowForms.includes("logInboundScanIssue(value, message, \"DUPLICATE_BARCODE\", {") &&
+    workflowForms.includes("expectedStatus: \"unused barcode\"") &&
+    workflowForms.includes("context.scannedStatus") &&
+    workflowForms.includes("relatedTransferId: selectedReceiveBarcode || null,") &&
+    workflowForms.includes("expectedBarcode: selectedReceiveBarcode || null") &&
+    workflowForms.includes("receivedBarcode: nextBarcode"),
+  "Stock issue records must auto-create from inbound, outbound, stock take, transfer, and return blocked scans"
+)
+for (const issueType of [
+  "DUPLICATE_BARCODE",
+  "BARCODE_LENGTH_MISMATCH",
+  "BARCODE_NOT_FOUND",
+  "WRONG_LOCATION",
+  "WRONG_ITEM",
+  "UNAVAILABLE_STOCK",
+  "BARCODE_RULE_DETECTION_FAILURE",
+  "UNKNOWN_BARCODE_STOCK_TAKE",
+  "STOCK_TAKE_MISMATCH",
+  "TRANSFER_MISSING_ITEM",
+  "TRANSFER_UNEXPECTED_ITEM",
+  "SPOILED_DAMAGED_REVIEW",
+]) {
+  assert(
+    stockActions.includes(`"${issueType}"`) &&
+      read("supabase/migrations/202606250007_stock_scan_issue_context_v1.sql").includes(
+        `'${issueType}'`
+      ),
+    `Stock scan issue contract missing ${issueType}`
+  )
+}
+for (const issueField of [
+  "issue_type: input.issueType",
+  "item_id: input.itemId",
+  "selected_item_id: input.selectedItemId",
+  "expected_location_id: input.expectedLocationId",
+  "scanned_location_id: input.scannedLocationId",
+  "expected_status: input.expectedStatus",
+  "scanned_status: input.scannedStatus",
+  "related_context: input.relatedContext",
+  "scanned_by: input.scannedBy",
+  "assertStockIssueLocationAccess(context.profile",
+  "locationIds.some((locationId) =>",
+  "created_at timestamptz not null default now()",
+]) {
+  assert(
+    stockActions.includes(issueField) ||
+      read("supabase/migrations/202606100001_erp_core_stock_v1.sql").includes(
+        issueField
+      ),
+    `Stock scan issue context missing ${issueField}`
+  )
+}
 assert(
   stockActions.includes("Inactive products cannot receive new inbound stock.") &&
     stockActions.includes("resolveNamedRecordId") &&
@@ -532,16 +668,44 @@ for (const fragment of [
   "scopeOptions.outlets",
   "name=\"outletId\"",
   "name=\"departmentId\"",
-  "Create confirmed order",
+  "Create Order",
+  "Worker fast path",
+  "Use search, quick add, and recent items to avoid typing.",
+  "Recent items",
+  "Tap a recent item to add it without typing the item name.",
+  "Order created. Pick items next.",
+  "Order saved",
+  "Stock checked",
+  "Open picking",
+  "Stock shortage stays visible in picking. Do not create the same order",
+  "Order not saved yet",
+  "Read the red message",
+  "Fix the highlighted step",
+  "Try Create Order again",
+  "Create order is not ready",
+  "Customer ready",
+  "Order type ready",
+  "Items and brand ready",
+  "Enter final price",
+  "Location ready",
+  "No order items are available. Ask a manager to set active",
+  "No matching order items. Clear search or choose All",
+  "Go to Picking",
   "itemsJson",
   "Search name or phone",
   "Credit overdue warning. Order is not blocked.",
-  "Processing required",
-  "Estimated kg is needed for stock reservation.",
+  "Needs processing",
+  "Estimated kg is needed for picking.",
   "pickOrderBarcodeAction",
   "manualPickWeightAction",
   "manualPickReasons.map",
-  "Wrong item scans are recorded as mismatches.",
+  "Order picking fast path",
+  "After picking starts",
+  "Duplicate picked barcodes show a warning",
+  "Wrong item scans show a warning with the next choice.",
+  "Pick saved. Next step:",
+  "Go to Price / Ready",
+  "Wrong item scans show a warning, then choose",
   "submitDisabled={readyCandidates.length === 0}",
   "disabled={deliveryOrders.length === 0}",
   "disabled={statusOptions.length === 0}",
@@ -562,6 +726,21 @@ assert(
     ordersPage.includes("Check that the Orders migrations were applied in order.") &&
     !ordersPage.includes("getOrderDetailData"),
   "Orders page must show setup errors and avoid duplicate detail data loads"
+)
+assert(
+    ordersPage.includes("function isDeliveryWorker") &&
+    ordersPage.includes("Today&apos;s order work") &&
+    ordersPage.includes("Start with the next task:") &&
+    ordersPage.includes("Pickup / Delivery") &&
+    ordersPage.includes("Driver Delivery") &&
+    ordersPage.includes("Today jobs and proof photo") &&
+    ordersPage.includes('href: "/delivery/driver"') &&
+    ordersPage.includes("Delivery Dashboard") &&
+    ordersPage.includes("Delivery overview") &&
+    ordersPage.includes("<TaskActionGrid roles={roles} advancedOrderUser={advancedOrderUser} />") &&
+    ordersPage.includes("roles={profile.roles}") &&
+    ordersPage.includes("advancedOrderUser={advancedOrderUser}"),
+  "Orders task home must keep role-aware worker actions and avoid sending delivery workers to manager delivery dashboard"
 )
 assert(
   ordersPage.includes("EditOrderBeforePickingForm") &&
@@ -1105,6 +1284,25 @@ assert(
 
 const retailActions = read("lib/retail/actions.ts")
 const retailPage = read("components/retail/retail-page.tsx")
+const retailForms = read("components/retail/retail-forms.tsx")
+const retailSalesHistoryPage = read("app/(erp)/retail/sales/history/page.tsx")
+const retailProcessingReviewPage = read("app/(erp)/retail/processing/review/page.tsx")
+const retailDailyClosingFormStart = retailForms.indexOf("export function RetailDailyClosingForm")
+const retailDailyClosingFormEnd = retailForms.indexOf(
+  "const processingLineIndexes",
+  retailDailyClosingFormStart
+)
+const retailDailyClosingForm = retailForms.slice(
+  retailDailyClosingFormStart,
+  retailDailyClosingFormEnd
+)
+const retailExpenseFormStart = retailForms.indexOf("export function RetailExpenseForm")
+const retailExpenseFormEnd = retailForms.indexOf(
+  "export function RetailExpenseEditForm",
+  retailExpenseFormStart
+)
+const retailExpenseForm = retailForms.slice(retailExpenseFormStart, retailExpenseFormEnd)
+const processingPage = read("components/processing/processing-page.tsx")
 assert(
   retailActions.includes("assertRetailSameDay"),
   "Retail actions must enforce same-day operator edits"
@@ -1116,11 +1314,261 @@ assert(
   "Retail actions must enforce retail/processing/cleaning module access"
 )
 assert(
-  retailPage.includes('href="/orders/prepare"') &&
-    retailPage.includes("Prepare customer orders") &&
-    retailPage.includes("Finished") &&
-    retailPage.includes("goods only enter stock after packing"),
-  "Processing page must link to order preparation and clarify stock entry"
+  retailForms.includes("function DailySalesReadiness") &&
+    retailForms.includes("Daily sales readiness") &&
+    retailForms.includes("Copy totals from AutoCount, attach the report if available") &&
+    retailForms.includes("AutoCount totals entered") &&
+    retailForms.includes("Payment split checked") &&
+    retailForms.includes("After confirming, go to Cash Closing for the same outlet and date.") &&
+    retailForms.includes("Manager must confirm this draft before Cash Closing.") &&
+    retailForms.includes("RetailDailySaleConfirmForm") &&
+    retailActions.includes("confirmRetailDailySaleAction") &&
+    retailActions.includes("Manager must confirm Daily Sales before Cash Closing.") &&
+    retailForms.includes("Daily sales total is zero. Check AutoCount before saving.") &&
+    retailForms.includes("value={outletId}") &&
+    retailForms.includes("setOutletId(event.target.value)") &&
+    retailForms.includes("<DailySalesReadiness") &&
+    retailForms.includes("Go to Cash Closing"),
+  "Retail daily sales UX must keep readiness checks, AutoCount guidance, controlled outlet choice, and cash-closing next step"
+)
+assert(
+  retailSalesHistoryPage.includes('redirect("/retail/reports")') &&
+    !retailPage.includes('route === "sales-history"'),
+  "Retail Daily Sales history must live in reports, not a separate page"
+)
+assert(
+    retailForms.includes("Complete Cleaning") &&
+    retailForms.includes("Cleaning worker fast path") &&
+    retailForms.includes("Tap to complete cleaning") &&
+    retailForms.includes("Missing first") &&
+    retailForms.includes("Missing cleaning is marked red") &&
+    retailForms.includes("sortCleaningTasksForWorker") &&
+    retailForms.includes("function CleaningTodayFocus") &&
+    retailForms.includes("Do this first:") &&
+    retailForms.includes("Complete the first card, then continue down the list.") &&
+    retailForms.includes("No photo needed") &&
+    retailForms.includes("Return home") &&
+    retailForms.includes("Tell manager if asked") &&
+    retailForms.includes("Missing") &&
+    retailForms.includes("Due today") &&
+    retailForms.includes("Missing cleaning. Check the area, then tap Complete Cleaning.") &&
+    retailForms.includes("Tasks left today:") &&
+    retailForms.includes("No photo is required") &&
+    retailForms.includes("No photo or remarks needed for V1.") &&
+    retailForms.includes("Done. Continue with the next cleaning task.") &&
+    retailForms.includes("function CleaningSuccessNextStep") &&
+    retailForms.includes("function CleaningErrorNextStep") &&
+    retailForms.includes("Cleaning saved") &&
+    retailForms.includes("Cleaning not saved yet") &&
+    retailForms.includes("Fix the blocked task or connection, then submit again.") &&
+    retailForms.includes("Check the task") &&
+    retailForms.includes("Check connection") &&
+    retailForms.includes("Tap Complete Cleaning again") &&
+    retailForms.includes("Task saved") &&
+    retailForms.includes("Complete next task") &&
+    retailForms.includes("Missing status saved") &&
+    retailForms.includes("Tap Complete Cleaning") &&
+    retailForms.includes('href="/retail/cleaning"') &&
+    retailForms.includes("fixed inset-x-4 bottom-4 z-40 min-h-16 text-base") &&
+    retailForms.includes("All required cleaning is done for today"),
+  "Cleaning worker UX must keep tap-to-complete flow, optional photo copy, success next step, and empty state"
+)
+assert(
+  retailDailyClosingFormStart >= 0 &&
+    retailDailyClosingFormEnd > retailDailyClosingFormStart &&
+    retailDailyClosingForm.includes('name="status" value="SUBMITTED"') &&
+    !retailDailyClosingForm.includes("dailyClosingStatus") &&
+  retailForms.includes("function CashClosingReadiness") &&
+    retailForms.includes("Cash closing readiness") &&
+    retailForms.includes("Check sales, cash counted, and variance before tapping Save closing.") &&
+    retailForms.includes("Daily sales found") &&
+    retailForms.includes("Record and confirm Daily Sales first.") &&
+    retailForms.includes("Variance is not zero. Warning only; save is allowed.") &&
+    retailForms.includes('href="/retail/sales"') &&
+    retailForms.includes("<CashClosingReadiness") &&
+    retailPage.includes("Cash closing is manager controlled") &&
+    retailPage.includes("Retail workers can check Closed / Not Closed in Today Summary.") &&
+    retailPage.includes("Retail managers, admin, and directors submit daily cash closing."),
+  "Retail cash closing UX must keep readiness checks, daily sales fallback, variance guidance, and manager-controlled access copy"
+)
+assert(
+    retailForms.includes("export function RetailExpenseForm") &&
+    retailForms.includes("Submit one outlet expense with receipt proof.") &&
+    retailForms.includes("submitLabel=\"Submit expense\"") &&
+    retailForms.includes('label="Receipt"') &&
+    retailForms.includes('defaultValue="CASH"') &&
+    retailForms.includes("required") &&
+    retailForms.includes("retailExpensePaymentMethods.map") &&
+    retailForms.includes("Back to Retail Home") &&
+    retailForms.includes("Edit submitted expense") &&
+    retailForms.includes('successActions={[\n        { href: "/retail", label: "Back to Retail Home" },\n        { href: "/retail/expenses/history", label: "Edit submitted expense" },') &&
+    retailForms.includes('href: "/retail/expenses/history"') &&
+    retailExpenseForm.includes('<ScopeDisplay label={profile.outletName ?? "Assigned outlet"} />') &&
+    !retailForms.includes("Supplier / remarks (optional)") &&
+    !retailForms.includes("Expense submission readiness") &&
+    retailForms.includes("function ExpenseErrorNextStep") &&
+    retailForms.includes("Expense not submitted yet") &&
+    retailForms.includes("Check category and amount") &&
+    retailForms.includes("Attach receipt proof") &&
+    retailForms.includes("Submit expense again") &&
+    retailForms.includes('emptyLabel="Select outlet"') &&
+    retailForms.includes("outletRequired"),
+  "Retail expense UX must stay simple: amount, category, cash default, required receipt, and home return"
+)
+assert(
+  retailForms.includes("export function RetailExpenseEditForm") &&
+    retailForms.includes("Edit your own submitted expense before manager review.") &&
+    retailForms.includes("Replace receipt optional") &&
+    retailActions.includes("export async function updateRetailExpenseAction") &&
+    retailActions.includes("Only submitted expenses can be edited before manager review.") &&
+    retailActions.includes("Only the submitting worker can edit this expense before review.") &&
+    retailPage
+      .slice(
+        retailPage.indexOf('{route === "expense-history"'),
+        retailPage.indexOf(
+          '{route === "cleaning"',
+          retailPage.indexOf('{route === "expense-history"')
+        )
+      )
+      .includes("RetailExpenseEditForm"),
+  "Retail expense status page must let workers edit own submitted expenses before manager review"
+)
+assert(
+  retailPage.includes("Expense review guide") &&
+    retailPage.includes("Start with the oldest submitted expense") &&
+    retailPage.includes("Open receipt proof") &&
+    retailPage.includes("Different checker required") &&
+    retailPage.includes("No submitted expenses need review. New worker submissions will appear") &&
+    retailForms.includes("function ExpenseReviewReadiness") &&
+    retailForms.includes("Expense review timeline") &&
+    retailForms.includes("Submitted &gt; Manager checker &gt; Approved, Rejected, or Cancelled.") &&
+    retailForms.includes("Review now:") &&
+    retailForms.includes("Open selected receipt") &&
+    retailForms.includes("encodeURIComponent") &&
+    retailForms.includes("Receipt opened") &&
+    retailForms.includes("Different checker") &&
+    retailForms.includes("The server blocks same-manager review unless admin/director scope applies.") &&
+    retailForms.includes("Approve only after checking receipt proof.") &&
+    retailForms.includes("Reject with a clear reason for the submitter.") &&
+    retailForms.includes("required={rejecting}") &&
+    retailForms.includes("function ExpenseReviewErrorNextStep") &&
+    retailForms.includes("Expense review not saved yet") &&
+    retailForms.includes("Select submitted expense") &&
+    retailForms.includes("Open receipt proof") &&
+    retailForms.includes("Add rejection reason if needed") &&
+    retailForms.includes("Same-manager") &&
+    retailForms.includes("View expense history"),
+  "Retail expense review UX must keep guided queue, review timeline, different-checker warning, and rejection recovery"
+)
+assert(
+  retailPage.includes("function RetailWorkerHome") &&
+    retailPage.includes("const workerHomeItems") &&
+    retailPage.indexOf('label: "Record Processing"') <
+      retailPage.indexOf('label: "Submit Expense"') &&
+    retailPage.includes("Submit Expense") &&
+    retailPage.includes("Complete Cleaning") &&
+    retailPage.includes("Record Processing") &&
+    retailPage.includes("Picking Order") &&
+    retailPage.includes("Today Summary") &&
+    retailPage.includes("function retailNavHref") &&
+    retailPage.includes("globalNavItems") &&
+    retailPage.includes("canManageGlobalSettings ? globalNavItems : navItems") &&
+    retailPage.includes("canManageGlobalSettings={canManageGlobalSettings}") &&
+    retailPage.includes('href: "/retail/reports/all"') &&
+    retailPage.includes('href: "/retail/reports/cash-variance"') &&
+    retailPage.includes('href: "/retail/reports/missing-tasks"') &&
+    retailPage.includes('href: "/retail/reports/processing"') &&
+    retailPage.includes('href: "/retail/reports/export"') &&
+    retailPage.includes('return "Review Expenses"') &&
+    retailPage.includes('return "/retail/expenses/review"') &&
+    retailPage.includes('return "Cleaning Setup"') &&
+    retailPage.includes('return "/retail/cleaning/tasks"') &&
+    retailPage.includes('return "Processing Records"') &&
+    retailPage.includes('return "/retail/processing/history"') &&
+    retailPage.includes("Own outlet only.") &&
+    retailPage.includes("min-h-28") &&
+    retailPage.includes("return <RetailWorkerHome />") &&
+    !retailPage
+      .slice(retailPage.indexOf("const workerHomeItems"), retailPage.indexOf("const managerHomeItems"))
+      .includes("/retail/reports") &&
+    !retailPage
+      .slice(retailPage.indexOf("const workerHomeItems"), retailPage.indexOf("const managerHomeItems"))
+      .includes("/retail/settings"),
+  "Retail worker home must keep big daily action buttons and no report/settings shortcuts"
+)
+const retailProcessingRouteSource = retailPage.slice(
+  retailPage.indexOf('route === "processing"'),
+  retailPage.indexOf('route === "processing-history"')
+)
+assert(
+  !retailProcessingRouteSource.includes('href="/orders/picking"') &&
+    !retailProcessingRouteSource.includes("Prepare customer orders") &&
+    !retailPage.includes('route === "processing-review"') &&
+    retailPage.includes('route === "processing-history"') &&
+    retailProcessingReviewPage.includes('redirect("/retail/processing/history")') &&
+    !retailPage.includes("<RetailProcessingReviewForm"),
+  "Retail processing task page must stay focused and old Retail review route must redirect to records"
+)
+assert(
+  retailForms.includes("ProcessingStepHeader") &&
+    retailForms.includes('["Type", "Raw", "Finished", "Wastage", "Submit"]') &&
+    retailForms.includes("defaultProcessingTypes") &&
+    retailForms.includes("Minced Meat") &&
+    retailForms.includes("Tap a preset, or type a processing name.") &&
+    retailForms.includes("Use one record for one processing or packing job") &&
+    retailForms.includes("If numbers look right, tap Submit processing") &&
+    retailForms.includes("Weight differences are") &&
+    !retailForms.includes("function ProcessingSubmitReadiness") &&
+    retailForms.includes("afterProcessingSteps") &&
+    retailForms.includes("errorNextStep={<ProcessingErrorNextStep />}") &&
+    retailForms.includes("function ProcessingErrorNextStep") &&
+    retailForms.includes("Processing not saved yet") &&
+    retailForms.includes("Check raw and finished weights") &&
+    retailForms.includes("Check processing type") &&
+    retailForms.includes("Submit processing again") &&
+    retailForms.includes("Pack finished goods") &&
+    retailForms.includes("Finished stock is not added automatically") &&
+    !retailForms.includes("Abnormal yield below 85% is alert only") &&
+    !retailPage.includes("<RetailProcessingReviewForm") &&
+    retailForms.includes("min-h-11 text-base"),
+  "Retail processing worker UX must keep guided steps, preset types, display-only weight differences, and larger numeric controls"
+)
+assert(
+  processingPage.includes("function ProcessingWorkerFastPath") &&
+    processingPage.includes("Processing worker fast path") &&
+    processingPage.includes("Record one processing or packing job") &&
+    processingPage.includes("Record raw") &&
+    processingPage.includes("Record finished") &&
+    processingPage.includes("Check yield") &&
+    processingPage.includes("Barcode inbound") &&
+    processingPage.includes('href="#record-processing"') &&
+    processingPage.includes('href="/stock/inbound"') &&
+    processingPage.includes("Finished stock still needs barcode inbound after packing") &&
+    processingPage.includes("Abnormal") &&
+    processingPage.includes("yield below 85% is alert only") &&
+    processingPage.includes("min-h-12 w-full justify-start"),
+  "Processing dashboard worker UX must keep fast path, large actions, barcode inbound next step, and alert-only yield guidance"
+)
+assert(
+  processingPage.includes("const processingReviewRoles") &&
+    processingPage.includes("const canReview = hasAnyRole(profile, processingReviewRoles)") &&
+    processingPage.includes("canOperate || canReview") &&
+    processingPage.includes("canOperate && canReview && \"xl:grid-cols-2\"") &&
+    processingPage.includes('section id="record-processing"') &&
+    processingPage.includes("canReview ? (") &&
+    processingPage.includes("<RetailProcessingReviewForm batches={data.sourceBatches} />") &&
+    retailForms.includes('href: "/processing/dashboard", label: "Review another processing"') &&
+    !retailForms.includes('href: "/retail/processing/review"'),
+  "Processing dashboard must separate worker record form from manager/admin/director review controls"
+)
+const retailProcessingReviewRolesSource = retailActions.slice(
+  retailActions.indexOf("const processingReviewRoles"),
+  retailActions.indexOf("const cleaningManagerRoles")
+)
+assert(
+  !retailProcessingReviewRolesSource.includes("retail_manager") &&
+    retailActions.includes('}, "processing")'),
+  "Retail managers must not be able to review processing records through the shared action"
 )
 
 for (const [file, moduleKey] of [
@@ -1135,8 +1583,172 @@ for (const [file, moduleKey] of [
     `${file} must enforce ${moduleKey} module access`
   )
 }
+const attendancePage = read("components/attendance/attendance-page.tsx")
+const attendanceForms = read("components/attendance/attendance-forms.tsx")
+assert(
+  attendancePage.includes("const attendanceManagerRoles: UserRole[]") &&
+    attendancePage.includes("function AttendanceWorkerDailyActions") &&
+    attendancePage.includes("Attendance worker daily actions") &&
+    attendancePage.includes("Use Clock first. Department review and settings stay with managers.") &&
+    attendancePage.includes("Clock In / Clock Out") &&
+    attendancePage.includes("Open Clock") &&
+    attendancePage.includes("Use GPS") &&
+    attendancePage.includes("Next step shown") &&
+    attendancePage.includes("canManageAttendance ||") &&
+    attendancePage.includes('!["department", "settings"].includes(item.route)') &&
+    attendancePage.includes("canManageAttendance ? undefined : currentProfileId") &&
+    attendancePage.includes("My today") &&
+    attendancePage.includes("No attendance summary for you today. Clock in to start.") &&
+    attendancePage.includes("Department attendance is manager controlled") &&
+    attendancePage.includes("Attendance settings are manager controlled"),
+  "Attendance page must keep worker-first daily actions, personal Today data, and manager/admin-only department/settings UI"
+)
+assert(
+  attendanceForms.includes("Clock In / Clock Out") &&
+    attendanceForms.includes("Attendance worker fast path") &&
+    attendanceForms.includes("Big button attendance") &&
+    attendanceForms.includes("Choose Clock In or Clock Out") &&
+    attendanceForms.includes("No typing unless GPS is blocked.") &&
+    attendanceForms.includes("Selected action:") &&
+    attendanceForms.includes("function ClockReadinessGuide") &&
+    attendanceForms.includes("Clock is not ready yet") &&
+    attendanceForms.includes("Ready to submit") &&
+    attendanceForms.includes("Work location selected") &&
+    attendanceForms.includes("GPS or manual location ready") &&
+    attendanceForms.includes("No active work location is available") &&
+    attendanceForms.includes("disabled={pending || !canSubmit}") &&
+    attendanceForms.includes("Location captured. Next: tap") &&
+    attendanceForms.includes("Submit Clock In") &&
+    attendanceForms.includes("Submit Clock Out") &&
+    attendanceForms.includes("function ClockSuccessNextStep") &&
+    attendanceForms.includes("function ClockErrorNextStep") &&
+    attendanceForms.includes("Attendance saved") &&
+    attendanceForms.includes("Attendance not saved yet") &&
+    attendanceForms.includes("Fix the action, location, or work location, then submit again.") &&
+    attendanceForms.includes("Check Clock In or Clock Out") &&
+    attendanceForms.includes("Capture location again") &&
+    attendanceForms.includes("Ask manager if still blocked") &&
+    attendanceForms.includes("Continue work") &&
+    attendanceForms.includes("Clock out before leaving") &&
+    attendanceForms.includes("Check My Attendance") &&
+    attendanceForms.includes("Back to Home") &&
+    attendanceForms.includes("Use Current Location") &&
+    attendanceForms.includes("Manual location and notes") &&
+    attendanceForms.includes("Location permission is blocked") &&
+    attendanceForms.includes("min-h-20") &&
+    attendanceForms.includes("min-h-14 w-full") &&
+    attendanceForms.includes('name="eventType" value={eventType}'),
+  "Attendance clock UX must keep big clock in/out buttons, location capture, and manual fallback"
+)
+const oaPage = read("components/oa-actions/oa-page.tsx")
+const oaForms = read("components/oa-actions/oa-forms.tsx")
+const oaTimeline = read("components/oa-actions/approval-timeline.tsx")
+assert(
+  oaTimeline.includes("export function ApprovalFlowGuide") &&
+    oaTimeline.includes("Submitted") &&
+    oaTimeline.includes("Manager Review") &&
+    oaTimeline.includes("Admin Review") &&
+    oaTimeline.includes("Director Approval") &&
+    oaTimeline.includes("Approved/Rejected") &&
+    oaTimeline.includes("export function RequestApprovalTimeline") &&
+    oaPage.includes("Approval queue timeline") &&
+    oaPage.includes("My request timeline") &&
+    oaForms.includes("<RequestApprovalTimeline request={selectedRequest} />"),
+  "OA Actions approval UX must show submitted -> manager review -> admin review -> director approval -> approved/rejected timeline"
+)
+assert(
+  oaForms.includes("className=\"min-h-12 w-full sm:w-auto\"") &&
+    oaForms.includes("className=\"flex h-11 w-full"),
+  "OA Actions forms must keep phone-friendly select controls and submit buttons"
+)
+assert(
+  oaForms.includes("function ReviewQueueGuide") &&
+    oaForms.includes("Review queue guide") &&
+    oaForms.includes("Clear pending requests one by one. The timeline shows who reviews next.") &&
+    oaForms.includes("Open request") &&
+    oaForms.includes("Move to next stage") &&
+    oaForms.includes("Open oldest") &&
+    oaForms.includes("Approve or reject") &&
+    oaForms.includes("Selected request next action") &&
+    oaForms.includes("No pending request in this queue.") &&
+    oaForms.includes("Nothing needs review right now.") &&
+    oaForms.includes("Queue clear") &&
+    oaForms.includes("Check timeline later") &&
+    oaForms.includes("Return to dashboard") &&
+    oaForms.includes("Next: director makes the final approval or rejection decision.") &&
+    oaForms.includes('<ReviewQueueGuide pendingCount={reviewable.length} mode="manager-admin" />') &&
+    oaForms.includes('<ReviewQueueGuide pendingCount={approvable.length} mode="director" />'),
+  "OA Actions reviewer UX must keep guided review steps, selected next action, and empty queue guidance"
+)
+assert(
+  oaForms.includes("export function OaRequestFastPath") &&
+    oaForms.includes("Worker request fast path") &&
+    oaForms.includes("Need cash advance") &&
+    oaForms.includes("Claim expense") &&
+    oaForms.includes("Apply leave") &&
+    oaForms.includes("Check My Requests") &&
+    oaForms.includes("function SuccessNextStep") &&
+    oaForms.includes("function WorkerRequestErrorNextStep") &&
+    oaForms.includes("Request submitted") &&
+    oaForms.includes("Timeline visible") &&
+    oaForms.includes("Wait for reviewer") &&
+    oaForms.includes("Do not submit the same request again unless a reviewer asks you to fix it.") &&
+    oaForms.includes("Go to My Requests") &&
+    oaForms.includes("Request not saved yet") &&
+    oaForms.includes("Check request type") &&
+    oaForms.includes("Fix missing details") &&
+    oaForms.includes("Submit request again") &&
+    oaForms.includes("Ask your manager if the request type is blocked.") &&
+    oaForms.includes("errorNextStep={(state) => <WorkerRequestErrorNextStep state={state} />}") &&
+    oaForms.includes("h-12 text-base sm:text-sm") &&
+    oaPage.includes('<OaRequestFastPath active="advance" />') &&
+    oaPage.includes('<OaRequestFastPath active="claim" />') &&
+    oaPage.includes('<OaRequestFastPath active="leave" />'),
+  "OA Actions worker request UX must keep fast-path choices, large mobile controls, and next-step guidance"
+)
+assert(
+  oaPage.includes("const workerOaRoles") &&
+    oaPage.includes("const elevatedOaRoles") &&
+    oaPage.includes("function WorkerOaDashboard") &&
+    oaPage.includes("Submit advance, claim, leave, and check your request status.") &&
+    oaPage.includes("function WorkerRequestStatusGuide") &&
+    oaPage.includes("My request status guide") &&
+    oaPage.includes("Check the newest request first. The timeline shows who reviews next.") &&
+    oaPage.includes("Submit new request") &&
+    oaPage.includes("Newest:") &&
+    oaPage.includes("Director reviews next. Do not submit the same request again.") &&
+    oaPage.includes("<WorkerRequestStatusGuide requests={requests} />") &&
+    oaPage.includes("<WorkerRequestStatusGuide requests={ownData.requests} />") &&
+    oaPage.includes("workerMode={isWorkerOnlyProfile}") &&
+    oaPage.includes("hasAnyRole(profile, workerOaRoles) && !hasAnyRole(profile, elevatedOaRoles)") &&
+    oaPage.includes("<WorkerOaDashboard requests={ownData.requests} />") &&
+    oaPage.includes("visibleAdvances") &&
+    oaPage.includes("advanceRows(visibleAdvances)") &&
+    oaPage.includes("claimRows(visibleClaims)") &&
+    oaPage.includes("leaveRows(visibleLeaves)") &&
+    oaPage.includes("canManagePayslips ?") &&
+    oaPage.includes("PayslipUploadForm people={data.people}") &&
+    oaPage.includes("payslipRows(ownData.payslips)"),
+  "OA Actions must show worker-only dashboard/history data separately from reviewer and payslip control views"
+)
+assert(
+  oaForms.includes("function PayslipUploadErrorNextStep") &&
+    oaForms.includes("Payslip not saved yet") &&
+    oaForms.includes("Select employee") &&
+    oaForms.includes("Check payroll month") &&
+    oaForms.includes("Attach file again") &&
+    oaForms.includes("Ask admin if the employee is missing.") &&
+    oaForms.includes("errorNextStep={(state) => <PayslipUploadErrorNextStep state={state} />}") &&
+    oaForms.includes("submitLabel=\"Save payslip\"") &&
+    oaForms.includes('id="payslipFile"') &&
+    oaForms.includes("className=\"h-12 text-base sm:text-sm\""),
+  "OA Actions payslip upload UX must keep account/admin error guidance and phone-friendly fields"
+)
 const deliveryActions = read("lib/delivery/actions.ts")
 const deliveryPage = read("components/delivery/delivery-page.tsx")
+const managerDeliveryDashboard = read("components/delivery/manager-delivery-dashboard.tsx")
+const driverMobileDeliveryPage = read("components/delivery/driver-mobile-delivery-page.tsx")
+const deliveryExpenseReviewPage = read("components/delivery/delivery-expense-review-page.tsx")
 assert(
   deliveryActions.includes("assertProofUploadAllowed(order)") &&
     deliveryActions.includes("Proof photos can only be uploaded after the delivery is out for delivery."),
@@ -1194,6 +1806,29 @@ assert(
   "Delivery page must show failed-delivery return/reinbound status"
 )
 assert(
+  driverMobileDeliveryPage.includes("function ProofSuccessNextStep") &&
+    driverMobileDeliveryPage.includes("function driverMainAction") &&
+    driverMobileDeliveryPage.includes("Main action: Accept this job") &&
+    driverMobileDeliveryPage.includes("Main action: Tap Loaded") &&
+    driverMobileDeliveryPage.includes("Main action: Start Delivery") &&
+    driverMobileDeliveryPage.includes("Main action: Upload proof photo") &&
+    driverMobileDeliveryPage.includes("No active delivery. Accept a job from Available") &&
+    driverMobileDeliveryPage.includes("Wait for today job") &&
+    driverMobileDeliveryPage.includes("Attach receipt photo") &&
+    driverMobileDeliveryPage.includes("Proof uploaded") &&
+    driverMobileDeliveryPage.includes("Failed proof saved") &&
+    driverMobileDeliveryPage.includes("Tell manager") &&
+    driverMobileDeliveryPage.includes("Return follow-up") &&
+    driverMobileDeliveryPage.includes("Check next job") &&
+    driverMobileDeliveryPage.includes("Manager must review the failed delivery and stock return follow-up.") &&
+    driverMobileDeliveryPage.includes("function ProofBlockedGuide") &&
+    driverMobileDeliveryPage.includes("Proof photo locked until Start Delivery") &&
+    driverMobileDeliveryPage.includes("Finish the current step first.") &&
+    driverMobileDeliveryPage.includes("Proof buttons appear") &&
+    driverMobileDeliveryPage.includes("<ProofBlockedGuide status={delivery.status} />"),
+  "Driver proof UX must show clear delivered/failed proof next steps after upload"
+)
+assert(
   ordersPage.includes("delivery failed") ||
     ordersData.includes("Delivery failed") ||
     ordersData.includes("failedReturnStatus"),
@@ -1226,23 +1861,63 @@ assert(
     deliveryPage.includes("Delivery payment entry unavailable"),
   "Delivery UI must keep director/view roles away from routine delivery operation controls"
 )
+assert(
+  managerDeliveryDashboard.includes("function DeliveryIssueReviewGuide") &&
+    managerDeliveryDashboard.includes("Delivery issues to clear today") &&
+    managerDeliveryDashboard.includes("Review failed proof, GPS/address, late, and slow delivery items before normal reports.") &&
+    managerDeliveryDashboard.includes("No delivery issues need follow-up right now") &&
+    managerDeliveryDashboard.includes("Failed deliveries still need manager review and stock return follow-up.") &&
+    managerDeliveryDashboard.includes("Address or GPS suggestions stay pending until a manager approves or rejects them.") &&
+    managerDeliveryDashboard.includes("Start here:") &&
+    managerDeliveryDashboard.includes("Open first issue below") &&
+    managerDeliveryDashboard.includes("Record follow-up") &&
+    managerDeliveryDashboard.includes("Issue queue clear") &&
+    managerDeliveryDashboard.includes("No failed proof, GPS/address, late, or slow delivery issue needs action right now.") &&
+    managerDeliveryDashboard.includes("Return to normal reports") &&
+    managerDeliveryDashboard.includes("Failed proof") &&
+    managerDeliveryDashboard.includes("GPS/address") &&
+    managerDeliveryDashboard.includes("Late or slow") &&
+    managerDeliveryDashboard.includes("<DeliveryIssueReviewGuide data={data} />"),
+  "Delivery manager dashboard must show a guided issue-clearing empty/pending state"
+)
+assert(
+  deliveryExpenseReviewPage.includes("function ExpenseReviewGuide") &&
+    deliveryExpenseReviewPage.includes("Expense review queue") &&
+    deliveryExpenseReviewPage.includes("Review pending driver receipt claims before normal delivery reports.") &&
+    deliveryExpenseReviewPage.includes("Open the first pending receipt, check delivery or scope, then approve or reject.") &&
+    deliveryExpenseReviewPage.includes("Pending standalone review") &&
+    deliveryExpenseReviewPage.includes("Queue clear") &&
+    deliveryExpenseReviewPage.includes("No pending delivery expenses need action for the current filters.") &&
+    deliveryExpenseReviewPage.includes("function ExpenseReviewReadiness") &&
+    deliveryExpenseReviewPage.includes("Expense review readiness") &&
+    deliveryExpenseReviewPage.includes("Pending &gt; Manager review &gt; Approved or Rejected.") &&
+    deliveryExpenseReviewPage.includes("stay separate from OA claims in V1.") &&
+    deliveryExpenseReviewPage.includes("Receipt checked") &&
+    deliveryExpenseReviewPage.includes("Scope checked") &&
+    deliveryExpenseReviewPage.includes("Decision selected") &&
+    deliveryExpenseReviewPage.includes("function ExpenseReviewErrorGuide") &&
+    deliveryExpenseReviewPage.includes("Expense review not saved yet") &&
+    deliveryExpenseReviewPage.includes("Add reject reason if needed") &&
+    deliveryExpenseReviewPage.includes('required={decision === "REJECTED"}'),
+  "Delivery expense review UX must keep pending-first guide, standalone V1 timeline, receipt/scope checks, and error recovery"
+)
 
 const stockPage = read("components/stock/stock-page.tsx")
 const stockReportExport = read("lib/stock/report-export.ts")
 assert(
-  stockPage.includes("Order outbound unavailable") &&
-    stockPage.includes("Check that the Orders migrations were applied before using") &&
+  stockPage.includes("Outbound unavailable") &&
+    stockPage.includes("Orders customer migrations") &&
     stockPage.includes("ordersResult?.ordersData"),
-  "Stock outbound must show a setup error when Orders data cannot load"
+  "Stock outbound must show a setup error when customer data cannot load"
 )
 assert(
-  workflowForms.includes("orderItems: CustomerOrderItem[]") &&
-    workflowForms.includes("Check before confirm") &&
-    workflowForms.includes("Weight difference is allowed.") &&
-    workflowForms.includes("Substitution scanned") &&
-    workflowForms.includes("Confirm substitution. No reason needed.") &&
-    stockPage.includes("orderItems={ordersResult.ordersData.items}"),
-  "Order outbound must warn on requested-vs-scanned differences and visible substitutions while allowing MVP substitution"
+  workflowForms.includes("Outbound Without Order") &&
+    workflowForms.includes('name="outboundMode" value="DIRECT"') &&
+    workflowForms.includes("directOutboundUnitBlockReason") &&
+    !workflowForms.includes("Order item checklist") &&
+    !workflowForms.includes("Weight difference is allowed.") &&
+    !stockPage.includes("orderItems={ordersResult.ordersData.items}"),
+  "Stock outbound must stay direct-only; order picking belongs in Orders"
 )
 assert(
   stockPage.includes("const stockOperatorRoles: UserRole[] = stockRoles.filter") &&
@@ -1300,6 +1975,8 @@ assert(
 
 const appShell = read("components/erp/app-shell.tsx")
 const homePage = read("components/dashboard/home-page.tsx")
+const directorPage = read("components/director/director-page.tsx")
+const financePage = read("components/finance/finance-page.tsx")
 assert(
   homePage.includes('href: "/orders/create"') &&
     homePage.includes('label: "Orders"') &&
@@ -1308,7 +1985,7 @@ assert(
   "Home shortcuts must include order creation and picking for eligible users"
 )
 for (const fragment of [
-  'label: "Stock Dashboard"',
+  'label: "Stock"',
   'label: "Stock Reports"',
   'label: "Processing Dashboard"',
   'label: "Retail Dashboard"',
@@ -1335,6 +2012,137 @@ assert(
     homePage.includes("const cleaningRoles: UserRole[]") &&
     homePage.includes("roles: cleaningRoles"),
   "Home shortcuts must be role-filtered and show a clear viewing scope line"
+)
+assert(
+  homePage.includes("const workerDailyActions: WorkerDailyAction[]") &&
+    homePage.includes("function WorkerActionTile") &&
+    homePage.includes("Worker daily actions") &&
+    homePage.includes("Clock In, Stock, Order, Delivery, Processing, Cleaning, and OA Action") &&
+    homePage.includes("Big buttons only. No finance, cost, stock value, or advanced reports.") &&
+    homePage.includes("Open workflow") &&
+    homePage.includes("Follow guided steps") &&
+    homePage.includes("Submit") &&
+    homePage.includes("Next step shown") &&
+    homePage.includes("Ask manager if this button is missing") &&
+    homePage.includes("Missing buttons are not active links.") &&
+    homePage.includes('href: "/attendance/clock"') &&
+    homePage.includes('href: "/stock"') &&
+    homePage.includes('href: "/orders/create"') &&
+    homePage.includes('href: "/delivery/driver"') &&
+    homePage.includes('href: "/processing/dashboard"') &&
+    homePage.includes('href: "/cleaning/tasks"') &&
+    homePage.includes('href: "/oa-actions/dashboard"'),
+  "Worker home must keep fixed daily actions, guided steps, and no finance/advanced report copy"
+)
+assert(
+  homePage.includes("Manager today board") &&
+    homePage.includes("Action first") &&
+    homePage.includes("const managerRoutineSteps") &&
+    homePage.includes("Check missing tasks") &&
+    homePage.includes("Open team activity") &&
+    homePage.includes("Clear approvals") &&
+    homePage.includes("Finish completion list") &&
+    homePage.includes("Attendance gaps") &&
+    homePage.includes("Missing cleaning") &&
+    homePage.includes("Review requests") &&
+    homePage.includes("Delivery issues") &&
+    homePage.includes("Yield alerts") &&
+    homePage.includes("Team issues to clear today") &&
+    homePage.includes("Watch list") &&
+    homePage.includes("Priority") &&
+    homePage.includes("Check now") &&
+    homePage.includes("Open and clear") &&
+    homePage.includes("Manager task completion sweep") &&
+    homePage.includes("Finish today by clearing missing tasks before normal reports.") &&
+    homePage.includes("const managerActivityEmptySteps") &&
+    homePage.includes("No team activity shortcuts are available") &&
+    homePage.includes("This manager profile has no visible team screens for today.") &&
+    homePage.includes("Confirm module access") &&
+    homePage.includes("Check team in person") &&
+    homePage.includes("Ask admin if missing") &&
+    homePage.includes("Attendance checked") &&
+    homePage.includes("Cleaning checked") &&
+    homePage.includes("Approvals cleared") &&
+    homePage.includes("Delivery issues checked") &&
+    homePage.includes("No manager actions are available for this profile.") &&
+    homePage.includes("Scope: {viewingScopeText(profile)}") &&
+    homePage.includes("Today") &&
+    homePage.includes("This week") &&
+    homePage.includes("This month"),
+  "Manager dashboard home must show action-first today activity, missing tasks, team issues, and visible scope"
+)
+assert(
+  homePage.includes("Director all-in-one overview") &&
+    homePage.includes("Alerts first") &&
+    homePage.includes("company-level exceptions") &&
+    homePage.includes("Finance/accounting") &&
+    homePage.includes("Director daily sections") &&
+    homePage.includes("Sales, stock, orders, delivery, attendance, cleaning, processing, approvals, finance, and alerts."),
+  "Director dashboard home must keep an all-in-one company overview with alerts and finance separated"
+)
+assert(
+  directorPage.includes("Director company overview") &&
+    directorPage.includes("All-in-one company view") &&
+    directorPage.includes("Director alerts first") &&
+    directorPage.includes("Company-level exceptions to clear before normal reports.") &&
+    directorPage.includes("Sales, stock, orders, delivery, attendance, cleaning, processing, OA") &&
+    directorPage.includes("Finance/accounting") &&
+    directorPage.includes("OA approvals") &&
+    directorPage.includes("Open alerts first") &&
+    directorPage.includes("Director daily review order") &&
+    directorPage.includes("Use the same order each day before reading normal reports.") &&
+    directorPage.includes("const directorReviewSteps") &&
+    directorPage.includes("const directorAlertSteps") &&
+    directorPage.includes("Review approvals") &&
+    directorPage.includes("Check operations") &&
+    directorPage.includes("Save/share report") &&
+    directorPage.includes("Director alert handling") &&
+    directorPage.includes("Clear urgent exceptions before reading normal KPI reports.") &&
+    directorPage.includes("Find urgent exception") &&
+    directorPage.includes("Open owner module") &&
+    directorPage.includes("Record follow-up") &&
+    directorPage.includes("function DirectorApprovalClearGuide") &&
+    directorPage.includes("No director approvals waiting") &&
+    directorPage.includes("OA, finance, and outlet expense decisions are clear.") &&
+    directorPage.includes("Check finance aging") &&
+    directorPage.includes("<DirectorApprovalClearGuide pendingCount={pendingRows.length} />") &&
+    directorPage.includes('href: "/stock/dashboard"') &&
+    directorPage.includes('href: "/orders"') &&
+    directorPage.includes('href: "/delivery"') &&
+    directorPage.includes('href: "/attendance/today"') &&
+    directorPage.includes('href: "/processing/dashboard"') &&
+    directorPage.includes('href: "/accounting-finance/dashboard"'),
+  "Director reports dashboard must show an all-in-one company overview with alerts, module links, and finance separated"
+)
+assert(
+  financePage.includes("Account/admin operational review") &&
+    financePage.includes("Review and control queue") &&
+    financePage.includes("Admin invoice review") &&
+    financePage.includes("Payment to release") &&
+    financePage.includes("OA admin review") &&
+    financePage.includes("OA payment") &&
+    financePage.includes("AR overdue") &&
+    financePage.includes("AP overdue") &&
+    financePage.includes("Container control") &&
+    financePage.includes("Account/admin daily control order") &&
+    financePage.includes("Clear reviews and payments first, then check aging and container follow-up.") &&
+    financePage.includes("const accountAdminReviewSteps") &&
+    financePage.includes("const accountAdminEmptySteps") &&
+    financePage.includes("Release payments") &&
+    financePage.includes("Check aging") &&
+    financePage.includes("Update containers") &&
+    financePage.includes("Account/admin queue clear guide") &&
+    financePage.includes("Reviews clear") &&
+    financePage.includes("Payments clear") &&
+    financePage.includes("Check aging next") &&
+    financePage.includes("If no review or payment card is urgent, check aging and container") &&
+    financePage.includes("before normal finance reports") &&
+    financePage.includes('href: "/accounting-finance/claims"') &&
+    financePage.includes('href: "/accounting-finance/advances"') &&
+    financePage.includes('href: "/accounting-finance/ar-invoices"') &&
+    financePage.includes('href: "/accounting-finance/ap-invoices"') &&
+    financePage.includes('href: "/accounting-finance/containers"'),
+  "Accounting dashboard must show an account/admin operational review queue with review, payment, overdue, and container controls"
 )
 for (const label of [
   "Dashboard",
@@ -1377,6 +2185,42 @@ assert(
     appShell.includes("lg:hidden") &&
     appShell.includes("overflow-x-hidden"),
   "Mobile sidebar must use a controlled Sheet with hamburger trigger and close-on-nav"
+)
+const mobileWorkerActionNavSource = appShell.slice(
+  appShell.indexOf("const mobileWorkerActionNav"),
+  appShell.indexOf("const routeAccess")
+)
+assert(
+  mobileWorkerActionNavSource.includes('href: "/dashboard"') &&
+    mobileWorkerActionNavSource.includes('label: "Home"') &&
+    mobileWorkerActionNavSource.includes('href: "/attendance/clock"') &&
+    mobileWorkerActionNavSource.includes('label: "Clock"') &&
+    mobileWorkerActionNavSource.includes('href: "/stock"') &&
+    mobileWorkerActionNavSource.includes('label: "Stock"') &&
+    mobileWorkerActionNavSource.includes('href: "/orders/create"') &&
+    mobileWorkerActionNavSource.includes('label: "Order"') &&
+    mobileWorkerActionNavSource.includes('href: "/delivery/driver"') &&
+    mobileWorkerActionNavSource.includes('label: "Delivery"') &&
+    mobileWorkerActionNavSource.includes('href: "/processing/dashboard"') &&
+    mobileWorkerActionNavSource.includes('label: "Processing"') &&
+    mobileWorkerActionNavSource.includes('href: "/cleaning/tasks"') &&
+    mobileWorkerActionNavSource.includes('label: "Cleaning"') &&
+    mobileWorkerActionNavSource.includes('href: "/oa-actions/dashboard"') &&
+    mobileWorkerActionNavSource.includes('label: "OA"') &&
+    !mobileWorkerActionNavSource.includes("accounting_finance") &&
+    !mobileWorkerActionNavSource.includes("director_reports") &&
+    !mobileWorkerActionNavSource.includes('href: "/stock/reports"'),
+  "Mobile worker quick actions must include worker daily actions and exclude finance/director/advanced report shortcuts"
+)
+assert(
+  appShell.includes("function MobileWorkerActionBar") &&
+    appShell.includes('aria-label="Worker quick actions"') &&
+    appShell.includes("mobileWorkerActions.length > 0 && \"pb-28 lg:pb-7\"") &&
+    appShell.includes("mobileWorkerActionNav.filter((item) => canSee(profile, item))") &&
+    appShell.includes("hasWorkerRole(profile)") &&
+    appShell.includes("fixed inset-x-0 bottom-0") &&
+    appShell.includes("overflow-x-auto"),
+  "Mobile shell must show filtered worker quick actions with enough bottom padding on phone width"
 )
 assert(
   appShell.includes("const stockOperatorRoles: UserRole[] = stockRoles.filter") &&
@@ -1455,6 +2299,9 @@ for (const fragment of [
 const atomicTransferMigration = read(
   "supabase/migrations/202606100047_atomic_transfer_receive_rpcs_v1.sql"
 )
+const stockTransferWorkerFlowMigration = read(
+  "supabase/migrations/202606250005_stock_transfer_worker_flow_v1.sql"
+)
 for (const fragment of [
   "drop function if exists public.transfer_stock_unit",
   "create or replace function public.transfer_stock_unit",
@@ -1473,6 +2320,18 @@ for (const fragment of [
     `Atomic transfer migration missing: ${fragment}`
   )
 }
+for (const fragment of [
+  "create or replace function public.transfer_stock_unit",
+  "create or replace function public.receive_stock_transfer",
+  "unit_record.status <> 'IN_STOCK'",
+  "status = 'IN_STOCK'",
+  "Wrong location. This barcode must be received at",
+]) {
+  assert(
+    stockTransferWorkerFlowMigration.includes(fragment),
+    `Stock transfer worker flow migration missing: ${fragment}`
+  )
+}
 assert(
   stockActions.includes('"transfer_stock_unit"') &&
     stockActions.includes('"receive_stock_transfer"') &&
@@ -1483,6 +2342,9 @@ assert(
 
 const atomicReturnMigration = read(
   "supabase/migrations/202606100048_atomic_stock_return_rpc_v1.sql"
+)
+const stockReturnConditionMigration = read(
+  "supabase/migrations/202606250006_stock_return_condition_flow_v1.sql"
 )
 for (const fragment of [
   "drop function if exists public.return_stock_unit",
@@ -1500,8 +2362,25 @@ for (const fragment of [
     `Atomic return migration missing: ${fragment}`
   )
 }
+for (const fragment of [
+  "create or replace function public.return_stock_unit",
+  "p_return_condition",
+  "when 'NEED_CHECK' then 'HOLD'",
+  "when 'SPOILED_DAMAGED' then 'DAMAGED'",
+  "status = next_status",
+  "grant execute on function public.return_stock_unit(text, uuid, text, text, text)",
+]) {
+  assert(
+    stockReturnConditionMigration.includes(fragment),
+    `Stock return condition migration missing: ${fragment}`
+  )
+}
 assert(
   stockActions.includes('"return_stock_unit"') &&
+    stockActions.includes("p_return_condition: parsed.returnCondition") &&
+    stockActions.includes("Return condition: Good -> Available") &&
+    stockActions.includes("Return condition: Need Check -> Hold") &&
+    stockActions.includes("Return condition: Spoiled / Damaged -> Spoiled") &&
     stockActions.includes("status === \"HOLD\" || status === \"INSPECTION\"") &&
     stockActions.includes("Barcode is waiting for inspection release"),
   "Return action must use atomic RPC and keep inspection release separate from normal return"

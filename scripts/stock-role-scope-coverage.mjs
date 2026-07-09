@@ -167,13 +167,27 @@ for (const fragment of [
   "reports: stockAdvancedRoles",
   "settings: stockAdvancedRoles",
   "const isWorkerDashboard = route === \"dashboard\" && isGeneralStockWorker",
+  "const canUseItemSetup = hasAnyRole(profile, stockItemMasterRoles)",
+  "defaultLocationId={profile.stockLocationId}",
+  "canUseItemSetup={canUseItemSetup}",
   "const showDashboardAlerts = !isWorkerDashboard",
 ]) {
   assert(stockPage.includes(fragment), `Stock page route scope missing: ${fragment}`)
 }
 
 const workerHomeBody =
-  stockPage.match(/function StockWorkerHome\(\) \{[\s\S]*?\n\}/)?.[0] ?? ""
+  stockPage.match(/function StockWorkerHome\([\s\S]*?\n\}/)?.[0] ?? ""
+
+for (const fragment of [
+  "Outbound Without Order",
+  "Transfer Out",
+  "Receive Transfer",
+  "Return Stock",
+  "Item / Barcode Setup",
+  "canUseItemSetup",
+]) {
+  assert(stockPage.includes(fragment), `Stock worker home missing: ${fragment}`)
+}
 
 for (const blockedFragment of [
   "KpiCards",
@@ -189,6 +203,12 @@ for (const blockedFragment of [
     `Stock worker dashboard must not expose ${blockedFragment}.`
   )
 }
+
+assert(
+  actions.includes("if (locationId !== profile.stockLocationId)") &&
+    actions.includes("Your role cannot ${action} stock for another location."),
+  "Worker stock actions must block cross-location/cross-outlet stock writes."
+)
 
 assert(
   packageJson.includes("stock-role-scope-coverage.mjs"),

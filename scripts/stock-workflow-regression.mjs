@@ -5,7 +5,11 @@ import {
   makeInternalBarcode,
   makeUniqueInternalBarcode,
 } from "../lib/stock/barcode-label.ts"
-import { decodeBarcodeWeight } from "../lib/stock/barcode-weight.ts"
+import {
+  decodeBarcodeWeight,
+  inferBarcodeWeightRule,
+  inferBarcodeWeightRuleWithStatus,
+} from "../lib/stock/barcode-weight.ts"
 import {
   generatedItemCode,
   isNumericItemCode,
@@ -108,6 +112,46 @@ assertDecode(
   }
 )
 
+assert.deepEqual(
+  inferBarcodeWeightRule({
+    barcode: "5363704999000267800078252512525227068224013687",
+    weightKgText: "26.78",
+  }),
+  { start: 13, length: 5, decimals: 2 },
+  "Inbound should infer a unique position rule after one manual supplier-barcode weight."
+)
+assertDecode(
+  {
+    barcode: "5363704999000144600078252512525227068224013687",
+    startText: "13",
+    lengthText: "5",
+    decimalsText: "2",
+  },
+  {
+    status: "decoded",
+    weightKg: "14.46",
+    source: "POSITION_RULE",
+    message: "Future supplier barcodes should auto-extract weight from the saved position rule.",
+  }
+)
+assert.equal(
+  inferBarcodeWeightRule({
+    barcode: "11126782222678",
+    weightKgText: "26.78",
+  }),
+  null,
+  "Inbound should not learn an ambiguous barcode weight position."
+)
+
+assert.deepEqual(
+  inferBarcodeWeightRuleWithStatus({
+    barcode: "11126782222678",
+    weightKgText: "26.78",
+  }),
+  { status: "ambiguous", suggestion: null },
+  "Inbound should ask for another sample when the same weight appears more than once."
+)
+
 assert.equal(
   normalizeItemCode(" 0007 "),
   "0007",
@@ -145,45 +189,43 @@ assert.equal(
 )
 
 const generated = makeInternalBarcode(
-  { itemCode: "0007" },
+  "INB-20260612-083000",
   "10.250",
-  42,
-  new Date("2026-06-12T00:00:00.000Z")
+  42
 )
 
 assert.equal(
   generated,
-  "2026061200070102500042",
-  "Generated barcode should be date + numeric item code + grams + serial."
+  "202606120830000042010250",
+  "Generated barcode should be session code digits + running number + grams."
 )
 assert.match(generated, /^\d+$/, "Generated barcode must be numeric only.")
 assert.equal(
-  makeInternalBarcode({ itemCode: "AB-7" }, "0", 1),
+  makeInternalBarcode("INB-20260612-083000", "0", 1),
   "",
   "Generated barcode should be blank when weight is invalid."
 )
 assert.equal(
-  makeInternalBarcode({ itemCode: "AB-7" }, "10.250", 1),
+  makeInternalBarcode("INB-", "10.250", 1),
   "",
-  "Generated barcode should be blank when item code is not numeric."
+  "Generated barcode should be blank when session code has no digits."
 )
 assert.equal(
-  makeInternalBarcode({ itemCode: "0007" }, "10.250", 10000),
+  makeInternalBarcode("INB-20260612-083000", "10.250", 10000),
   "",
   "Generated barcode should not wrap serial numbers after 9999."
 )
 
 const uniqueGenerated = makeUniqueInternalBarcode(
-  { itemCode: "0007" },
+  "INB-20260612-083000",
   "10.250",
-  ["2026061200070102500042"],
-  42,
-  new Date("2026-06-12T00:00:00.000Z")
+  ["202606120830000042010250"],
+  42
 )
 
 assert.deepEqual(
   uniqueGenerated,
-  { barcode: "2026061200070102500043", serial: 43 },
+  { barcode: "202606120830000043010250", serial: 43 },
   "Generated barcode should skip existing labels and use the next serial."
 )
 
@@ -235,8 +277,8 @@ for (const status of [
 ]) {
   assert.equal(
     outboundUnitBlockReason({ barcode: "EM-STATUS", status }) === null,
-    activeStockStatus(status),
-    `Outbound block helper should match active stock status for ${status}.`
+    status === "IN_STOCK",
+    `Outbound block helper should only allow available stock for ${status}.`
   )
 }
 assert.throws(

@@ -6,13 +6,13 @@ import {
   getDeliveryVehicles,
   getTodayDriverDeliveries,
   getTodayDriverExpenses,
+  getUpcomingOrderDeliveries,
 } from "@/lib/delivery/queries"
 
 const driverDeliveryRoles: UserRole[] = [
   "delivery_team_general_worker",
   "delivery_manager",
   "admin",
-  "director",
 ]
 
 export default async function DeliveryDriverPage() {
@@ -30,12 +30,14 @@ export default async function DeliveryDriverPage() {
 
   const result = await Promise.all([
     getAvailableDeliveries(),
+    getUpcomingOrderDeliveries(),
     getTodayDriverDeliveries(),
     getTodayDriverExpenses(),
     getDeliveryVehicles(),
   ])
-    .then(([availableDeliveries, driverDeliveries, expenses, vehicles]) => ({
+    .then(([availableDeliveries, upcomingOrderDeliveries, driverDeliveries, expenses, vehicles]) => ({
       availableDeliveries,
+      upcomingOrderDeliveries,
       driverDeliveries,
       expenses,
       vehicles,
@@ -43,6 +45,7 @@ export default async function DeliveryDriverPage() {
     }))
     .catch((error: unknown) => ({
       availableDeliveries: [],
+      upcomingOrderDeliveries: [],
       driverDeliveries: [],
       expenses: [],
       vehicles: [],
@@ -55,6 +58,7 @@ export default async function DeliveryDriverPage() {
   return (
     <DriverMobileDeliveryPage
       availableDeliveries={result.availableDeliveries}
+      upcomingOrderDeliveries={result.upcomingOrderDeliveries}
       driverDeliveries={result.driverDeliveries}
       expenses={result.expenses}
       vehicles={result.vehicles}

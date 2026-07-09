@@ -21,6 +21,7 @@ function includesAll(source, fragments, label) {
 
 const ownerList = read("docs/STOCK_TEST_LIST_FOR_OWNER.md")
 const remoteQa = read("docs/STOCK_REMOTE_QA_VERCEL.md")
+const mobileAudit = read("docs/STOCK_MOBILE_UX_REQUIREMENT_AUDIT.md")
 const migrationChecklist = read("docs/STOCK_MIGRATION_CHECKLIST.md")
 const migration053 = read(
   "supabase/migrations/202606100053_stock_inbound_session_undo_v1.sql"
@@ -49,6 +50,13 @@ includesAll(
   ownerList,
   [
     "Login And Profile Scope",
+    "Guided Stock Inbound End-To-End Evidence",
+    "Supplier Barcode Guided Flow",
+    "No Supplier Barcode Guided Flow",
+    "Locks NV Belly Boneless",
+    "Barcode length is different from saved rule",
+    "external scanner input",
+    "whole-session undo/delete action",
     "Stock Inbound",
     "Recent Inbound Templates",
     "Continuous Scanning",
@@ -60,7 +68,7 @@ includesAll(
     "Undo Scan And VOIDED Status",
     "Stock Movement INBOUND_VOID",
     "Stock Balance Excludes Voided Units",
-    "Outbound Order-Based Scanning",
+    "Stock Direct Outbound Mobile Flow",
     "Transfer And Receive Transfer",
     "Return Stock Becomes IN_STOCK",
     "Damage And Spoilage Approval",
@@ -71,9 +79,21 @@ includesAll(
   "Owner stock test list"
 )
 
+assert(
+  !ownerList.includes("customer selection is optional before scanning"),
+  "Owner stock test list must not say Direct Sales customer selection is optional."
+)
+
 includesAll(
   remoteQa,
   [
+    "Guided Stock Inbound Vercel QA",
+    "Supplier Barcode Flow",
+    "No Supplier Barcode Flow",
+    "Locks NV Belly Boneless",
+    "Barcode length is different from saved rule.",
+    "Duplicate barcode. Inbound is blocked.",
+    "whole-session undo/delete",
     "/stock/inbound",
     "/stock/outbound",
     "/stock/transfer",
@@ -87,6 +107,26 @@ includesAll(
     "https://elite-meat-erp.vercel.app",
   ],
   "Remote Vercel stock QA routes"
+)
+
+includesAll(
+  mobileAudit,
+  [
+    "Stock Mobile UX Requirement Audit",
+    "Main mobile users are general workers.",
+    "Stock mobile home shows Inbound, Outbound, Transfer, Receive, Return/Damage, Stock Take.",
+    "Duplicate barcode blocks immediately with red warning.",
+    "Generated internal label saves stock only after the printed label is scanned.",
+    "Bluetooth label printer primary; PDF fallback required.",
+    "Damage/spoilage requires photo and creates approval request only.",
+    "Receive-transfer at wrong location is blocked.",
+    "Transfer pending over 3 days alerts sender manager, receiver manager, admin, and director.",
+    "Other stock operations during active stock take warn only, not block.",
+    "Stock scanning is online-only for MVP.",
+    "Test at 390px width.",
+    "Manual evidence pending",
+  ],
+  "Stock mobile UX requirement audit"
 )
 
 includesAll(
@@ -180,13 +220,28 @@ includesAll(
     "Previous scan",
     "Weight rule and notes",
     "Save weight rule for future scans",
-    "Undo scan",
-    "Finish Inbound Session",
+    "Undo Last Scan",
+    "Finish Session",
     "No weight found. Generate an internal label, print it, then attach it.",
     "Generate internal label",
     "StockLabelPrintActions",
   ],
   "Stock inbound worker coverage"
+)
+
+includesAll(
+  ownerList + remoteQa,
+  [
+    "Undo Last Scan",
+    "Finish Session",
+  ],
+  "Current Stock Inbound QA wording"
+)
+
+assert(
+  !ownerList.includes("Finish Inbound Session") &&
+    !remoteQa.includes("Finish Inbound Session"),
+  "Current Stock Inbound QA docs must use Finish Session."
 )
 
 includesAll(

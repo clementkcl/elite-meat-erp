@@ -23,7 +23,35 @@ export type DataTableColumn<T extends Record<string, unknown>> = {
   align?: "left" | "right"
 }
 
+type DisplayLinkValue = {
+  kind: "link"
+  href: string
+  label: string
+}
+
+export function tableLink(
+  href: string | null | undefined,
+  label = "View"
+): DisplayLinkValue | null {
+  return href ? { kind: "link", href, label } : null
+}
+
+function isDisplayLink(value: unknown): value is DisplayLinkValue {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "kind" in value &&
+    (value as { kind?: unknown }).kind === "link" &&
+    typeof (value as { href?: unknown }).href === "string" &&
+    typeof (value as { label?: unknown }).label === "string"
+  )
+}
+
 function formatValue(value: unknown) {
+  if (isDisplayLink(value)) {
+    return value.label
+  }
+
   if (typeof value === "number") {
     return Number.isInteger(value)
       ? value.toLocaleString()
@@ -42,6 +70,20 @@ function formatValue(value: unknown) {
 }
 
 function DisplayValue({ value }: { value: unknown }) {
+  if (isDisplayLink(value)) {
+    return (
+      <a
+        href={value.href}
+        target="_blank"
+        rel="noreferrer"
+        className="text-primary underline-offset-4 hover:underline"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {value.label}
+      </a>
+    )
+  }
+
   if (isStatusLike(value)) {
     return <StatusBadge value={String(value)} />
   }
@@ -72,7 +114,7 @@ export function DataTable<T extends Record<string, unknown>>({
             variant="ghost"
             size="sm"
             className={cn(
-              "h-7 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground",
+              "h-auto min-h-11 gap-1 whitespace-normal px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground",
               column.align === "right" && "ml-auto"
             )}
             onClick={() =>
@@ -80,13 +122,13 @@ export function DataTable<T extends Record<string, unknown>>({
             }
           >
             {column.header}
-            <ArrowUpDown className="size-3" />
+            <ArrowUpDown className="size-3 shrink-0" />
           </Button>
         ),
         cell: ({ getValue }) => (
           <div
             className={cn(
-              "min-w-0 truncate text-sm text-foreground/90",
+              "min-w-0 whitespace-normal break-words text-sm text-foreground/90",
               column.align === "right" && "text-right tabular-nums"
             )}
             title={String(formatValue(getValue()))}

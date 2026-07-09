@@ -37,10 +37,20 @@ type TableRow = Record<string, string | number | boolean>
 
 const financeRoles: UserRole[] = ["account", "admin", "director"]
 
+type OperationalQueueItem = {
+  label: string
+  value: string
+  detail: string
+  href: string
+  action: string
+  tone?: "default" | "warning" | "danger" | "success"
+}
+
 const titles: Record<FinanceRoute, { title: string; description: string }> = {
   dashboard: {
     title: "Accounting Dashboard",
-    description: "Receivables, payables, director approvals, and container exposure.",
+    description:
+      "Operational review and control screen for receivables, payables, OA payments, and containers.",
   },
   claims: {
     title: "Claims",
@@ -200,6 +210,273 @@ function KpiCards({
   )
 }
 
+function queueToneClass(tone: OperationalQueueItem["tone"]) {
+  if (tone === "danger") {
+    return "border-red-200 bg-red-50"
+  }
+
+  if (tone === "warning") {
+    return "border-amber-200 bg-amber-50"
+  }
+
+  if (tone === "success") {
+    return "border-emerald-200 bg-emerald-50"
+  }
+
+  return "border-border bg-background"
+}
+
+function queueBadgeVariant(tone: OperationalQueueItem["tone"]) {
+  if (tone === "danger") {
+    return "destructive"
+  }
+
+  if (tone === "warning") {
+    return "warning"
+  }
+
+  if (tone === "success") {
+    return "success"
+  }
+
+  return "secondary"
+}
+
+function buildOperationalQueue({
+  invoices,
+  containers,
+  claims,
+  advances,
+}: {
+  invoices: FinanceInvoice[]
+  containers: FinanceContainer[]
+  claims: UnifiedOaRequest[]
+  advances: UnifiedOaRequest[]
+}): OperationalQueueItem[] {
+  const submittedInvoices = invoices.filter(
+    (invoice) => invoice.status === "SUBMITTED"
+  )
+  const directorApprovedUnpaid = invoices.filter(
+    (invoice) =>
+      invoice.status === "DIRECTOR_APPROVED" &&
+      invoice.paymentStatus !== "PAID"
+  )
+  const overdueAr = invoices.filter(
+    (invoice) =>
+      invoice.invoiceType === "AR" &&
+      invoice.paymentStatus !== "PAID" &&
+      invoice.status !== "REJECTED" &&
+      invoice.status !== "VOID" &&
+      invoice.ageDays > 30
+  )
+  const overdueAp = invoices.filter(
+    (invoice) =>
+      invoice.invoiceType === "AP" &&
+      invoice.paymentStatus !== "PAID" &&
+      invoice.status !== "REJECTED" &&
+      invoice.status !== "VOID" &&
+      invoice.ageDays > 30
+  )
+  const oaAdminReview = [...claims, ...advances].filter(
+    (request) =>
+      request.status === "SUBMITTED" || request.status === "MANAGER_REVIEWED"
+  )
+  const oaReadyToPay = [...claims, ...advances].filter(
+    (request) => request.status === "DIRECTOR_APPROVED"
+  )
+  const openContainers = containers.filter(
+    (container) => container.status !== "CLOSED"
+  )
+  const etaMissing = openContainers.filter((container) => !container.etaDate)
+
+  return [
+    {
+      label: "Admin invoice review",
+      value: String(submittedInvoices.length),
+      detail: "Submitted AR/AP invoices waiting for admin review.",
+      href: "/accounting-finance/dashboard",
+      action: "Review invoices",
+      tone: submittedInvoices.length > 0 ? "danger" : "success",
+    },
+    {
+      label: "Payment to release",
+      value: String(directorApprovedUnpaid.length),
+      detail: "Director-approved invoices not marked paid.",
+      href: "/accounting-finance/dashboard",
+      action: "Mark paid",
+      tone: directorApprovedUnpaid.length > 0 ? "danger" : "success",
+    },
+    {
+      label: "OA admin review",
+      value: String(oaAdminReview.length),
+      detail: "Claims and advances waiting for admin review.",
+      href: "/accounting-finance/claims",
+      action: "Review OA",
+      tone: oaAdminReview.length > 0 ? "warning" : "success",
+    },
+    {
+      label: "OA payment",
+      value: String(oaReadyToPay.length),
+      detail: "Director-approved claims and advances waiting for account payment.",
+      href: "/accounting-finance/advances",
+      action: "Pay requests",
+      tone: oaReadyToPay.length > 0 ? "danger" : "success",
+    },
+    {
+      label: "AR overdue",
+      value: String(overdueAr.length),
+      detail: "Receivable invoices older than 30 days and not paid.",
+      href: "/accounting-finance/ar-invoices",
+      action: "Check AR",
+      tone: overdueAr.length > 0 ? "warning" : "success",
+    },
+    {
+      label: "AP overdue",
+      value: String(overdueAp.length),
+      detail: "Payable invoices older than 30 days and not paid.",
+      href: "/accounting-finance/ap-invoices",
+      action: "Check AP",
+      tone: overdueAp.length > 0 ? "warning" : "success",
+    },
+    {
+      label: "Container control",
+      value: String(openContainers.length),
+      detail: `${etaMissing.length} open containers are missing ETA.`,
+      href: "/accounting-finance/containers",
+      action: "Update containers",
+      tone: etaMissing.length > 0 ? "warning" : "default",
+    },
+  ]
+}
+
+function OperationalReviewBoard({ items }: { items: OperationalQueueItem[] }) {
+  const urgentCount = items.filter((item) => item.tone === "danger").length
+  const checkCount = items.filter((item) => item.tone === "warning").length
+  const accountAdminReviewSteps = [
+    "Review invoices",
+    "Release payments",
+    "Check aging",
+    "Update containers",
+  ]
+  const accountAdminEmptySteps = [
+    "Reviews clear",
+    "Payments clear",
+    "Check aging next",
+  ]
+
+  return (
+    <section
+      aria-labelledby="account-admin-operational-review"
+      className="space-y-4 rounded-lg border bg-card p-4 shadow-sm"
+    >
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">
+            Account/admin operational review
+          </p>
+          <h2
+            id="account-admin-operational-review"
+            className="text-xl font-semibold tracking-tight"
+          >
+            Review and control queue
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Start with review, payment, overdue, and container control items
+            before normal finance reports.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant={urgentCount > 0 ? "destructive" : "success"}>
+            {urgentCount} urgent
+          </Badge>
+          <Badge variant={checkCount > 0 ? "warning" : "secondary"}>
+            {checkCount} to check
+          </Badge>
+        </div>
+      </div>
+
+      <div className="rounded-lg border bg-muted/30 p-3">
+        <div className="text-sm font-semibold">Account/admin daily control order</div>
+        <div className="mt-1 text-sm text-muted-foreground">
+          Clear reviews and payments first, then check aging and container follow-up.
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-4">
+          {accountAdminReviewSteps.map((step, index) => (
+            <div key={step} className="rounded-md border bg-background px-3 py-3">
+              <div className="text-xs font-medium text-muted-foreground">
+                Step {index + 1}
+              </div>
+              <div className="mt-1 text-sm font-semibold">{step}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {urgentCount === 0 ? (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold">
+                Account/admin queue clear guide
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                If no review or payment card is urgent, check aging and container
+                follow-up before normal finance reports.
+              </p>
+            </div>
+            <Badge variant="success">Queue clear</Badge>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {accountAdminEmptySteps.map((step) => (
+              <div key={step} className="rounded-md border bg-background px-3 py-2">
+                <div className="text-sm font-semibold">{step}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className={`flex min-h-40 flex-col justify-between rounded-lg border p-4 ${queueToneClass(
+              item.tone
+            )}`}
+          >
+            <div className="space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-sm font-semibold">{item.label}</h3>
+                <Badge variant={queueBadgeVariant(item.tone)}>
+                  {item.tone === "danger"
+                    ? "Act"
+                    : item.tone === "warning"
+                      ? "Check"
+                      : item.tone === "success"
+                        ? "Clear"
+                        : "Open"}
+                </Badge>
+              </div>
+              <div className="text-2xl font-semibold tabular-nums">
+                {item.value}
+              </div>
+              <p className="text-sm text-muted-foreground">{item.detail}</p>
+            </div>
+            <Button
+              asChild
+              variant={item.tone === "danger" ? "default" : "outline"}
+              size="sm"
+              className="mt-4 min-h-11 w-full justify-center"
+            >
+              <Link href={item.href}>{item.action}</Link>
+            </Button>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function invoiceRows(invoices: FinanceInvoice[]): TableRow[] {
   return invoices.map((invoice) => ({
     createdAt: dateText(invoice.createdAt),
@@ -287,6 +564,12 @@ export async function FinancePage({ route }: { route: FinanceRoute }) {
   const apInvoices = finance.invoices.filter(
     (invoice) => invoice.invoiceType === "AP"
   )
+  const operationalQueue = buildOperationalQueue({
+    invoices: finance.invoices,
+    containers: finance.containers,
+    claims,
+    advances,
+  })
 
   return (
     <div className="space-y-5">
@@ -295,6 +578,7 @@ export async function FinancePage({ route }: { route: FinanceRoute }) {
 
       {route === "dashboard" ? (
         <>
+          <OperationalReviewBoard items={operationalQueue} />
           <KpiCards kpis={finance.dashboard.kpis} />
           <div className="grid gap-4 xl:grid-cols-2">
             <AccountReviewInvoiceForm invoices={finance.invoices} />

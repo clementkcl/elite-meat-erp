@@ -17,7 +17,7 @@ import {
   WorkLocationForm,
 } from "@/components/attendance/attendance-forms"
 import { moduleAccessBlock } from "@/lib/auth/module-guard"
-import { getCurrentProfile } from "@/lib/auth/session"
+import { getCurrentProfile, hasAnyRole } from "@/lib/auth/session"
 import type { UserRole } from "@/lib/auth/types"
 import { getAttendancePageData } from "@/lib/attendance/data"
 
@@ -40,6 +40,13 @@ const attendanceRoles: UserRole[] = [
   "account",
   "admin",
   "director",
+]
+
+const attendanceManagerRoles: UserRole[] = [
+  "retail_manager",
+  "delivery_manager",
+  "processing_manager",
+  "admin",
 ]
 
 const titles: Record<AttendanceRoute, { title: string; description: string }> = {
@@ -144,19 +151,31 @@ function PageHeader({
   )
 }
 
-function AttendanceNav({ route }: { route: AttendanceRoute }) {
+function AttendanceNav({
+  route,
+  canManageAttendance,
+}: {
+  route: AttendanceRoute
+  canManageAttendance: boolean
+}) {
   return (
     <div className="flex gap-2 overflow-x-auto pb-1">
-      {navItems.map((item) => (
-        <Button
-          key={item.href}
-          asChild
-          variant={item.route === route ? "default" : "outline"}
-          size="sm"
-        >
-          <Link href={item.href}>{item.label}</Link>
-        </Button>
-      ))}
+      {navItems
+        .filter(
+          (item) =>
+            canManageAttendance ||
+            !["department", "settings"].includes(item.route)
+        )
+        .map((item) => (
+          <Button
+            key={item.href}
+            asChild
+            variant={item.route === route ? "default" : "outline"}
+            size="sm"
+          >
+            <Link href={item.href}>{item.label}</Link>
+          </Button>
+        ))}
     </div>
   )
 }
@@ -241,6 +260,84 @@ function ruleRows(
   }))
 }
 
+function PermissionCard({
+  title,
+  description,
+}: {
+  title: string
+  description: string
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+    </Card>
+  )
+}
+
+function AttendanceWorkerDailyActions() {
+  const actions = [
+    {
+      href: "/attendance/clock",
+      label: "Clock In / Clock Out",
+      detail: "One big attendance button.",
+    },
+    {
+      href: "/attendance/my-attendance",
+      label: "My Attendance",
+      detail: "Check own clock history.",
+    },
+  ]
+
+  return (
+    <Card className="border-emerald-200 bg-emerald-50/50">
+      <CardHeader>
+        <CardTitle>Attendance worker daily actions</CardTitle>
+        <CardDescription>
+          Use Clock first. Department review and settings stay with managers.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {actions.map((action) => (
+            <Button
+              key={action.href}
+              asChild
+              variant="outline"
+              className="h-auto min-h-24 justify-start whitespace-normal bg-background p-4 text-left"
+            >
+              <Link href={action.href}>
+                <span>
+                  <span className="block text-base font-semibold">
+                    {action.label}
+                  </span>
+                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                    {action.detail}
+                  </span>
+                </span>
+              </Link>
+            </Button>
+          ))}
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-4">
+          {["Open Clock", "Use GPS", "Submit", "Next step shown"].map(
+            (step, index) => (
+              <div key={step} className="rounded-md border bg-background px-3 py-2 text-sm">
+                <div className="text-xs font-medium uppercase text-muted-foreground">
+                  Step {index + 1}
+                </div>
+                <div className="mt-1 font-medium">{step}</div>
+              </div>
+            )
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export async function AttendancePage({ route }: { route: AttendanceRoute }) {
   const blocked = await moduleAccessBlock(
     "attendance",
@@ -257,43 +354,81 @@ export async function AttendancePage({ route }: { route: AttendanceRoute }) {
     getCurrentProfile(),
   ])
   const currentProfileId = profile?.id
+  const canManageAttendance = profile
+    ? hasAnyRole(profile, attendanceManagerRoles)
+    : false
   const today = new Date().toISOString().slice(0, 10)
+  const todaySummaryRows = summaryRows(
+    data,
+    canManageAttendance ? undefined : currentProfileId
+  ).filter((row) =>
+    String(row.workDate).includes(
+      new Date(today).toLocaleDateString("en", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    )
+  )
+  const todayLogRows = logRows(
+    data,
+    canManageAttendance ? undefined : currentProfileId
+  ).slice(0, 12)
 
   return (
     <div className="space-y-5">
       <PageHeader route={route} demoMode={data.demoMode} />
-      <AttendanceNav route={route} />
+      <AttendanceNav
+        route={route}
+        canManageAttendance={canManageAttendance}
+      />
 
       {route === "today" ? (
         <>
-          <KpiCards kpis={data.dashboard.kpis} />
+          {!canManageAttendance ? <AttendanceWorkerDailyActions /> : null}
+          {canManageAttendance ? <KpiCards kpis={data.dashboard.kpis} /> : null}
           <Card>
             <CardHeader>
-              <CardTitle>Today</CardTitle>
-              <CardDescription>Attendance summary for {dateText(today)}.</CardDescription>
+              <CardTitle>{canManageAttendance ? "Today" : "My today"}</CardTitle>
+              <CardDescription>
+                {canManageAttendance
+                  ? `Attendance summary for ${dateText(today)}.`
+                  : "Your own attendance status for today."}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <DataTable
                 columns={summaryColumns}
-                data={summaryRows(data).filter((row) =>
-                  String(row.workDate).includes(
-                    new Date(today).toLocaleDateString("en", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })
-                  )
-                )}
+                data={todaySummaryRows}
+                emptyText={
+                  canManageAttendance
+                    ? "No attendance summary for today."
+                    : "No attendance summary for you today. Clock in to start."
+                }
               />
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Latest clock logs</CardTitle>
-              <CardDescription>Recent clock-in and clock-out events.</CardDescription>
+              <CardTitle>
+                {canManageAttendance ? "Latest clock logs" : "My latest clock logs"}
+              </CardTitle>
+              <CardDescription>
+                {canManageAttendance
+                  ? "Recent clock-in and clock-out events."
+                  : "Your recent clock-in and clock-out events."}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <DataTable columns={logColumns} data={logRows(data).slice(0, 12)} />
+              <DataTable
+                columns={logColumns}
+                data={todayLogRows}
+                emptyText={
+                  canManageAttendance
+                    ? "No clock logs yet."
+                    : "No clock logs for you yet. Use Clock In / Clock Out."
+                }
+              />
             </CardContent>
           </Card>
         </>
@@ -371,48 +506,62 @@ export async function AttendancePage({ route }: { route: AttendanceRoute }) {
       ) : null}
 
       {route === "department" ? (
-        <>
-          <AttendanceStatusForm
-            people={data.people}
-            locations={data.workLocations}
+        canManageAttendance ? (
+          <>
+            <AttendanceStatusForm
+              people={data.people}
+              locations={data.workLocations}
+            />
+            <Card>
+              <CardHeader>
+                <CardTitle>Department summary</CardTitle>
+                <CardDescription>Daily attendance rows across employees.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DataTable columns={summaryColumns} data={summaryRows(data)} />
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <PermissionCard
+            title="Department attendance is manager controlled"
+            description="Workers can clock in, clock out, and review their own attendance. Team status updates are for retail, delivery, processing managers, and admin."
           />
-          <Card>
-            <CardHeader>
-              <CardTitle>Department summary</CardTitle>
-              <CardDescription>Daily attendance rows across employees.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DataTable columns={summaryColumns} data={summaryRows(data)} />
-            </CardContent>
-          </Card>
-        </>
+        )
       ) : null}
 
       {route === "settings" ? (
-        <>
-          <div className="grid gap-4 xl:grid-cols-2">
-            <WorkLocationForm />
-            <AttendanceRuleForm locations={data.workLocations} />
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Work locations</CardTitle>
-              <CardDescription>Approved clock-in location radius settings.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DataTable columns={locationColumns} data={locationRows(data)} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Attendance rules</CardTitle>
-              <CardDescription>Clock schedule and late thresholds.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DataTable columns={ruleColumns} data={ruleRows(data)} />
-            </CardContent>
-          </Card>
-        </>
+        canManageAttendance ? (
+          <>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <WorkLocationForm />
+              <AttendanceRuleForm locations={data.workLocations} />
+            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Work locations</CardTitle>
+                <CardDescription>Approved clock-in location radius settings.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DataTable columns={locationColumns} data={locationRows(data)} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Attendance rules</CardTitle>
+                <CardDescription>Clock schedule and late thresholds.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <DataTable columns={ruleColumns} data={ruleRows(data)} />
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <PermissionCard
+            title="Attendance settings are manager controlled"
+            description="Workers can use Clock and My Attendance. Work locations and attendance rules are managed by managers and admin."
+          />
+        )
       ) : null}
     </div>
   )

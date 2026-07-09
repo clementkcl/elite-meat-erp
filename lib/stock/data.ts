@@ -1,4 +1,5 @@
 import {
+  asRecord,
   asRecordArray,
   readBoolean,
   readNullableString,
@@ -6,6 +7,7 @@ import {
   readString,
 } from "@/lib/records"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
+import { stockDisplayItemName } from "@/lib/stock/display-names"
 import {
   demoBrands,
   demoBarcodeWeightRules,
@@ -106,12 +108,50 @@ function isReturnSupplierRequestStatus(
   )
 }
 
-function formatItemName(item: Item | undefined) {
+function formatDisplayItemName(item: Item | undefined, brand: Brand | undefined) {
   if (!item) {
     return "Unknown item"
   }
 
-  return `${item.category} / ${item.section} / ${item.name}`
+  return stockDisplayItemName(item, brand, "Unknown item")
+}
+
+function formatDefaultDisplayItemName(item: Item | undefined, brands: Brand[]) {
+  const brand = item?.defaultBrandId
+    ? brands.find((candidate) => candidate.id === item.defaultBrandId)
+    : undefined
+
+  return formatDisplayItemName(item, brand)
+}
+
+function formatScanIssueItemName(
+  item: Item | undefined,
+  brands: Brand[],
+  relatedContext: Record<string, unknown>
+) {
+  const displayProductName = readString(relatedContext.displayProductName)
+
+  if (displayProductName) {
+    return displayProductName
+  }
+
+  const productName = readString(relatedContext.productName)
+  const manufacturerName = readString(relatedContext.manufacturerName)
+
+  if (productName) {
+    return manufacturerName
+      ? `${manufacturerName} ${productName}`
+      : stockDisplayItemName(item, undefined, productName)
+  }
+
+  const brandId = readNullableString(relatedContext.brandId)
+  const exactBrand = brandId
+    ? brands.find((candidate) => candidate.id === brandId)
+    : undefined
+
+  return exactBrand
+    ? formatDisplayItemName(item, exactBrand)
+    : formatDefaultDisplayItemName(item, brands)
 }
 
 function findName<T extends { id: string; name: string }>(
@@ -211,6 +251,7 @@ function mapItem(row: Record<string, unknown>): Item {
     itemCode: readString(row.item_code),
     category: isStockCategory(category) ? category : "MEAT",
     defaultBrandId: readNullableString(row.default_brand_id),
+    displayName: readNullableString(row.display_name),
     section: readString(row.section, "GENERAL"),
     name: readString(row.name),
     chineseName: readNullableString(row.chinese_name),
@@ -218,6 +259,10 @@ function mapItem(row: Record<string, unknown>): Item {
     barcodeRequired: readBoolean(row.barcode_required, true),
     active: readBoolean(row.is_active, true),
     defaultLowStockLevel: readNumber(row.default_low_stock_level),
+    defaultWeightKg:
+      row.default_weight_kg === null || row.default_weight_kg === undefined
+        ? null
+        : readNumber(row.default_weight_kg),
   }
 }
 
@@ -232,6 +277,7 @@ function mapUnit(row: Record<string, unknown>): StockUnit {
     brandId: readNullableString(row.brand_id),
     originId: readNullableString(row.origin_id),
     locationId: readString(row.location_id),
+    transferToLocationId: readNullableString(row.transfer_to_location_id),
     status: isUnitStatus(status) ? status : "IN_STOCK",
     netWeightKg: readNumber(row.net_weight_kg),
     inboundSource: isInboundSource(inboundSource)
@@ -252,6 +298,8 @@ function mapBarcodeWeightRule(row: Record<string, unknown>): BarcodeWeightRule {
     barcodeWeightStart: readNumber(row.barcode_weight_start, 7),
     barcodeWeightLength: readNumber(row.barcode_weight_length, 5),
     barcodeWeightDecimals: readNumber(row.barcode_weight_decimals, 2),
+    barcodeLength: row.barcode_length == null ? null : readNumber(row.barcode_length),
+    sampleBarcode: readNullableString(row.sample_barcode),
     updatedAt: readString(row.updated_at, new Date().toISOString()),
   }
 }
@@ -294,9 +342,11 @@ function mapStockTakeSession(
 
 function mapStockTakeLine(
   row: Record<string, unknown>,
-  items: Item[]
+  items: Item[],
+  brands: Brand[]
 ): StockTakeLine {
   const itemId = readString(row.item_id)
+  const brandId = readNullableString(row.brand_id)
   const exceptionType = readNullableString(row.exception_type)
   const exceptionStatus = readNullableString(row.exception_status)
   const systemCount = readNumber(row.system_count)
@@ -308,9 +358,12 @@ function mapStockTakeLine(
     id: readString(row.id),
     sessionId: readString(row.session_id),
     itemId,
-    brandId: readNullableString(row.brand_id),
+    brandId,
     barcode: readNullableString(row.barcode),
-    itemName: formatItemName(items.find((item) => item.id === itemId)),
+    itemName: formatDisplayItemName(
+      items.find((item) => item.id === itemId),
+      brands.find((brand) => brand.id === brandId)
+    ),
     systemCount,
     actualCount,
     varianceCount: readNumber(row.variance_count, actualCount - systemCount),
@@ -332,15 +385,18 @@ function mapStockTakeLine(
     sourceStockUnitId: readNullableString(row.source_stock_unit_id),
     resolvedStockUnitId: readNullableString(row.resolved_stock_unit_id),
     notes: readString(row.notes, ""),
+    createdAt: readString(row.created_at, new Date().toISOString()),
   }
 }
 
 function mapDamageRequest(
   row: Record<string, unknown>,
   items: Item[],
+  brands: Brand[],
   locations: StockLocation[]
 ): StockDamageRequest {
   const itemId = readString(row.item_id)
+  const brandId = readNullableString(row.brand_id)
   const locationId = readString(row.location_id)
   const reason = readString(row.reason, "other")
   const status = readString(row.status, "SUBMITTED")
@@ -351,7 +407,10 @@ function mapDamageRequest(
     barcode: readString(row.barcode),
     stockUnitId: readString(row.stock_unit_id),
     itemId,
-    itemName: formatItemName(items.find((item) => item.id === itemId)),
+    itemName: formatDisplayItemName(
+      items.find((item) => item.id === itemId),
+      brands.find((brand) => brand.id === brandId)
+    ),
     locationId,
     locationName: findName(locations, locationId),
     reason: isDamageReason(reason) ? reason : "other",
@@ -367,9 +426,11 @@ function mapDamageRequest(
 function mapReturnSupplierRequest(
   row: Record<string, unknown>,
   items: Item[],
+  brands: Brand[],
   locations: StockLocation[]
 ): StockReturnSupplierRequest {
   const itemId = readString(row.item_id)
+  const brandId = readNullableString(row.brand_id)
   const locationId = readString(row.location_id)
   const status = readString(row.status, "SUBMITTED")
 
@@ -379,7 +440,10 @@ function mapReturnSupplierRequest(
     barcode: readString(row.barcode),
     stockUnitId: readString(row.stock_unit_id),
     itemId,
-    itemName: formatItemName(items.find((item) => item.id === itemId)),
+    itemName: formatDisplayItemName(
+      items.find((item) => item.id === itemId),
+      brands.find((brand) => brand.id === brandId)
+    ),
     locationId,
     locationName: findName(locations, locationId),
     supplierName: readString(row.supplier_name),
@@ -395,19 +459,37 @@ function mapReturnSupplierRequest(
 function mapMovement(
   row: Record<string, unknown>,
   items: Item[],
+  brands: Brand[],
+  units: StockUnit[],
   locations: StockLocation[]
 ): StockMovement {
   const movementType = readString(row.movement_type, "INBOUND")
   const itemId = readString(row.item_id)
+  const stockUnitId = readNullableString(row.stock_unit_id)
+  const barcode = readString(row.barcode, "-")
+  const linkedUnit = units.find(
+    (unit) =>
+      (stockUnitId && unit.id === stockUnitId) ||
+      (barcode !== "-" && unit.barcode === barcode)
+  )
+  const displayItemId = linkedUnit?.itemId ?? itemId
+  const displayBrandId =
+    linkedUnit?.brandId ?? readNullableString(row.brand_id)
+  const brand = brands.find((candidate) => candidate.id === displayBrandId)
+  const brandName = brand?.name ?? "No manufacturer"
   const fromLocationId = readNullableString(row.from_location_id)
   const toLocationId = readNullableString(row.to_location_id)
 
   return {
     id: readString(row.id),
     movementType: isMovementType(movementType) ? movementType : "INBOUND",
-    stockUnitId: readNullableString(row.stock_unit_id),
-    itemName: formatItemName(items.find((item) => item.id === itemId)),
-    barcode: readString(row.barcode, "-"),
+    stockUnitId,
+    itemName: formatDisplayItemName(
+      items.find((item) => item.id === displayItemId),
+      brand
+    ),
+    brandName,
+    barcode,
     fromLocation: findName(locations, fromLocationId),
     toLocation: findName(locations, toLocationId),
     quantity: readNumber(row.quantity),
@@ -426,20 +508,35 @@ function mapScanLog(row: Record<string, unknown>): StockScanLog {
     success: readBoolean(row.success),
     message: readString(row.message),
     scannedBy: readNullableString(row.scanned_by),
+    issueType: readNullableString(row.issue_type),
+    itemId: readNullableString(row.item_id),
+    selectedItemId: readNullableString(row.selected_item_id),
+    expectedLocationId: readNullableString(row.expected_location_id),
+    scannedLocationId: readNullableString(row.scanned_location_id),
+    expectedStatus: readNullableString(row.expected_status),
+    scannedStatus: readNullableString(row.scanned_status),
+    relatedContext: asRecord(row.related_context),
+    reviewStatus: readString(row.review_status, "OPEN"),
     createdAt: readString(row.created_at, new Date().toISOString()),
   }
 }
 
 function buildBalances(
   items: Item[],
+  brands: Brand[],
   locations: StockLocation[],
   units: StockUnit[],
   noBarcodeStock: NoBarcodeStock[]
 ): StockBalanceRow[] {
   const grouped = new Map<string, StockBalanceRow>()
 
-  const ensureRow = (item: Item, location: StockLocation) => {
-    const key = `${item.id}:${location.id}`
+  const ensureRow = (
+    item: Item,
+    brand: Brand | undefined,
+    brandId: string | null,
+    location: StockLocation
+  ) => {
+    const key = `${item.id}:${brandId ?? "none"}:${location.id}`
     const existing = grouped.get(key)
 
     if (existing) {
@@ -448,7 +545,10 @@ function buildBalances(
 
     const row: StockBalanceRow = {
       id: key,
-      itemName: formatItemName(item),
+      itemId: item.id,
+      brandId,
+      itemName: formatDisplayItemName(item, brand),
+      brandName: brand?.name ?? "No manufacturer",
       category: item.category,
       locationName: location.name,
       unitCount: 0,
@@ -477,7 +577,8 @@ function buildBalances(
         return
       }
 
-      const row = ensureRow(item, location)
+      const brand = brands.find((candidate) => candidate.id === unit.brandId)
+      const row = ensureRow(item, brand, unit.brandId ?? null, location)
       row.unitCount += 1
       row.totalWeightKg = roundWeight(row.totalWeightKg + unit.netWeightKg)
     })
@@ -492,7 +593,8 @@ function buildBalances(
       return
     }
 
-    const row = ensureRow(item, location)
+    const brand = brands.find((candidate) => candidate.id === stock.brandId)
+    const row = ensureRow(item, brand, stock.brandId, location)
     row.noBarcodeQuantity += stock.quantity
     row.noBarcodeWeightKg = roundWeight(row.noBarcodeWeightKg + stock.weightKg)
   })
@@ -553,6 +655,7 @@ function buildNegativeStockAlerts(
 function buildStockAgeAlerts(
   units: StockUnit[],
   items: Item[],
+  brands: Brand[],
   locations: StockLocation[]
 ): StockAgeAlert[] {
   const now = Date.now()
@@ -573,11 +676,12 @@ function buildStockAgeAlerts(
       }
 
       const item = items.find((candidate) => candidate.id === unit.itemId)
+      const brand = brands.find((candidate) => candidate.id === unit.brandId)
 
       return {
         id: `age-${unit.id}`,
         barcode: unit.barcode,
-        itemName: formatItemName(item),
+        itemName: formatDisplayItemName(item, brand),
         locationName: findName(locations, unit.locationId),
         receivedAt: unit.receivedAt,
         ageDays,
@@ -594,7 +698,8 @@ function buildStockAgeAlerts(
 function buildTransferPendingAlerts(
   units: StockUnit[],
   movements: StockMovement[],
-  items: Item[]
+  items: Item[],
+  brands: Brand[]
 ): TransferPendingAlert[] {
   const now = Date.now()
   const outboundTransfers = movements
@@ -623,8 +728,9 @@ function buildTransferPendingAlerts(
       return {
         id: `transfer-pending-${unit.id}`,
         barcode: unit.barcode,
-        itemName: formatItemName(
-          items.find((candidate) => candidate.id === unit.itemId)
+        itemName: formatDisplayItemName(
+          items.find((candidate) => candidate.id === unit.itemId),
+          brands.find((candidate) => candidate.id === unit.brandId)
         ),
         fromLocation: movement?.fromLocation ?? "-",
         toLocation: movement?.toLocation ?? "-",
@@ -641,6 +747,7 @@ function buildReports(
   units: StockUnit[] = [],
   items: Item[] = [],
   brands: Brand[] = [],
+  origins: Origin[] = [],
   locations: StockLocation[] = [],
   movements: StockMovement[] = [],
   stockAgeAlerts: StockAgeAlert[] = [],
@@ -654,10 +761,28 @@ function buildReports(
   const totalByLocation = new Map<string, StockReportRow>()
   const totalByCategory = new Map<string, StockReportRow>()
   const stockByInboundAge = new Map<string, StockReportRow>()
+  const unitIdentity = (unit: StockUnit | undefined) => {
+    const item = unit ? items.find((candidate) => candidate.id === unit.itemId) : undefined
+    const brand = unit
+      ? brands.find((candidate) => candidate.id === unit.brandId)
+      : undefined
+    const origin = unit
+      ? origins.find((candidate) => candidate.id === unit.originId)
+      : undefined
+
+    return {
+      itemName: unit ? formatDisplayItemName(item, brand) : "-",
+      brandName: brand?.name ?? "No manufacturer",
+      originName: origin?.name ?? "Unknown origin",
+    }
+  }
   const movementHistoryRows = movements.map((movement) => ({
     id: `report-movement-${movement.id}`,
     reportName: "Stock movement history",
     locationName: movement.toLocation !== "-" ? movement.toLocation : movement.fromLocation,
+    itemName: movement.itemName,
+    brandName: movement.brandName,
+    originName: "-",
     category: movement.movementType,
     count: movement.quantity,
     weightKg: roundWeight(movement.weightKg),
@@ -669,6 +794,9 @@ function buildReports(
       id: `report-inbound-${movement.id}`,
       reportName: "Inbound",
       locationName: movement.toLocation,
+      itemName: movement.itemName,
+      brandName: movement.brandName,
+      originName: "-",
       category: movement.itemName,
       count: movement.quantity,
       weightKg: roundWeight(movement.weightKg),
@@ -680,6 +808,9 @@ function buildReports(
       id: `report-outbound-${movement.id}`,
       reportName: "Outbound",
       locationName: movement.fromLocation,
+      itemName: movement.itemName,
+      brandName: movement.brandName,
+      originName: "-",
       category: movement.movementType,
       count: movement.quantity,
       weightKg: roundWeight(movement.weightKg),
@@ -693,41 +824,66 @@ function buildReports(
           candidate.movementType === "OUTBOUND_TRANSFER" &&
           candidate.barcode === unit.barcode
       )
+      const identity = unitIdentity(unit)
 
       return {
         id: `report-transfer-pending-${unit.id}`,
         reportName: "Transfer pending",
         locationName: findName(locations, unit.locationId),
+        itemName: identity.itemName,
+        brandName: identity.brandName,
+        originName: identity.originName,
         category: unit.barcode,
         count: 1,
         weightKg: roundWeight(unit.netWeightKg),
         generatedAt: movement?.createdAt ?? unit.receivedAt,
       } satisfies StockReportRow
     })
-  const oldStockRows = stockAgeAlerts.map((alert) => ({
-    id: `report-old-stock-${alert.id}`,
-    reportName: "Old stock 6 months",
-    locationName: alert.locationName,
-    category: `${alert.itemName} / ${
-      alert.alertLevel === "OVER_12_MONTHS" ? "Over 12 months" : "Over 6 months"
-    }`,
-    count: 1,
-    weightKg: roundWeight(
-      units.find((unit) => unit.barcode === alert.barcode)?.netWeightKg ?? 0
-    ),
-    generatedAt: now,
-  }) satisfies StockReportRow)
+  const oldStockRows = stockAgeAlerts.map((alert) => {
+    const unit = units.find((candidate) => candidate.barcode === alert.barcode)
+    const identity = unitIdentity(unit)
+
+    return {
+      id: `report-old-stock-${alert.id}`,
+      reportName: "Old stock 6 months",
+      locationName: alert.locationName,
+      itemName: identity.itemName,
+      brandName: identity.brandName,
+      originName: identity.originName,
+      category: `${alert.itemName} / ${
+        alert.alertLevel === "OVER_12_MONTHS" ? "Over 12 months" : "Over 6 months"
+      }`,
+      count: 1,
+      weightKg: roundWeight(unit?.netWeightKg ?? 0),
+      generatedAt: now,
+    } satisfies StockReportRow
+  })
   const barcodeScanErrorRows = scanLogs
-    .filter((log) => !log.success)
+    .filter((log) => !log.success || log.issueType)
     .map((log) => ({
       id: `report-barcode-scan-error-${log.id}`,
       reportName: "Barcode scan errors",
       locationName: "SCAN LOG",
-      category: `${log.action}: ${log.message}`,
+      itemName: "Scan issue",
+      brandName: "-",
+      originName: "-",
+      category: `${log.barcode} / ${log.issueType ?? log.action}: ${log.message}`,
       count: 1,
       weightKg: 0,
       generatedAt: log.createdAt,
     }) satisfies StockReportRow)
+  const stockBalanceRows = balances.map((balance) => ({
+    id: `report-stock-balance-${balance.id}`,
+    reportName: "Stock balance",
+    locationName: balance.locationName,
+    itemName: balance.itemName,
+    brandName: balance.brandName,
+    originName: "-",
+    category: balance.category,
+    count: balance.totalQuantity,
+    weightKg: roundWeight(balance.combinedWeightKg),
+    generatedAt: now,
+  }) satisfies StockReportRow)
 
   balances.forEach((balance) => {
     const locationRow =
@@ -736,6 +892,9 @@ function buildReports(
         id: `report-location-${balance.locationName}`,
         reportName: "Stock by location",
         locationName: balance.locationName,
+        itemName: "ALL",
+        brandName: "ALL",
+        originName: "ALL",
         category: "ALL",
         count: 0,
         weightKg: 0,
@@ -756,6 +915,9 @@ function buildReports(
         id: `report-category-${balance.category}`,
         reportName: "Stock by category",
         locationName: "ALL",
+        itemName: "ALL",
+        brandName: "ALL",
+        originName: "ALL",
         category: balance.category,
         count: 0,
         weightKg: 0,
@@ -786,9 +948,11 @@ function buildReports(
           : ageDays >= sixMonthStockAgeDays
             ? "6 to 12 months"
             : "Under 6 months"
-      const brandName = findName(brands, unit.brandId, "No brand")
+      const brand = brands.find((candidate) => candidate.id === unit.brandId)
+      const brandName = brand?.name ?? "No manufacturer"
+      const originName = findName(origins, unit.originId, "Unknown origin")
       const locationName = findName(locations, unit.locationId)
-      const itemName = formatItemName(item)
+      const itemName = formatDisplayItemName(item, brand)
       const key = `${item.id}:${unit.brandId ?? "none"}:${unit.locationId}:${ageBucket}`
       const row =
         stockByInboundAge.get(key) ??
@@ -796,6 +960,9 @@ function buildReports(
           id: `report-inbound-age-${key}`,
           reportName: "Stock by inbound age",
           locationName,
+          itemName,
+          brandName,
+          originName,
           category: `${itemName} / ${brandName} / ${ageBucket}`,
           count: 0,
           weightKg: 0,
@@ -810,11 +977,15 @@ function buildReports(
   const damageRows = damageRequests.map(
     (request) => {
       const linkedUnit = units.find((unit) => unit.id === request.stockUnitId)
+      const identity = unitIdentity(linkedUnit)
 
       return {
         id: `report-damage-${request.id}`,
         reportName: "Damage/spoilage",
         locationName: request.locationName,
+        itemName: identity.itemName === "-" ? request.itemName : identity.itemName,
+        brandName: identity.brandName,
+        originName: identity.originName,
         category: `${request.status} / Manager signature: ${request.managerSignature ?? "Pending"} / Director signature: ${request.directorSignature ?? "Pending"}`,
         count: 1,
         weightKg: roundWeight(linkedUnit?.netWeightKg ?? 0),
@@ -825,11 +996,15 @@ function buildReports(
   const returnSupplierRows = returnSupplierRequests.map(
     (request) => {
       const linkedUnit = units.find((unit) => unit.id === request.stockUnitId)
+      const identity = unitIdentity(linkedUnit)
 
       return {
         id: `report-return-supplier-${request.id}`,
         reportName: "Return supplier",
         locationName: request.locationName,
+        itemName: identity.itemName === "-" ? request.itemName : identity.itemName,
+        brandName: identity.brandName,
+        originName: identity.originName,
         category: request.status,
         count: 1,
         weightKg: roundWeight(linkedUnit?.netWeightKg ?? 0),
@@ -850,6 +1025,11 @@ function buildReports(
           id: `report-stock-take-variance-${line.id}`,
           reportName: "Stock take variance",
           locationName: session?.locationName ?? "STOCK TAKE",
+          itemName: line.itemName,
+          brandName:
+            brands.find((brand) => brand.id === line.brandId)?.name ??
+            "No manufacturer",
+          originName: "-",
           category: `${line.itemName} / Manager signature: ${session?.managerSignature ?? "Pending"} / Director signature: ${session?.directorSignature ?? "Pending"}`,
           count: line.varianceCount,
           weightKg: roundWeight(line.varianceWeightKg),
@@ -858,6 +1038,7 @@ function buildReports(
     })
 
   return [
+    ...stockBalanceRows,
     ...totalByLocation.values(),
     ...totalByCategory.values(),
     ...stockByInboundAge.values(),
@@ -875,6 +1056,7 @@ function buildReports(
 
 function buildDashboard(
   items: Item[],
+  brands: Brand[],
   locations: StockLocation[],
   units: StockUnit[],
   noBarcodeStock: NoBarcodeStock[],
@@ -905,11 +1087,12 @@ function buildDashboard(
     0
   )
   const negativeStockAlerts = buildNegativeStockAlerts(balances)
-  const stockAgeAlerts = buildStockAgeAlerts(units, items, locations)
+  const stockAgeAlerts = buildStockAgeAlerts(units, items, brands, locations)
   const transferPendingAlerts = buildTransferPendingAlerts(
     units,
     movements,
-    items
+    items,
+    brands
   )
   const pendingDamageApprovals = damageRequests.filter((request) =>
     ["SUBMITTED", "MANAGER_REVIEWED"].includes(request.status)
@@ -930,17 +1113,44 @@ function buildDashboard(
         message.includes("weight"))
     )
   })
-  const scanAlerts: StockScanAlert[] = [
-    ...duplicateScanAttempts,
-    ...barcodeDecodeErrors,
-  ]
+  const failedScanLogs = scanLogs.filter(
+    (log) => (!log.success || log.issueType) && log.reviewStatus === "OPEN"
+  )
+  const scanAlerts: StockScanAlert[] = failedScanLogs
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 8)
     .map((log) => ({
       id: `scan-alert-${log.id}`,
       barcode: log.barcode,
       action: log.action,
       message: log.message,
+      scannedBy: log.scannedBy,
+      issueType: log.issueType ?? null,
+      itemName: log.itemId
+        ? formatScanIssueItemName(
+            items.find((item) => item.id === log.itemId),
+            brands,
+            log.relatedContext ?? {}
+          )
+        : null,
+      selectedItemName: log.selectedItemId
+        ? formatScanIssueItemName(
+            items.find((item) => item.id === log.selectedItemId),
+            brands,
+            log.relatedContext ?? {}
+          )
+        : null,
+      expectedLocationId: log.expectedLocationId ?? null,
+      expectedLocationName: log.expectedLocationId
+        ? findName(locations, log.expectedLocationId)
+        : null,
+      scannedLocationId: log.scannedLocationId ?? null,
+      scannedLocationName: log.scannedLocationId
+        ? findName(locations, log.scannedLocationId)
+        : null,
+      expectedStatus: log.expectedStatus ?? null,
+      scannedStatus: log.scannedStatus ?? null,
+      relatedContext: log.relatedContext ?? {},
+      reviewStatus: log.reviewStatus ?? "OPEN",
       createdAt: log.createdAt,
     }))
   const today = tableDate(new Date().toISOString())
@@ -1091,6 +1301,11 @@ function buildDashboard(
         detail: "Submitted manager review or director approval",
       },
       {
+        label: "Scan issues for review",
+        value: String(failedScanLogs.length),
+        detail: "Open scan and stock workflow issues awaiting review",
+      },
+      {
         label: "Duplicate scan attempts",
         value: String(duplicateScanAttempts.length),
         detail: "Blocked duplicate barcode scan logs",
@@ -1121,6 +1336,7 @@ function filterMovements(
   const dateFrom = filters.dateFrom?.trim()
   const dateTo = filters.dateTo?.trim()
   const item = filters.item?.trim().toLowerCase()
+  const brand = filters.brand?.trim().toLowerCase()
   const status = filters.status?.trim().toLowerCase()
   const user = filters.user?.trim().toLowerCase()
 
@@ -1130,6 +1346,7 @@ function filterMovements(
       !query ||
       [
         movement.itemName,
+        movement.brandName,
         movement.barcode,
         movement.referenceNo,
         movement.notes,
@@ -1146,6 +1363,8 @@ function filterMovements(
     const matchesDateTo = !dateTo || movementDate <= dateTo
     const matchesItem =
       !item || movement.itemName.toLowerCase().includes(item)
+    const matchesBrand =
+      !brand || movement.brandName.toLowerCase().includes(brand)
     const matchesStatus =
       !status ||
       movement.movementType.toLowerCase().includes(status) ||
@@ -1159,9 +1378,40 @@ function filterMovements(
       matchesDateFrom &&
       matchesDateTo &&
       matchesItem &&
+      matchesBrand &&
       matchesStatus &&
       matchesUser
     )
+  })
+}
+
+function withMovementDisplayNames(
+  movements: StockMovement[],
+  items: Item[],
+  brands: Brand[],
+  units: StockUnit[]
+) {
+  return movements.map((movement) => {
+    const linkedUnit = units.find(
+      (unit) =>
+        (movement.stockUnitId && unit.id === movement.stockUnitId) ||
+        (movement.barcode !== "-" && unit.barcode === movement.barcode)
+    )
+
+    if (!linkedUnit) {
+      return movement
+    }
+
+    return {
+      ...movement,
+      itemName: formatDisplayItemName(
+        items.find((item) => item.id === linkedUnit.itemId),
+        brands.find((brand) => brand.id === linkedUnit.brandId)
+      ),
+      brandName:
+        brands.find((brand) => brand.id === linkedUnit.brandId)?.name ??
+        "No manufacturer",
+    }
   })
 }
 
@@ -1227,34 +1477,35 @@ async function loadSupabaseData(filters: MovementFilters) {
   const noBarcodeStock = noBarcodeRows.map(mapNoBarcodeStock)
   const movements = filterMovements(
     movementRows
-      .map((row) => mapMovement(row, items, locations))
+      .map((row) => mapMovement(row, items, brands, units, locations))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     filters
   )
   const scanLogs = scanLogRows
     .map(mapScanLog)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  const balances = buildBalances(items, locations, units, noBarcodeStock)
+  const balances = buildBalances(items, brands, locations, units, noBarcodeStock)
   const stockTakeSessions = stockTakeSessionRows
     .map((row) => mapStockTakeSession(row, locations))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  const stockTakeLines = stockTakeLineRows.map((row) =>
-    mapStockTakeLine(row, items)
-  )
+  const stockTakeLines = stockTakeLineRows
+    .map((row) => mapStockTakeLine(row, items, brands))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const damageRequests = damageRequestRows
-    .map((row) => mapDamageRequest(row, items, locations))
+    .map((row) => mapDamageRequest(row, items, brands, locations))
     .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
   const returnSupplierRequests = returnSupplierRequestRows
-    .map((row) => mapReturnSupplierRequest(row, items, locations))
+    .map((row) => mapReturnSupplierRequest(row, items, brands, locations))
     .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
   const reports = buildReports(
     balances,
     units,
     items,
     brands,
+    origins,
     locations,
     movements,
-    buildStockAgeAlerts(units, items, locations),
+    buildStockAgeAlerts(units, items, brands, locations),
     scanLogs,
     damageRequests,
     returnSupplierRequests,
@@ -1282,6 +1533,7 @@ async function loadSupabaseData(filters: MovementFilters) {
     reports,
     dashboard: buildDashboard(
       items,
+      brands,
       locations,
       units,
       noBarcodeStock,
@@ -1298,19 +1550,24 @@ async function loadSupabaseData(filters: MovementFilters) {
 function buildDemoData(filters: MovementFilters): StockPageData {
   const balances = buildBalances(
     demoItems,
+    demoBrands,
     demoLocations,
     demoUnits,
     demoNoBarcodeStock
   )
-  const movements = filterMovements(demoMovements, filters)
+  const movements = filterMovements(
+    withMovementDisplayNames(demoMovements, demoItems, demoBrands, demoUnits),
+    filters
+  )
   const reports = buildReports(
     balances,
     demoUnits,
     demoItems,
     demoBrands,
+    demoOrigins,
     demoLocations,
     movements,
-    buildStockAgeAlerts(demoUnits, demoItems, demoLocations),
+    buildStockAgeAlerts(demoUnits, demoItems, demoBrands, demoLocations),
     demoScanLogs,
     demoDamageRequests,
     demoReturnSupplierRequests,
@@ -1338,6 +1595,7 @@ function buildDemoData(filters: MovementFilters): StockPageData {
     reports,
     dashboard: buildDashboard(
       demoItems,
+      demoBrands,
       demoLocations,
       demoUnits,
       demoNoBarcodeStock,
@@ -1384,9 +1642,9 @@ export async function getStockUnitDetailData(unitId: string) {
     data,
     unit: {
       ...unit,
-      itemName: item ? formatItemName(item) : "Unknown item",
+      itemName: formatDisplayItemName(item, brand),
       itemCode: item?.itemCode ?? "-",
-      brandName: brand?.name ?? "Unbranded",
+      brandName: brand?.name ?? "No manufacturer",
       originName: origin?.name ?? "Unknown origin",
       locationName: location?.name ?? "Unknown location",
     },
@@ -1399,16 +1657,22 @@ export function getSystemStockForItemLocation(
   item: Item,
   location: StockLocation
 ) {
-  const row = balances.find(
+  const scopedRows = balances.filter(
     (balance) =>
-      balance.itemName === formatItemName(item) &&
+      balance.itemId === item.id &&
       balance.locationName === location.name
   )
 
   return {
-    count: (row?.unitCount ?? 0) + (row?.noBarcodeQuantity ?? 0),
+    count: scopedRows.reduce(
+      (total, row) => total + row.unitCount + row.noBarcodeQuantity,
+      0
+    ),
     weightKg: roundWeight(
-      (row?.totalWeightKg ?? 0) + (row?.noBarcodeWeightKg ?? 0)
+      scopedRows.reduce(
+        (total, row) => total + row.totalWeightKg + row.noBarcodeWeightKg,
+        0
+      )
     ),
   }
 }

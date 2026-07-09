@@ -30,7 +30,8 @@ function stockPolicyFiles() {
     .filter(
       (file) =>
         /^2026061000(09|31|37|38|39|40|41|44)_.*\.sql$/.test(file) ||
-        /^202606230002_.*\.sql$/.test(file)
+        /^202606230002_.*\.sql$/.test(file) ||
+        /^202606250009_.*\.sql$/.test(file)
     )
     .sort()
 }
@@ -80,6 +81,9 @@ const damage = migration("202606100039_stock_damage_approval_v1.sql")
 const returnSupplier = migration("202606100040_stock_return_supplier_approval_v1.sql")
 const inboundRules = migration("202606100037_stock_inbound_labels_rules_v1.sql")
 const itemMaster = migration("202606100044_item_master_all_roles_v1.sql")
+const stockScanIssueReviewScope = migration(
+  "202606250009_stock_scan_issue_review_scope_v1.sql"
+)
 const allStockPolicySource = stockPolicyFiles()
   .map((file) => migration(file))
   .join("\n")
@@ -150,6 +154,24 @@ for (const [policyName, tableName, operation, guard] of scopedPolicyExpectations
     `Policy "${policyName}" on ${tableName} must keep guard ${guard}.`
   )
 }
+
+includesAll(
+  stockScanIssueReviewScope,
+  [
+    'drop policy if exists "stock users can read own scan logs" on public.barcode_scan_logs;',
+    'create policy "stock users can read own scan logs"',
+    "public.can_manage_stock_take()",
+    "public.can_access_stock_location(expected_location_id)",
+    "public.can_access_stock_location(scanned_location_id)",
+    'drop policy if exists "stock admins can update scan logs" on public.barcode_scan_logs;',
+    'create policy "stock admins can update scan logs"',
+    "review_status = 'OPEN'",
+    "review_status in ('APPROVED', 'REJECTED', 'CORRECTED')",
+    "reviewed_by = auth.uid()",
+    "reviewed_at is not null",
+  ],
+  "Stock scan issue scoped manager review policy"
+)
 
 includesAll(
   stockTake,

@@ -13,6 +13,13 @@ export const retailPaymentMethods = [
   "CREDIT",
 ] as const
 
+export const retailExpensePaymentMethods = [
+  "CASH",
+  "ONLINE_TRANSFER",
+  "EWALLET",
+  "CREDIT",
+] as const
+
 export const retailPaymentStatuses = [
   "UNPAID",
   "PARTIAL",
@@ -22,11 +29,22 @@ export const retailPaymentStatuses = [
 
 export const retailCashSessionStatuses = ["OPEN", "CLOSED"] as const
 
+export const retailClosingStatuses = [
+  "DRAFT",
+  "SUBMITTED",
+  "REVIEWED",
+  "APPROVED",
+  "REJECTED",
+] as const
+
 export const retailProcessingStatuses = [
+  "DRAFT",
+  "SUBMITTED",
+  "REVIEWED",
+  "REJECTED",
+  "CANCELLED",
   "OPEN",
   "COMPLETED",
-  "REVIEWED",
-  "CANCELLED",
 ] as const
 
 export const retailCleaningFrequencies = [
@@ -41,16 +59,18 @@ export const retailCleaningStatuses = ["PENDING", "DONE", "MISSED"] as const
 export const retailExpenseStatuses = [
   "SUBMITTED",
   "REVIEWED",
-  "APPROVED",
   "REJECTED",
-  "PAID",
+  "CANCELLED",
 ] as const
 
 export type RetailSaleStatus = (typeof retailSaleStatuses)[number]
 export type RetailPaymentMethod = (typeof retailPaymentMethods)[number]
+export type RetailExpensePaymentMethod =
+  (typeof retailExpensePaymentMethods)[number]
 export type RetailPaymentStatus = (typeof retailPaymentStatuses)[number]
 export type RetailCashSessionStatus =
   (typeof retailCashSessionStatuses)[number]
+export type RetailClosingStatus = (typeof retailClosingStatuses)[number]
 export type RetailProcessingStatus = (typeof retailProcessingStatuses)[number]
 export type RetailCleaningFrequency =
   (typeof retailCleaningFrequencies)[number]
@@ -168,6 +188,54 @@ export type RetailSaleLine = {
   notes: string
 }
 
+export type RetailDailySale = {
+  id: string
+  outletId: string | null
+  outletName: string
+  salesDate: string
+  status: "DRAFT" | "CONFIRMED"
+  cashSales: number
+  bankTransferSales: number
+  ewalletSales: number
+  creditSales: number
+  totalSales: number
+  attachmentUrl: string | null
+  attachmentStatus: "OK" | "MISSING"
+  createdByName: string
+  updatedByName: string
+  remarks: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type RetailDailyClosing = {
+  id: string
+  outletId: string | null
+  outletName: string
+  closingDate: string
+  openingCash: number
+  cashSales: number
+  bankTransferSales: number
+  ewalletSales: number
+  creditSales: number
+  cashExpenses: number
+  expectedCash: number
+  actualCashCounted: number
+  totalSales: number
+  cashReceived: number
+  expensesAmount: number
+  closingCash: number
+  varianceAmount: number
+  status: RetailClosingStatus
+  submittedByName: string
+  submittedAt: string | null
+  reviewedByName: string
+  reviewedAt: string | null
+  remarks: string
+  notes: string
+  createdAt: string
+}
+
 export type RetailPayment = {
   id: string
   saleId: string
@@ -197,31 +265,82 @@ export type RetailPriceRule = {
   active: boolean
 }
 
+export type RetailProcessingLine = {
+  id: string
+  itemId: string | null
+  itemName: string
+  quantity: number
+  weightKg: number
+  remarks: string
+}
+
+export type RetailProcessingBom = {
+  id: string
+  outletId: string | null
+  outletName: string
+  name: string
+  rawMaterialItemNames: string[]
+  finishedProductItemNames: string[]
+  active: boolean
+  remarks: string
+  expectedYieldMinPercent: number | null
+  expectedYieldMaxPercent: number | null
+  expectedWastagePercent: number | null
+  createdByName: string
+  createdAt: string
+  updatedByName: string
+  updatedAt: string
+}
+
 export type RetailProcessingBatch = {
   id: string
   batchNo: string
+  processingBomId: string | null
   outletId: string | null
   outletName: string
+  departmentId: string | null
+  departmentName: string
   stockLocationId: string | null
   stockLocationName: string
+  processingDate: string
+  processingType: string
+  rawLines: RetailProcessingLine[]
   rawItemLabel: string
   rawBrandName: string
   rawOriginName: string
   rawQuantity: number
   rawWeightKg: number
+  finishedLines: RetailProcessingLine[]
   finishedItemLabel: string
   finishedBrandName: string
   finishedOriginName: string
   finishedQuantity: number
   finishedWeightKg: number
+  wastageWeightKg: number
+  wastagePercent: number
+  wastageReason: string
+  wastagePhotoUrl: string | null
+  wastageRemarks: string
+  accountedWeightKg: number
+  unaccountedDifferenceKg: number
+  unaccountedDifferencePercent: number
   yieldPercent: number
   lossWeightKg: number
   processingMinYieldPercent: number | null
   processingMaxLossPercent: number | null
   yieldAlert: string
+  warningMessage: string
   status: RetailProcessingStatus
+  createdByName: string
+  createdAt: string
+  submittedByName: string
+  submittedAt: string | null
+  reviewedByName: string
+  reviewedAt: string | null
+  rejectionReason: string
   processedByName: string
   processedAt: string
+  remarks: string
   notes: string
 }
 
@@ -234,11 +353,17 @@ export type RetailCleaningTask = {
   taskName: string
   frequency: RetailCleaningFrequency
   dueDate: string
+  active: boolean
   status: RetailCleaningStatus
   assignedToName: string
   completedByName: string
   completedAt: string | null
-  notes: string
+  completionPhotoUrl: string | null
+  remarks: string
+  createdByName: string
+  createdAt: string
+  updatedByName: string
+  updatedAt: string
 }
 
 export type RetailExpense = {
@@ -247,18 +372,41 @@ export type RetailExpense = {
   outletName: string
   expenseDate: string
   category: string
-  vendor: string
+  supplierPayee: string
   amount: number
-  paymentMethod: RetailPaymentMethod
+  paymentMethod: RetailExpensePaymentMethod
   status: RetailExpenseStatus
-  receiptUrl: string
+  receiptUrl: string | null
+  submittedById: string | null
   submittedByName: string
+  submittedAt: string | null
   reviewedByName: string
-  approvedByName: string
-  paidByName: string
-  paidAt: string | null
-  notes: string
+  reviewedAt: string | null
+  rejectionReason: string
+  remarks: string
   createdAt: string
+}
+
+export type RetailExpenseCategory = {
+  id: string
+  outletId: string | null
+  outletName: string
+  name: string
+  active: boolean
+}
+
+export type RetailAuditLog = {
+  id: string
+  tableName: string
+  recordId: string
+  outletId: string | null
+  outletName: string
+  fieldChanged: string
+  oldValue: string
+  newValue: string
+  editedByName: string
+  editedAt: string
+  reason: string
 }
 
 export type RetailStockUnit = {
@@ -296,6 +444,17 @@ export type RetailKpi = {
   detail: string
 }
 
+export type RetailReportFilters = {
+  date?: string
+  dateFrom?: string
+  dateTo?: string
+  outletId?: string
+  paymentMethod?: string
+  status?: string
+  processingItem?: string
+  processingType?: string
+}
+
 export type RetailPageData = {
   demoMode: boolean
   people: RetailPerson[]
@@ -307,13 +466,18 @@ export type RetailPageData = {
   origins: RetailOrigin[]
   registers: RetailRegister[]
   cashSessions: RetailCashSession[]
+  dailySales: RetailDailySale[]
+  dailyClosings: RetailDailyClosing[]
   sales: RetailSale[]
   saleLines: RetailSaleLine[]
   payments: RetailPayment[]
   priceRules: RetailPriceRule[]
+  processingBoms: RetailProcessingBom[]
   processingBatches: RetailProcessingBatch[]
   cleaningTasks: RetailCleaningTask[]
+  expenseCategories: RetailExpenseCategory[]
   expenses: RetailExpense[]
+  auditLogs: RetailAuditLog[]
   stockUnits: RetailStockUnit[]
   noBarcodeStock: RetailNoBarcodeStock[]
   dashboard: {

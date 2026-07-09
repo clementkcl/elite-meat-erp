@@ -1,0 +1,8 @@
+.git
+.next
+.worktrees
+node_modules
+tmp-*
+*.log
+*.pid
+.env*

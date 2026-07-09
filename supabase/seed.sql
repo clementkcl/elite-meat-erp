@@ -32,17 +32,49 @@ cross join (values
   ('SUNGAI MERAH'),
   ('WONDERFUL'),
   ('SUNGAI MAAW'),
-  ('DIRECTOR')
+  ('DIRECTOR'),
+  ('QA NO ORDERS')
 ) as outlets(outlet_name)
 where b.name = 'Elite Meat Main'
 on conflict (name) do nothing;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'outlets'
+      and column_name = 'order_code'
+  ) then
+    update public.outlets
+    set order_code = case name
+      when 'JALAN CHANNEL' then '10'
+      when 'SUNGAI MERAH' then '11'
+      when 'WONDERFUL' then '12'
+      when 'SUNGAI MAAW' then '13'
+      when 'QA NO ORDERS' then '98'
+      when 'DIRECTOR' then '99'
+      else order_code
+    end
+    where name in (
+      'JALAN CHANNEL',
+      'SUNGAI MERAH',
+      'WONDERFUL',
+      'SUNGAI MAAW',
+      'QA NO ORDERS',
+      'DIRECTOR'
+    );
+  end if;
+end $$;
 
 insert into public.stock_locations (name) values
   ('JALAN CHANNEL'),
   ('SUNGAI MERAH'),
   ('WONDERFUL'),
   ('SUNGAI MAAW'),
-  ('DIRECTOR')
+  ('DIRECTOR'),
+  ('QA NO ORDERS')
 on conflict (name) do update set is_active = true;
 
 insert into public.outlet_module_access (outlet_id, module_key, is_enabled)
@@ -63,6 +95,238 @@ cross join (
 ) as module(module_key)
 on conflict (outlet_id, module_key) do update set
   is_enabled = excluded.is_enabled;
+
+update public.outlet_module_access access
+set is_enabled = false,
+    updated_at = now()
+from public.outlets outlet
+where access.outlet_id = outlet.id
+  and outlet.name = 'QA NO ORDERS'
+  and access.module_key in ('orders', 'delivery', 'retail', 'processing');
+
+do $$
+declare
+  qa_password text := 'ChangeMe-QA-2026!';
+  qa_instance_id uuid := '00000000-0000-0000-0000-000000000000';
+  qa_branch_id uuid;
+  qa_user_id uuid;
+  qa_email text;
+  identity_id_type text;
+  qa record;
+begin
+  select id into qa_branch_id
+  from public.branches
+  where name = 'Elite Meat Main';
+
+  for qa in
+    select *
+    from (values
+      ('qa.retail.worker.jc@example.test', 'QA Retail Worker JC', 'retail_team_general_worker', 'JALAN CHANNEL', 'Retail', 'JALAN CHANNEL'),
+      ('qa.retail.worker.sm@example.test', 'QA Retail Worker SM', 'retail_team_general_worker', 'SUNGAI MERAH', 'Retail', 'SUNGAI MERAH'),
+      ('qa.retail.worker.wf@example.test', 'QA Retail Worker WF', 'retail_team_general_worker', 'WONDERFUL', 'Retail', 'WONDERFUL'),
+      ('qa.retail.worker.smaaw@example.test', 'QA Retail Worker SMAAW', 'retail_team_general_worker', 'SUNGAI MAAW', 'Retail', 'SUNGAI MAAW'),
+      ('qa.retail.manager.jc@example.test', 'QA Retail Manager JC', 'retail_manager', 'JALAN CHANNEL', 'Retail', 'JALAN CHANNEL'),
+      ('qa.retail.manager.sm@example.test', 'QA Retail Manager SM', 'retail_manager', 'SUNGAI MERAH', 'Retail', 'SUNGAI MERAH'),
+      ('qa.retail.manager.wf@example.test', 'QA Retail Manager WF', 'retail_manager', 'WONDERFUL', 'Retail', 'WONDERFUL'),
+      ('qa.retail.manager.smaaw@example.test', 'QA Retail Manager SMAAW', 'retail_manager', 'SUNGAI MAAW', 'Retail', 'SUNGAI MAAW'),
+      ('qa.delivery.worker.jc@example.test', 'QA Delivery Worker JC', 'delivery_team_general_worker', 'JALAN CHANNEL', 'Delivery', 'JALAN CHANNEL'),
+      ('qa.delivery.worker.sm@example.test', 'QA Delivery Worker SM', 'delivery_team_general_worker', 'SUNGAI MERAH', 'Delivery', 'SUNGAI MERAH'),
+      ('qa.delivery.worker.wf@example.test', 'QA Delivery Worker WF', 'delivery_team_general_worker', 'WONDERFUL', 'Delivery', 'WONDERFUL'),
+      ('qa.delivery.worker.smaaw@example.test', 'QA Delivery Worker SMAAW', 'delivery_team_general_worker', 'SUNGAI MAAW', 'Delivery', 'SUNGAI MAAW'),
+      ('qa.delivery.manager.jc@example.test', 'QA Delivery Manager JC', 'delivery_manager', 'JALAN CHANNEL', 'Delivery', 'JALAN CHANNEL'),
+      ('qa.delivery.manager.sm@example.test', 'QA Delivery Manager SM', 'delivery_manager', 'SUNGAI MERAH', 'Delivery', 'SUNGAI MERAH'),
+      ('qa.delivery.manager.wf@example.test', 'QA Delivery Manager WF', 'delivery_manager', 'WONDERFUL', 'Delivery', 'WONDERFUL'),
+      ('qa.delivery.manager.smaaw@example.test', 'QA Delivery Manager SMAAW', 'delivery_manager', 'SUNGAI MAAW', 'Delivery', 'SUNGAI MAAW'),
+      ('qa.processing.worker.jc@example.test', 'QA Processing Worker JC', 'processing_team_general_worker', 'JALAN CHANNEL', 'Processing', 'JALAN CHANNEL'),
+      ('qa.processing.worker.sm@example.test', 'QA Processing Worker SM', 'processing_team_general_worker', 'SUNGAI MERAH', 'Processing', 'SUNGAI MERAH'),
+      ('qa.processing.worker.wf@example.test', 'QA Processing Worker WF', 'processing_team_general_worker', 'WONDERFUL', 'Processing', 'WONDERFUL'),
+      ('qa.processing.worker.smaaw@example.test', 'QA Processing Worker SMAAW', 'processing_team_general_worker', 'SUNGAI MAAW', 'Processing', 'SUNGAI MAAW'),
+      ('qa.processing.manager.jc@example.test', 'QA Processing Manager JC', 'processing_manager', 'JALAN CHANNEL', 'Processing', 'JALAN CHANNEL'),
+      ('qa.processing.manager.sm@example.test', 'QA Processing Manager SM', 'processing_manager', 'SUNGAI MERAH', 'Processing', 'SUNGAI MERAH'),
+      ('qa.processing.manager.wf@example.test', 'QA Processing Manager WF', 'processing_manager', 'WONDERFUL', 'Processing', 'WONDERFUL'),
+      ('qa.processing.manager.smaaw@example.test', 'QA Processing Manager SMAAW', 'processing_manager', 'SUNGAI MAAW', 'Processing', 'SUNGAI MAAW'),
+      ('qa.account.jc@example.test', 'QA Account JC', 'account', 'JALAN CHANNEL', 'Accounting', 'JALAN CHANNEL'),
+      ('qa.account.sm@example.test', 'QA Account SM', 'account', 'SUNGAI MERAH', 'Accounting', 'SUNGAI MERAH'),
+      ('qa.account.wf@example.test', 'QA Account WF', 'account', 'WONDERFUL', 'Accounting', 'WONDERFUL'),
+      ('qa.account.smaaw@example.test', 'QA Account SMAAW', 'account', 'SUNGAI MAAW', 'Accounting', 'SUNGAI MAAW'),
+      ('qa.account.global@example.test', 'QA Global Account', 'account', 'DIRECTOR', 'Accounting', 'DIRECTOR'),
+      ('qa.admin@example.test', 'QA Admin', 'admin', 'DIRECTOR', 'Admin', 'DIRECTOR'),
+      ('qa.director@example.test', 'QA Director', 'director', 'DIRECTOR', 'Management', 'DIRECTOR'),
+      ('qa.noorders@example.test', 'QA No Orders Worker', 'retail_team_general_worker', 'QA NO ORDERS', 'Retail', 'QA NO ORDERS')
+    ) as matrix(email, full_name, role_key, outlet_name, department_name, stock_location_name)
+  loop
+    qa_email := lower(qa.email);
+
+    select id into qa_user_id
+    from auth.users
+    where lower(email) = qa_email
+    limit 1;
+
+    if qa_user_id is null then
+      qa_user_id := (
+        substr(md5('elite-meat-erp-qa:' || qa_email), 1, 8) || '-' ||
+        substr(md5('elite-meat-erp-qa:' || qa_email), 9, 4) || '-' ||
+        substr(md5('elite-meat-erp-qa:' || qa_email), 13, 4) || '-' ||
+        substr(md5('elite-meat-erp-qa:' || qa_email), 17, 4) || '-' ||
+        substr(md5('elite-meat-erp-qa:' || qa_email), 21, 12)
+      )::uuid;
+
+      insert into auth.users (
+        id,
+        instance_id,
+        aud,
+        role,
+        email,
+        encrypted_password,
+        email_confirmed_at,
+        confirmation_token,
+        recovery_token,
+        email_change_token_new,
+        email_change_token_current,
+        email_change,
+        phone_change,
+        phone_change_token,
+        reauthentication_token,
+        raw_app_meta_data,
+        raw_user_meta_data,
+        created_at,
+        updated_at
+      )
+      values (
+        qa_user_id,
+        qa_instance_id,
+        'authenticated',
+        'authenticated',
+        qa_email,
+        crypt(qa_password, gen_salt('bf')),
+        now(),
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '{"provider":"email","providers":["email"]}'::jsonb,
+        jsonb_build_object('full_name', qa.full_name, 'qa_user', true),
+        now(),
+        now()
+      );
+    else
+      update auth.users
+      set aud = 'authenticated',
+          role = 'authenticated',
+          encrypted_password = crypt(qa_password, gen_salt('bf')),
+          email_confirmed_at = coalesce(email_confirmed_at, now()),
+          confirmation_token = coalesce(confirmation_token, ''),
+          recovery_token = coalesce(recovery_token, ''),
+          email_change_token_new = coalesce(email_change_token_new, ''),
+          email_change_token_current = coalesce(email_change_token_current, ''),
+          email_change = coalesce(email_change, ''),
+          phone_change = coalesce(phone_change, ''),
+          phone_change_token = coalesce(phone_change_token, ''),
+          reauthentication_token = coalesce(reauthentication_token, ''),
+          raw_app_meta_data = '{"provider":"email","providers":["email"]}'::jsonb,
+          raw_user_meta_data = jsonb_build_object('full_name', qa.full_name, 'qa_user', true),
+          updated_at = now()
+      where id = qa_user_id;
+    end if;
+
+    if to_regclass('auth.identities') is not null then
+      delete from auth.identities
+      where user_id = qa_user_id
+        and provider = 'email';
+
+      select data_type into identity_id_type
+      from information_schema.columns
+      where table_schema = 'auth'
+        and table_name = 'identities'
+        and column_name = 'id';
+
+      if identity_id_type = 'uuid' then
+        insert into auth.identities (
+          id,
+          user_id,
+          provider_id,
+          identity_data,
+          provider,
+          last_sign_in_at,
+          created_at,
+          updated_at
+        )
+        values (
+          gen_random_uuid(),
+          qa_user_id,
+          qa_user_id::text,
+          jsonb_build_object('sub', qa_user_id::text, 'email', qa_email, 'email_verified', true),
+          'email',
+          now(),
+          now(),
+          now()
+        );
+      else
+        insert into auth.identities (
+          id,
+          user_id,
+          provider_id,
+          identity_data,
+          provider,
+          last_sign_in_at,
+          created_at,
+          updated_at
+        )
+        values (
+          qa_user_id::text,
+          qa_user_id,
+          qa_user_id::text,
+          jsonb_build_object('sub', qa_user_id::text, 'email', qa_email, 'email_verified', true),
+          'email',
+          now(),
+          now(),
+          now()
+        );
+      end if;
+    end if;
+
+    insert into public.profiles (
+      id,
+      email,
+      full_name,
+      branch_id,
+      outlet_id,
+      department_id,
+      stock_location_id
+    )
+    select
+      qa_user_id,
+      qa_email,
+      qa.full_name,
+      qa_branch_id,
+      outlet.id,
+      department.id,
+      stock_location.id
+    from public.outlets outlet
+    join public.departments department on department.name = qa.department_name
+    join public.stock_locations stock_location on stock_location.name = qa.stock_location_name
+    where outlet.name = qa.outlet_name
+    on conflict (id) do update set
+      email = excluded.email,
+      full_name = excluded.full_name,
+      branch_id = excluded.branch_id,
+      outlet_id = excluded.outlet_id,
+      department_id = excluded.department_id,
+      stock_location_id = excluded.stock_location_id,
+      updated_at = now();
+
+    delete from public.profile_roles
+    where profile_id = qa_user_id;
+
+    insert into public.profile_roles (profile_id, role_key)
+    values (qa_user_id, qa.role_key)
+    on conflict do nothing;
+  end loop;
+end $$;
 
 insert into public.erp_claim_categories (code, name, sort_order) values
   ('TRAVEL', 'Travel', 10),
@@ -251,20 +515,22 @@ insert into public.items (
   section,
   name,
   barcode_required,
+  default_weight_kg,
   processing_min_yield_percent,
   processing_max_loss_percent
 ) values
-  ('0001', 'MEAT', 'BELLY', 'BONELESS', true, 85.00, 15.00),
-  ('0002', 'MEAT', 'BELLY', 'BONE IN', true, 80.00, 20.00),
-  ('0003', 'MEAT', 'LOIN', 'BONELESS', true, 88.00, 12.00),
-  ('0004', 'ORGANS', 'COOKED', 'STOMACH', true, 70.00, 30.00),
-  ('0005', 'ORGANS', 'TONGUE', 'TONGUE', true, 75.00, 25.00),
-  ('0006', 'PROCESSED', 'MEATBALL', 'MEATBALL', false, 90.00, 10.00)
+  ('0001', 'MEAT', 'BELLY', 'BONELESS', true, null, 85.00, 15.00),
+  ('0002', 'MEAT', 'BELLY', 'BONE IN', true, null, 80.00, 20.00),
+  ('0003', 'MEAT', 'LOIN', 'BONELESS', true, null, 88.00, 12.00),
+  ('0004', 'ORGANS', 'COOKED', 'STOMACH', true, null, 70.00, 30.00),
+  ('0005', 'ORGANS', 'TONGUE', 'TONGUE', true, null, 75.00, 25.00),
+  ('0006', 'PROCESSED', 'MEATBALL', 'MEATBALL', false, 0.500, 90.00, 10.00)
 on conflict (item_code) do update set
   category = excluded.category,
   section = excluded.section,
   name = excluded.name,
   barcode_required = excluded.barcode_required,
+  default_weight_kg = excluded.default_weight_kg,
   processing_min_yield_percent = excluded.processing_min_yield_percent,
   processing_max_loss_percent = excluded.processing_max_loss_percent,
   is_active = true;
@@ -281,6 +547,21 @@ from (
 ) as seed(item_code, brand_name)
 join public.brands brand on brand.name = seed.brand_name
 where item.item_code = seed.item_code;
+
+update public.items item
+set display_name = trim(
+  concat_ws(
+    ' ',
+    nullif(brand.name, ''),
+    case
+      when upper(trim(item.section)) = 'GENERAL' then trim(item.name)
+      when lower(trim(item.name)) like lower(trim(item.section)) || '%' then trim(item.name)
+      else trim(item.section) || ' ' || trim(item.name)
+    end
+  )
+)
+from public.brands brand
+where item.default_brand_id = brand.id;
 
 insert into public.barcode_weight_rules (
   item_id,

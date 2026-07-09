@@ -209,6 +209,10 @@ begin
     return new;
   end if;
 
+  if current_setting('app.delivery_status_sync', true) = 'true' then
+    return new;
+  end if;
+
   if public.is_admin_or_director() then
     return new;
   end if;

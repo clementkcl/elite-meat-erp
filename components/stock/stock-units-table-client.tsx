@@ -5,8 +5,8 @@ import type { StockReportTableRow } from "@/lib/stock/report-export"
 
 const unitColumns: DataTableColumn<StockReportTableRow>[] = [
   { key: "barcode", header: "Barcode" },
-  { key: "itemName", header: "Item" },
-  { key: "brandName", header: "Brand" },
+  { key: "itemName", header: "Product" },
+  { key: "brandName", header: "Manufacturer" },
   { key: "originName", header: "Origin" },
   { key: "locationName", header: "Location" },
   { key: "status", header: "Status" },

@@ -1,18 +1,13 @@
-export type BarcodeLabelItem = {
-  itemCode?: string | null
-}
-
 export function makeInternalBarcode(
-  item: BarcodeLabelItem | undefined,
+  sessionCode: string | null | undefined,
   weightKg: string,
-  serial: number,
-  date = new Date()
+  serial: number
 ) {
-  const itemCode = item?.itemCode?.trim() ?? ""
+  const sessionPart = sessionCode?.replace(/\D/g, "") ?? ""
   const weightGrams = Math.round(Number(weightKg) * 1000)
 
   if (
-    !/^\d+$/.test(itemCode) ||
+    !sessionPart ||
     !Number.isInteger(serial) ||
     serial < 1 ||
     serial > 9999 ||
@@ -22,24 +17,22 @@ export function makeInternalBarcode(
     return ""
   }
 
-  const datePart = date.toISOString().slice(0, 10).replaceAll("-", "")
   const weightPart = String(weightGrams).padStart(6, "0").slice(-6)
   const serialPart = String(serial).padStart(4, "0")
 
-  return `${datePart}${itemCode.padStart(4, "0")}${weightPart}${serialPart}`
+  return `${sessionPart}${serialPart}${weightPart}`
 }
 
 export function makeUniqueInternalBarcode(
-  item: BarcodeLabelItem | undefined,
+  sessionCode: string | null | undefined,
   weightKg: string,
   existingBarcodes: string[],
-  startSerial = 1,
-  date = new Date()
+  startSerial = 1
 ) {
   const blockedBarcodes = new Set(existingBarcodes.map((barcode) => barcode.trim()))
 
   for (let serial = Math.max(1, startSerial); serial <= 9999; serial += 1) {
-    const barcode = makeInternalBarcode(item, weightKg, serial, date)
+    const barcode = makeInternalBarcode(sessionCode, weightKg, serial)
 
     if (barcode && !blockedBarcodes.has(barcode)) {
       return { barcode, serial }

@@ -1,7 +1,10 @@
 export type ProcessingBatchStatus =
+  | "DRAFT"
+  | "SUBMITTED"
   | "OPEN"
   | "COMPLETED"
   | "REVIEWED"
+  | "REJECTED"
   | "CANCELLED"
 
 export type ProcessingBatchSummary = {

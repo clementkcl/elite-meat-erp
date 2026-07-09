@@ -61,6 +61,9 @@ const stockTakeRules = read("lib/stock/stock-take-rules.ts")
 const workflowForms = read("components/stock/workflow-forms.tsx")
 const regression = read("scripts/stock-workflow-regression.mjs")
 const acceptance = read("scripts/stock-acceptance-coverage.mjs")
+const mobileWorkerMvpMigration = read(
+  "supabase/migrations/202606230002_stock_mobile_worker_mvp_v1.sql"
+)
 const stockTakeApprovalRpc = read(
   "supabase/migrations/202606100052_stock_take_barcode_variance_rpc_v1.sql"
 )
@@ -77,7 +80,7 @@ includesAll(
     "String(session.item_id ?? \"\") === input.itemId",
     "sameNullableId(session.brand_id, input.brandId)",
     "STOCK_TAKE_OPERATION_WARNING",
-    "Stock take is active for this item/brand/location.",
+    "Stock take is active for this item/manufacturer/location.",
     "You can continue, but this movement will be recorded.",
   ],
   "Stock take selected item+brand warning helper"
@@ -135,6 +138,34 @@ includesAll(
 )
 
 includesAll(
+  functionBody(actions, "createStockTakeSessionAction") +
+    mobileWorkerMvpMigration,
+  [
+    "runStockAction(formData, stockOperatorRoles",
+    "assertStockLocationAccess",
+    "create stock take",
+    "stock users can create scoped draft stock take sessions",
+    "with check (",
+    "public.can_manage_stock()",
+    "public.can_access_stock_location(location_id)",
+    "status = 'DRAFT'",
+  ],
+  "Stock workers can start scoped draft stock take sessions"
+)
+
+includesAll(
+  functionBody(actions, "reviewStockTakeAction") +
+    functionBody(actions, "approveStockTakeAction"),
+  [
+    "runStockAction(formData, stockManagerRoles",
+    "runStockAction(formData, stockDirectorApprovalRoles",
+    "managerSignature",
+    "directorSignature",
+  ],
+  "Stock take review and approval remain protected"
+)
+
+includesAll(
   stockTakeRules + regression,
   [
     "export function sameNullableId",
@@ -152,10 +183,21 @@ includesAll(
   workflowForms,
   [
     "Barcode-only count",
-    "Wrong item/brand blocked.",
+    "Wrong item/manufacturer blocked.",
     "Unknown barcode is exception.",
     "Missing barcode adjustment waits for manager",
-    "Stock take is active for this item/brand/location. You can",
+    "Finish Count",
+    "Counted quantity",
+    "Counted weight",
+    "Extra scanned count",
+    "Missing expected count",
+    "Wrong item count",
+    "Wrong location count",
+    "Mismatch report waits for approval.",
+    "activeStockStatus(unit.status)",
+    "selectedExpectedUnits",
+    "wrongItemScanCount",
+    "Stock take is active for this item/manufacturer/location. You can",
   ],
   "Stock take worker warning guidance"
 )
@@ -192,6 +234,8 @@ includesAll(
     "missingCount",
     "barcodeVarianceComputed",
     "Stock take missing barcode adjusted out",
+    "director_approved_at",
+    "manager_signature",
   ],
   "Stock take review and approval require scanned lines"
 )
@@ -207,6 +251,10 @@ includesAll(
     "exception_status",
     "UNKNOWN_BARCODE",
     "WRONG_LOCATION",
+    "Pending stock take exceptions",
+    "pendingStockTakeExceptions",
+    "Review these before final approval.",
+    "Next: manager review, then director approval.",
     "Stock take unknown barcode created after approval",
     "Stock take wrong-location barcode moved after approval",
     "exceptionLines",

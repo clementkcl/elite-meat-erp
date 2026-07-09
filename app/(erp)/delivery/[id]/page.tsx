@@ -31,10 +31,12 @@ export default async function DeliveryDetailRoute({
   }
 
   const [{ id }, profile] = await Promise.all([params, requireCurrentProfile()])
+  const canManageDelivery =
+    profile.roles.includes("delivery_manager") || profile.roles.includes("admin")
   const result = await Promise.all([
     getDeliveryById(id),
     getDeliveryVehicles(),
-    getDeliveryDrivers(),
+    canManageDelivery ? getDeliveryDrivers() : Promise.resolve([]),
   ])
     .then(([delivery, vehicles, drivers]) => ({
       delivery,

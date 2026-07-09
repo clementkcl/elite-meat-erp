@@ -46,6 +46,7 @@ import {
   type DeliveryExpense,
   type DeliveryExpenseType,
   type DeliveryFailedReason,
+  type DeliveryUpcomingOrder,
   type Vehicle,
 } from "@/lib/delivery/types"
 
@@ -74,6 +75,8 @@ function Message({ state }: { state: MessageState }) {
 
   return (
     <div
+      role={state.status === "error" ? "alert" : "status"}
+      aria-live={state.status === "error" ? "assertive" : "polite"}
       className={
         state.status === "success"
           ? "rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
@@ -156,6 +159,69 @@ function deliverySummary(delivery: Delivery) {
   return `${delivery.totalWeightKg.toLocaleString(undefined, {
     maximumFractionDigits: 1,
   })} kg / ${delivery.itemCount} item${delivery.itemCount === 1 ? "" : "s"}`
+}
+
+function kg(value: number) {
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} kg`
+}
+
+function driverStepText(delivery: Delivery) {
+  switch (delivery.status) {
+    case "AVAILABLE":
+      return "Tap Accept Delivery to take this job."
+    case "ACCEPTED":
+      return "Next: load the goods, then tap Loaded."
+    case "LOADED":
+      return "Next: tap Start Delivery when leaving the outlet."
+    case "OUT_FOR_DELIVERY":
+      return "Next: visit the customer, then upload Delivered or Failed proof photo."
+    case "DELIVERED":
+      return "Done. Proof photo was uploaded."
+    case "FAILED":
+      return "Failed proof uploaded. Manager must check the return follow-up."
+    default:
+      return "Check this delivery with a manager."
+  }
+}
+
+function driverMainAction(delivery: Delivery) {
+  switch (delivery.status) {
+    case "AVAILABLE":
+      return {
+        title: "Main action: Accept this job",
+        detail: "No typing needed unless the vehicle is wrong.",
+      }
+    case "ACCEPTED":
+      return {
+        title: "Main action: Tap Loaded",
+        detail: "Use this after the goods are on the vehicle.",
+      }
+    case "LOADED":
+      return {
+        title: "Main action: Start Delivery",
+        detail: "Use this when leaving the outlet for the customer.",
+      }
+    case "OUT_FOR_DELIVERY":
+      return {
+        title: "Main action: Upload proof photo",
+        detail: "Delivered and Failed both need a photo before completion.",
+      }
+    case "DELIVERED":
+      return {
+        title: "Main action: Check next job",
+        detail: "This job is complete after proof upload.",
+      }
+    case "FAILED":
+      return {
+        title: "Main action: Tell manager",
+        detail: "Failed delivery needs manager return follow-up.",
+      }
+    default:
+      return {
+        title: "Main action: Ask manager",
+        detail: "This delivery needs review before continuing.",
+      }
+  }
 }
 
 async function getPhoneGps() {
@@ -285,6 +351,8 @@ function DeliveryCardShell({
   delivery: Delivery
   children?: ReactNode
 }) {
+  const mainAction = driverMainAction(delivery)
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="space-y-3">
@@ -302,8 +370,24 @@ function DeliveryCardShell({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2 text-sm">
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">
+            <div className="text-base font-semibold">{mainAction.title}</div>
+            <div className="mt-1 text-sm text-emerald-950/75">
+              {mainAction.detail}
+            </div>
+          </div>
+          <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium">
+            {driverStepText(delivery)}
+          </div>
           {delivery.deliveryNote ? (
-            <div className="break-words font-medium">{delivery.deliveryNote}</div>
+            <div className="rounded-md border bg-muted/30 p-3">
+              <div className="text-xs font-medium uppercase text-muted-foreground">
+                Customer remarks
+              </div>
+              <div className="mt-1 break-words font-medium">
+                {delivery.deliveryNote}
+              </div>
+            </div>
           ) : null}
           <div className="flex gap-2 break-words text-muted-foreground">
             <MapPin className="mt-0.5 size-4 shrink-0" />
@@ -331,6 +415,7 @@ function AvailableCard({
   const { pending, message, run } = useDeliveryAction()
   const [showVehicle, setShowVehicle] = useState(false)
   const [vehicleId, setVehicleId] = useState("")
+  const acceptSteps = ["Tap Accept", "Load goods", "Tap Loaded", "Start delivery"]
 
   return (
     <DeliveryCardShell delivery={delivery}>
@@ -354,25 +439,44 @@ function AvailableCard({
         </div>
       ) : null}
 
+      <div className="rounded-md border bg-muted/30 p-3">
+        <div className="text-sm font-semibold">Driver accept steps</div>
+        <div className="mt-1 text-sm text-muted-foreground">
+          No typing for normal accept. Use Change Vehicle only when needed.
+        </div>
+        <div className="mt-3 grid gap-2 min-[360px]:grid-cols-4">
+          {acceptSteps.map((step, index) => (
+            <div key={step} className="rounded-md border bg-background px-3 py-3">
+              <div className="text-xs font-medium text-muted-foreground">
+                Step {index + 1}
+              </div>
+              <div className="mt-1 text-sm font-semibold">{step}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+        One tap accepts this delivery. Change vehicle only when the default is wrong.
+      </div>
+      <Button
+        type="button"
+        disabled={pending}
+        className="min-h-16 w-full text-base"
+        onClick={() =>
+          run(
+            () => acceptDelivery(delivery.id, vehicleId || null),
+            "Delivery accepted. Next: load goods, then tap Loaded."
+          )
+        }
+      >
+        <Truck className="size-5" />
+        {pending ? "Accepting..." : "Accept Delivery"}
+      </Button>
       <div className="grid gap-2 min-[360px]:grid-cols-2">
         <Button
           type="button"
-          disabled={pending}
-          className="min-h-12 text-base"
-          onClick={() =>
-            run(
-              () => acceptDelivery(delivery.id, vehicleId || null),
-              "Delivery accepted."
-            )
-          }
-        >
-          <Truck className="size-5" />
-          Accept Delivery
-        </Button>
-        <Button
-          type="button"
           variant="outline"
-          className="min-h-12 text-base"
+          className="min-h-12 w-full text-base"
           onClick={() => setShowVehicle((value) => !value)}
         >
           Change Vehicle
@@ -497,6 +601,82 @@ function AddressIssueForm({ delivery }: { delivery: Delivery }) {
   )
 }
 
+function ProofSuccessNextStep({
+  outcome,
+  state,
+}: {
+  outcome: "DELIVERED" | "FAILED"
+  state: MessageState
+}) {
+  if (state.status !== "success" || !state.message.includes("proof uploaded")) {
+    return null
+  }
+
+  const steps =
+    outcome === "FAILED"
+      ? ["Failed proof saved", "Tell manager", "Return follow-up"]
+      : ["Delivery complete", "Check next job", "Completed tab"]
+
+  return (
+    <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+      <div className="flex items-start gap-2">
+        <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-700" />
+        <div>
+          <p className="text-sm font-semibold text-emerald-900">
+            Proof uploaded
+          </p>
+          <p className="text-sm text-emerald-900/75">
+            {outcome === "FAILED"
+              ? "Manager must review the failed delivery and stock return follow-up."
+              : "This delivery is complete. Continue with the next job if one is shown."}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-2 min-[380px]:grid-cols-3">
+        {steps.map((step, index) => (
+          <div key={step} className="rounded-md border bg-background/80 px-3 py-2">
+            <div className="text-xs font-medium text-muted-foreground">
+              Next {index + 1}
+            </div>
+            <div className="mt-1 text-sm font-semibold">{step}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ProofBlockedGuide({ status }: { status: Delivery["status"] }) {
+  if (status !== "ACCEPTED" && status !== "LOADED") {
+    return null
+  }
+
+  const steps =
+    status === "ACCEPTED"
+      ? ["Accept done", "Tap Loaded", "Start Delivery", "Proof buttons appear"]
+      : ["Loaded done", "Tap Start Delivery", "Visit customer", "Proof buttons appear"]
+
+  return (
+    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      <div className="font-semibold">Proof photo locked until Start Delivery</div>
+      <p className="mt-1">
+        Finish the current step first. Delivered and Failed proof buttons appear
+        after Start Delivery.
+      </p>
+      <div className="mt-3 grid gap-2 min-[380px]:grid-cols-4">
+        {steps.map((step, index) => (
+          <div key={step} className="rounded-md border bg-background px-3 py-2">
+            <div className="text-xs font-medium text-muted-foreground">
+              Step {index + 1}
+            </div>
+            <div className="mt-1 font-semibold">{step}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ProofForm({
   delivery,
   outcome,
@@ -511,6 +691,10 @@ function ProofForm({
   const [failedReason, setFailedReason] =
     useState<DeliveryFailedReason>("CUSTOMER_NOT_AVAILABLE")
   const [remarks, setRemarks] = useState("")
+  const proofSteps =
+    outcome === "FAILED"
+      ? ["Choose reason", "Take proof photo", "Manager follow-up"]
+      : ["Take proof photo", "GPS tried", "Delivery complete"]
 
   function openCamera() {
     if (outcome === "FAILED" && failedReason === "OTHER" && !remarks.trim()) {
@@ -526,45 +710,81 @@ function ProofForm({
       return
     }
 
-    run(async () => {
-      const gps = await getPhoneGps()
-      const watermarked = await watermarkProof(file, [
-        delivery.deliveryNo,
-        delivery.customerName,
-        driverName,
-        new Date().toLocaleString("en"),
-        gps
-          ? `GPS ${gps.latitude}, ${gps.longitude}`
-          : "GPS unavailable",
-      ])
+    run(
+      async () => {
+        const gps = await getPhoneGps()
+        const watermarked = await watermarkProof(file, [
+          delivery.deliveryNo,
+          delivery.customerName,
+          driverName,
+          new Date().toLocaleString("en"),
+          gps ? `GPS ${gps.latitude}, ${gps.longitude}` : "GPS unavailable",
+        ])
 
-      if (outcome === "FAILED") {
-        await uploadFailedProofAndComplete(
-          delivery.id,
-          watermarked,
-          gps
-            ? { latitude: gps.latitude, longitude: gps.longitude }
-            : { unavailable: true },
-          failedReason,
-          remarks.trim() || null
-        )
-      } else {
-        await uploadDeliveredProofAndComplete(
-          delivery.id,
-          watermarked,
-          gps
-            ? { latitude: gps.latitude, longitude: gps.longitude }
-            : { unavailable: true }
-        )
-      }
-      if (inputRef.current) {
-        inputRef.current.value = ""
-      }
-    }, outcome === "FAILED" ? "Failed proof uploaded." : "Delivered proof uploaded.")
+        if (outcome === "FAILED") {
+          await uploadFailedProofAndComplete(
+            delivery.id,
+            watermarked,
+            gps
+              ? { latitude: gps.latitude, longitude: gps.longitude }
+              : { unavailable: true },
+            failedReason,
+            remarks.trim() || null
+          )
+        } else {
+          await uploadDeliveredProofAndComplete(
+            delivery.id,
+            watermarked,
+            gps
+              ? { latitude: gps.latitude, longitude: gps.longitude }
+              : { unavailable: true }
+          )
+        }
+        if (inputRef.current) {
+          inputRef.current.value = ""
+        }
+      },
+      outcome === "FAILED"
+        ? "Failed proof uploaded. Next: tell the manager if stock needs return follow-up."
+        : "Delivered proof uploaded. This delivery is complete."
+    )
   }
 
   return (
     <div className="space-y-3 rounded-md border p-3">
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 font-medium">
+          <Camera className="size-5" />
+          {outcome === "FAILED" ? "Failed proof photo" : "Delivered proof photo"}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Photo opens the camera. GPS is tried automatically during upload.
+        </p>
+      </div>
+      <div className="grid gap-2 min-[380px]:grid-cols-3">
+        {proofSteps.map((step, index) => (
+          <div key={step} className="rounded-md border bg-muted/30 px-3 py-2">
+            <div className="text-xs font-medium text-muted-foreground">
+              Step {index + 1}
+            </div>
+            <div className="mt-1 text-sm font-semibold">{step}</div>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="warning">Photo required</Badge>
+        <Badge variant="outline">GPS tried automatically</Badge>
+        {outcome === "FAILED" ? (
+          <Badge variant="destructive">Return follow-up needed</Badge>
+        ) : (
+          <Badge variant="success">Auto-completes delivery</Badge>
+        )}
+      </div>
+      <div className="rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
+        {outcome === "FAILED"
+          ? "Failed proof records the failed reason and tells the manager to check stock return follow-up."
+          : "Delivered proof completes the delivery after the photo uploads."}
+      </div>
       <input
         ref={inputRef}
         type="file"
@@ -608,7 +828,7 @@ function ProofForm({
       <Button
         type="button"
         disabled={pending}
-        className="min-h-12 w-full text-base"
+        className="min-h-16 w-full text-base"
         onClick={openCamera}
       >
         <Camera className="size-5" />
@@ -619,7 +839,114 @@ function ProofForm({
             : "Upload Delivered Proof"}
       </Button>
       <Message state={message} />
+      <ProofSuccessNextStep outcome={outcome} state={message} />
     </div>
+  )
+}
+
+function UpcomingOrderCard({ order }: { order: DeliveryUpcomingOrder }) {
+  const status =
+    order.status === "READY"
+      ? "Price Required"
+      : order.status === "PREPARING"
+        ? "Picking"
+        : "Preparing"
+  const waitingTitle =
+    order.status === "READY" ? "Final price needed" : "Preparing order"
+  const waitingText =
+    order.status === "READY"
+      ? "Picked weight is visible. Accept appears after final price is saved."
+      : "Progress is visible. Accept appears after picking and final price are done."
+
+  return (
+    <Card className="overflow-hidden border-amber-200 bg-amber-50/40">
+      <CardHeader className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <CardTitle className="break-words text-xl">{order.customerName}</CardTitle>
+            <CardDescription className="break-words">
+              {order.orderNo}
+            </CardDescription>
+          </div>
+          <Badge variant="warning" className="mt-1">
+            {status}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-md border border-amber-200 bg-background p-3 text-sm">
+          <div className="text-base font-semibold text-amber-900">
+            {waitingTitle}
+          </div>
+          <div className="mt-1 text-amber-900/80">
+            {waitingText}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-medium">Picking progress</span>
+            <span className="tabular-nums">{order.progressPercent}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-background">
+            <div
+              className="h-2 rounded-full bg-amber-500"
+              style={{ width: `${order.progressPercent}%` }}
+            />
+          </div>
+          <div className="text-sm text-muted-foreground">
+            Picked {kg(order.pickedWeightKg)} / {kg(order.totalEstimatedWeightKg)}
+          </div>
+        </div>
+        {order.items.length > 0 ? (
+          <div className="space-y-2 rounded-md border bg-background p-3">
+            <div className="text-xs font-medium uppercase text-muted-foreground">
+              Items and customization
+            </div>
+            <div className="space-y-3">
+              {order.items.map((item) => (
+                <div key={item.id} className="space-y-2">
+                  <div className="break-words text-sm font-medium">
+                    {item.itemLabel}
+                  </div>
+                  {Object.keys(item.customization).length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(item.customization).flatMap(([group, options]) =>
+                        options.map((option) => (
+                          <Badge key={`${item.id}-${group}-${option}`} variant="outline">
+                            {group}: {option}
+                          </Badge>
+                        ))
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      No customization
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {order.customerRemarks ? (
+          <div className="rounded-md border bg-background p-3 text-sm">
+            <div className="text-xs font-medium uppercase text-muted-foreground">
+              Customer remarks
+            </div>
+            <div className="mt-1 break-words font-medium">
+              {order.customerRemarks}
+            </div>
+          </div>
+        ) : null}
+        <div className="flex gap-2 break-words text-sm text-muted-foreground">
+          <MapPin className="mt-0.5 size-4 shrink-0" />
+          <span>{order.deliveryAddress || "No address saved"}</span>
+        </div>
+        <Button disabled className="min-h-14 w-full text-base">
+          Not ready to accept yet
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -634,34 +961,41 @@ function MyDeliveryCard({
 
   return (
     <DeliveryCardShell delivery={delivery}>
-      <div className="grid gap-2 min-[360px]:grid-cols-2">
+      <div className="grid gap-2">
         {delivery.status === "ACCEPTED" ? (
           <Button
             type="button"
             disabled={pending}
-            className="min-h-12 text-base"
+            className="min-h-16 w-full text-base"
             onClick={() =>
-              run(() => markDeliveryLoaded(delivery.id), "Delivery marked loaded.")
+              run(
+                () => markDeliveryLoaded(delivery.id),
+                "Delivery marked loaded. Next: tap Start Delivery when leaving."
+              )
             }
           >
             <PackageCheck className="size-5" />
-            Loaded
+            {pending ? "Saving..." : "Loaded"}
           </Button>
         ) : null}
         {delivery.status === "LOADED" ? (
           <Button
             type="button"
             disabled={pending}
-            className="min-h-12 text-base"
+            className="min-h-16 w-full text-base"
             onClick={() =>
-              run(() => startDelivery(delivery.id), "Delivery started.")
+              run(
+                () => startDelivery(delivery.id),
+                "Delivery started. Next: upload Delivered or Failed proof photo after visiting the customer."
+              )
             }
           >
             <Navigation className="size-5" />
-            Start Delivery
+            {pending ? "Starting..." : "Start Delivery"}
           </Button>
         ) : null}
       </div>
+      <ProofBlockedGuide status={delivery.status} />
       {delivery.status === "OUT_FOR_DELIVERY" ? (
         <div className="space-y-3">
           <ProofForm
@@ -918,24 +1252,120 @@ function ExpenseList({ expenses }: { expenses: DeliveryExpense[] }) {
 
 function TabEmptyState({ tab }: { tab: DriverTab }) {
   const descriptions: Record<DriverTab, string> = {
-    Available: "No available deliveries for today.",
-    "My Deliveries": "Accepted deliveries will appear here.",
-    Completed: "Delivered records will appear here after proof upload.",
-    Failed: "Failed records will appear here after failed proof upload.",
-    Expenses: "Submitted expenses will appear here.",
+    Available:
+      "No jobs to accept right now. Stay on this screen or ask a manager if a delivery is missing.",
+    "My Deliveries":
+      "No active delivery. Accept a job from Available, then follow Loaded, Start Delivery, and proof photo.",
+    Completed:
+      "Delivered jobs appear here after the proof photo upload completes the delivery.",
+    Failed:
+      "Failed jobs appear here after failed proof upload. Tell the manager when return follow-up is needed.",
+    Expenses:
+      "Submitted expenses will appear here after you save a receipt photo.",
+  }
+  const nextActions: Record<DriverTab, string[]> = {
+    Available: ["Wait for today job", "Ask manager", "Refresh if needed"],
+    "My Deliveries": ["Open Available", "Accept Delivery", "Follow next action"],
+    Completed: ["Upload proof photo", "Check next job", "End route when clear"],
+    Failed: ["Upload failed proof", "Tell manager", "Return follow-up"],
+    Expenses: ["Choose type", "Enter amount", "Attach receipt photo"],
   }
 
   return (
-    <EmptyState
-      title={`No ${tab.toLowerCase()}`}
-      description={descriptions[tab]}
-      className="rounded-md border border-dashed"
-    />
+    <div className="space-y-3 rounded-md border border-dashed p-4">
+      <EmptyState
+        title={`No ${tab.toLowerCase()}`}
+        description={descriptions[tab]}
+      />
+      <div className="grid gap-2 min-[380px]:grid-cols-3">
+        {nextActions[tab].map((action) => (
+          <div
+            key={action}
+            className="min-h-11 rounded-md border bg-background px-3 py-2 text-sm font-medium"
+          >
+            {action}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DriverFastPath({
+  availableCount,
+  activeCount,
+  completedCount,
+  failedCount,
+}: {
+  availableCount: number
+  activeCount: number
+  completedCount: number
+  failedCount: number
+}) {
+  const steps = [
+    "Accept Delivery",
+    "Loaded",
+    "Start Delivery",
+    "Proof photo",
+  ]
+
+  return (
+    <Card className="border-emerald-200 bg-emerald-50/70">
+      <CardHeader className="space-y-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
+          <Truck className="size-4" />
+          Driver fast path
+        </div>
+        <CardTitle className="text-xl">Do today jobs in order</CardTitle>
+        <CardDescription className="text-emerald-950/70">
+          One big action at a time. Open maps, call customer, then upload a proof photo.
+        </CardDescription>
+        <div className="grid gap-2 min-[420px]:grid-cols-4">
+          {steps.map((step) => (
+            <div
+              key={step}
+              className="rounded-md bg-background/80 px-3 py-2 text-sm font-medium text-emerald-950"
+            >
+              {step}
+            </div>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 gap-2 text-sm min-[520px]:grid-cols-4">
+          <div className="rounded-md border bg-background px-3 py-2">
+            <div className="text-muted-foreground">Available today</div>
+            <div className="text-lg font-semibold tabular-nums">
+              {availableCount}
+            </div>
+          </div>
+          <div className="rounded-md border bg-background px-3 py-2">
+            <div className="text-muted-foreground">In progress</div>
+            <div className="text-lg font-semibold tabular-nums">
+              {activeCount}
+            </div>
+          </div>
+          <div className="rounded-md border bg-background px-3 py-2">
+            <div className="text-muted-foreground">Completed</div>
+            <div className="text-lg font-semibold tabular-nums">
+              {completedCount}
+            </div>
+          </div>
+          <div className="rounded-md border bg-background px-3 py-2">
+            <div className="text-muted-foreground">Failed follow-up</div>
+            <div className="text-lg font-semibold tabular-nums">
+              {failedCount}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
 export function DriverMobileDeliveryPage({
   availableDeliveries,
+  upcomingOrderDeliveries,
   driverDeliveries,
   expenses,
   vehicles,
@@ -943,13 +1373,13 @@ export function DriverMobileDeliveryPage({
   loadError,
 }: {
   availableDeliveries: Delivery[]
+  upcomingOrderDeliveries: DeliveryUpcomingOrder[]
   driverDeliveries: Delivery[]
   expenses: DeliveryExpense[]
   vehicles: Vehicle[]
   driverName: string
   loadError?: string | null
 }) {
-  const [activeTab, setActiveTab] = useState<DriverTab>("Available")
   const myDeliveries = useMemo(
     () =>
       driverDeliveries.filter((delivery) =>
@@ -969,6 +1399,9 @@ export function DriverMobileDeliveryPage({
     () => [...myDeliveries, ...completed, ...failed],
     [completed, failed, myDeliveries]
   )
+  const [activeTab, setActiveTab] = useState<DriverTab>(
+    myDeliveries.length > 0 ? "My Deliveries" : "Available"
+  )
 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-5 px-3 py-4 sm:px-4">
@@ -976,6 +1409,13 @@ export function DriverMobileDeliveryPage({
         <h1 className="text-2xl font-semibold tracking-tight">Driver Delivery</h1>
         <p className="text-sm text-muted-foreground">Today delivery work</p>
       </div>
+
+      <DriverFastPath
+        availableCount={availableDeliveries.length}
+        activeCount={myDeliveries.length}
+        completedCount={completed.length}
+        failedCount={failed.length}
+      />
 
       {loadError ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -998,15 +1438,34 @@ export function DriverMobileDeliveryPage({
       </div>
 
       {activeTab === "Available" ? (
-        availableDeliveries.length > 0 ? (
+        availableDeliveries.length > 0 || upcomingOrderDeliveries.length > 0 ? (
           <div className="space-y-4">
-            {availableDeliveries.map((delivery) => (
-              <AvailableCard
-                key={delivery.id}
-                delivery={delivery}
-                vehicles={vehicles}
-              />
-            ))}
+            {upcomingOrderDeliveries.length > 0 ? (
+              <section className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-lg font-semibold">Preparing Orders</h2>
+                  <Badge variant="secondary">{upcomingOrderDeliveries.length}</Badge>
+                </div>
+                {upcomingOrderDeliveries.map((order) => (
+                  <UpcomingOrderCard key={order.id} order={order} />
+                ))}
+              </section>
+            ) : null}
+            {availableDeliveries.length > 0 ? (
+              <section className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h2 className="text-lg font-semibold">Pending Delivery</h2>
+                  <Badge variant="secondary">{availableDeliveries.length}</Badge>
+                </div>
+                {availableDeliveries.map((delivery) => (
+                  <AvailableCard
+                    key={delivery.id}
+                    delivery={delivery}
+                    vehicles={vehicles}
+                  />
+                ))}
+              </section>
+            ) : null}
           </div>
         ) : (
           <TabEmptyState tab={activeTab} />

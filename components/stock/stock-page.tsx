@@ -7,6 +7,7 @@ import {
   Search,
   Send,
 } from "lucide-react"
+import Link from "next/link"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,11 +39,13 @@ import {
   TransferForm,
 } from "@/components/stock/workflow-forms"
 import { getStockPageData } from "@/lib/stock/data"
+import { stockDisplayItemName } from "@/lib/stock/display-names"
 import {
   buildCsv,
   buildStockWhatsappSummary,
   type StockReportTableRow,
 } from "@/lib/stock/report-export"
+import { reviewStockScanIssueFormAction } from "@/lib/stock/actions"
 import {
   stockMovementTypes,
   stockUnitStatuses,
@@ -130,8 +133,8 @@ const titles: Record<StockRoute, { title: string; description: string }> = {
     description: "Live stock KPIs, category mix, movement trend, and location weight.",
   },
   items: {
-    title: "Item Master",
-    description: "Create and review item master records used by all stock workflows.",
+    title: "Product Master",
+    description: "Create and review product master records used by all stock workflows.",
   },
   inbound: {
     title: "Barcode Inbound",
@@ -140,7 +143,7 @@ const titles: Record<StockRoute, { title: string; description: string }> = {
   outbound: {
     title: "Outbound",
     description:
-      "Scan barcode stock units for order-based or direct outbound batches.",
+      "Scan barcode stock units for direct outbound batches.",
   },
   transfer: {
     title: "Stock Transfer",
@@ -157,11 +160,11 @@ const titles: Record<StockRoute, { title: string; description: string }> = {
   "no-barcode-inbound": {
     title: "No-Barcode Label Flow",
     description:
-      "Generate a barcode label first, then receive the item through Barcode Inbound.",
+      "Generate a barcode label first, then receive the product through Barcode Inbound.",
   },
   balance: {
     title: "Stock Balance",
-    description: "Current stock on hand by item and location.",
+    description: "Current stock on hand by product and location.",
   },
   movements: {
     title: "Movement History",
@@ -177,23 +180,25 @@ const titles: Record<StockRoute, { title: string; description: string }> = {
   },
   settings: {
     title: "Stock Settings",
-    description: "Manage brands, origins, and stock locations.",
+    description: "Manage manufacturers, origins, and stock locations.",
   },
 }
 
 const itemColumns: DataTableColumn<TableRow>[] = [
   { key: "itemCode", header: "Item code" },
   { key: "category", header: "Category" },
-  { key: "defaultBrandName", header: "Brand" },
+  { key: "displayName", header: "Display name" },
+  { key: "defaultBrandName", header: "Manufacturer" },
   { key: "section", header: "Section" },
-  { key: "name", header: "Name" },
+  { key: "name", header: "Product" },
   { key: "barcodeRequired", header: "Barcode" },
   { key: "active", header: "Active" },
 ]
 
 const balanceColumns: DataTableColumn<TableRow>[] = [
   { key: "locationName", header: "Location" },
-  { key: "itemName", header: "Item" },
+  { key: "itemName", header: "Product" },
+  { key: "brandName", header: "Manufacturer" },
   { key: "category", header: "Category" },
   { key: "unitCount", header: "Barcode units", align: "right" },
   { key: "totalWeightKg", header: "Barcode kg", align: "right" },
@@ -207,7 +212,8 @@ const balanceColumns: DataTableColumn<TableRow>[] = [
 const movementColumns: DataTableColumn<TableRow>[] = [
   { key: "createdAt", header: "Time" },
   { key: "movementType", header: "Type" },
-  { key: "itemName", header: "Item" },
+  { key: "itemName", header: "Product" },
+  { key: "brandName", header: "Manufacturer" },
   { key: "barcode", header: "Barcode" },
   { key: "fromLocation", header: "From" },
   { key: "toLocation", header: "To" },
@@ -219,7 +225,10 @@ const movementColumns: DataTableColumn<TableRow>[] = [
 const reportColumns: DataTableColumn<TableRow>[] = [
   { key: "reportName", header: "Report" },
   { key: "locationName", header: "Location" },
-  { key: "category", header: "Category" },
+  { key: "itemName", header: "Product" },
+  { key: "brandName", header: "Manufacturer" },
+  { key: "originName", header: "Origin" },
+  { key: "category", header: "Detail" },
   { key: "count", header: "Count", align: "right" },
   { key: "weightKg", header: "Kg", align: "right" },
   { key: "generatedAt", header: "Generated" },
@@ -287,21 +296,25 @@ const stockShortcuts = [
   },
   {
     label: "Outbound",
+    workerLabel: "Outbound Without Order",
     href: "/stock/outbound",
     icon: Send,
   },
   {
     label: "Transfer",
+    workerLabel: "Transfer Out",
     href: "/stock/transfer",
     icon: ArrowRightLeft,
   },
   {
     label: "Receive",
+    workerLabel: "Receive Transfer",
     href: "/stock/receive-transfer",
     icon: PackageCheck,
   },
   {
     label: "Return / Damage",
+    workerLabel: "Return Stock",
     href: "/stock/return",
     icon: RotateCcw,
   },
@@ -310,15 +323,28 @@ const stockShortcuts = [
     href: "/stock/stock-take",
     icon: ClipboardList,
   },
+  {
+    label: "Item Master",
+    workerLabel: "Item / Barcode Setup",
+    href: "/stock/items",
+    icon: Search,
+    itemSetup: true,
+  },
 ]
 
 function StockShortcutButtons({
   showHeading = true,
   workerHome = false,
+  canUseItemSetup = false,
 }: {
   showHeading?: boolean
   workerHome?: boolean
+  canUseItemSetup?: boolean
 }) {
+  const shortcuts = stockShortcuts.filter(
+    (shortcut) => !shortcut.itemSetup || canUseItemSetup
+  )
+
   return (
     <div className="space-y-3">
       {showHeading ? (
@@ -326,9 +352,12 @@ function StockShortcutButtons({
           <h2 className="text-base font-semibold">Stock shortcuts</h2>
         </div>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {stockShortcuts.map((shortcut) => {
+      <div className="grid gap-3 min-[390px]:grid-cols-2 lg:grid-cols-3">
+        {shortcuts.map((shortcut) => {
           const Icon = shortcut.icon
+          const label = workerHome
+            ? shortcut.workerLabel ?? shortcut.label
+            : shortcut.label
 
           return (
             <Button
@@ -337,14 +366,18 @@ function StockShortcutButtons({
               variant="outline"
               className={
                 workerHome
-                  ? "h-20 justify-start gap-3 text-lg"
-                  : "h-16 justify-start gap-3 text-base"
+                  ? "min-h-20 justify-start gap-3 whitespace-normal py-4 text-left text-lg"
+                  : "min-h-16 justify-start gap-3 whitespace-normal py-3 text-left text-base"
               }
             >
-              <a href={shortcut.href}>
-                <Icon className={workerHome ? "size-6" : "size-5"} />
-                {shortcut.label}
-              </a>
+              <Link href={shortcut.href}>
+                <Icon
+                  className={
+                    workerHome ? "size-6 shrink-0" : "size-5 shrink-0"
+                  }
+                />
+                <span className="min-w-0 break-words">{label}</span>
+              </Link>
             </Button>
           )
         })}
@@ -353,8 +386,18 @@ function StockShortcutButtons({
   )
 }
 
-function StockWorkerHome() {
-  return <StockShortcutButtons showHeading={false} workerHome />
+function StockWorkerHome({
+  canUseItemSetup,
+}: {
+  canUseItemSetup: boolean
+}) {
+  return (
+    <StockShortcutButtons
+      showHeading={false}
+      workerHome
+      canUseItemSetup={canUseItemSetup}
+    />
+  )
 }
 
 function NegativeStockAlertPanel({
@@ -379,7 +422,7 @@ function NegativeStockAlertPanel({
             <CardTitle className="text-base text-red-900 dark:text-red-100">
               Negative stock alert
             </CardTitle>
-            <CardDescription className="text-red-800/80 dark:text-red-200/80">
+            <CardDescription className="break-words text-red-800/80 dark:text-red-200/80">
               Temporary negative stock is allowed, but these balances need review.
             </CardDescription>
           </div>
@@ -392,8 +435,10 @@ function NegativeStockAlertPanel({
             key={alert.id}
             className="rounded-md border border-red-200 bg-background p-3 text-sm dark:border-red-900"
           >
-            <div className="font-medium">{alert.itemName}</div>
-            <div className="mt-1 text-muted-foreground">{alert.locationName}</div>
+            <div className="break-words font-medium">{alert.itemName}</div>
+            <div className="mt-1 break-words text-muted-foreground">
+              {alert.locationName}
+            </div>
             <div className="mt-2 tabular-nums text-red-700 dark:text-red-300">
               Qty {alert.quantity.toLocaleString()} /{" "}
               {alert.weightKg.toLocaleString(undefined, {
@@ -401,7 +446,7 @@ function NegativeStockAlertPanel({
               })}{" "}
               kg
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
+            <div className="mt-1 break-words text-xs text-muted-foreground">
               {alert.reason}
             </div>
           </div>
@@ -437,7 +482,7 @@ function StockAgeAlertPanel({
             <CardTitle className="text-base text-amber-950 dark:text-amber-100">
               Stock age alert
             </CardTitle>
-            <CardDescription className="text-amber-900/80 dark:text-amber-200/80">
+            <CardDescription className="break-words text-amber-900/80 dark:text-amber-200/80">
               Review stock older than 6 months. Stock over 12 months is highest priority.
             </CardDescription>
           </div>
@@ -451,7 +496,7 @@ function StockAgeAlertPanel({
             className="rounded-md border border-amber-200 bg-background p-3 text-sm dark:border-amber-900"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium">{alert.itemName}</span>
+              <span className="break-words font-medium">{alert.itemName}</span>
               <Badge
                 variant={
                   alert.alertLevel === "OVER_12_MONTHS"
@@ -462,8 +507,10 @@ function StockAgeAlertPanel({
                 {alert.alertLevel.replaceAll("_", " ")}
               </Badge>
             </div>
-            <div className="mt-1 text-muted-foreground">{alert.locationName}</div>
-            <div className="mt-2 text-xs text-muted-foreground">
+            <div className="mt-1 break-words text-muted-foreground">
+              {alert.locationName}
+            </div>
+            <div className="mt-2 break-words text-xs text-muted-foreground">
               {alert.barcode} received {dateText(alert.receivedAt)}
             </div>
             <div className="mt-1 tabular-nums text-amber-800 dark:text-amber-200">
@@ -504,7 +551,7 @@ function TransferPendingAlertPanel({
             <CardTitle className="text-base text-orange-950 dark:text-orange-100">
               Transfer receive overdue
             </CardTitle>
-            <CardDescription className="text-orange-900/80 dark:text-orange-200/80">
+            <CardDescription className="break-words text-orange-900/80 dark:text-orange-200/80">
               Transfers scanned out for more than 3 days should be received or
               investigated by sender outlet manager, receiver outlet manager,
               admin, and director.
@@ -519,11 +566,11 @@ function TransferPendingAlertPanel({
             key={alert.id}
             className="rounded-md border border-orange-200 bg-background p-3 text-sm dark:border-orange-900"
           >
-            <div className="font-medium">{alert.itemName}</div>
+            <div className="break-words font-medium">{alert.itemName}</div>
             <div className="mt-1 break-all font-mono text-xs">
               {alert.barcode}
             </div>
-            <div className="mt-2 text-muted-foreground">
+            <div className="mt-2 break-words text-muted-foreground">
               {alert.fromLocation} {"->"} {alert.toLocation}
             </div>
             <div className="mt-1 text-xs text-orange-800 dark:text-orange-200">
@@ -535,6 +582,9 @@ function TransferPendingAlertPanel({
             <div className="mt-2 tabular-nums text-orange-700 dark:text-orange-300">
               {alert.ageDays} day{alert.ageDays === 1 ? "" : "s"} pending
             </div>
+            <Button asChild className="mt-3 min-h-11 w-full" size="sm">
+              <Link href="/stock/receive-transfer">Open receive</Link>
+            </Button>
           </div>
         ))}
         {hiddenCount > 0 ? (
@@ -554,7 +604,11 @@ function itemRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[
     category: item.category,
     defaultBrandName:
       data.brands.find((brand) => brand.id === item.defaultBrandId)?.name ??
-      "No brand",
+      "No manufacturer",
+    displayName: stockDisplayItemName(
+      item,
+      data.brands.find((brand) => brand.id === item.defaultBrandId)
+    ),
     section: item.section,
     name: item.name,
     barcodeRequired: item.barcodeRequired,
@@ -562,10 +616,78 @@ function itemRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[
   }))
 }
 
+function MobileItemCards({ rows }: { rows: TableRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground md:hidden">
+        No product master records found.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2 md:hidden">
+      <div className="text-sm font-medium">Mobile item list</div>
+      {rows.slice(0, 8).map((row) => (
+        <div
+          key={String(row.itemCode)}
+          className="rounded-md border bg-muted/20 p-3 text-sm"
+        >
+          <div className="flex flex-col gap-2 min-[390px]:flex-row min-[390px]:items-start min-[390px]:justify-between">
+            <div className="min-w-0">
+              <div className="break-all font-mono text-xs">
+                {String(row.itemCode ?? "-")}
+              </div>
+              <div className="mt-1 break-words font-semibold">
+                {String(row.displayName ?? row.name ?? "Unknown product")}
+              </div>
+              <div className="mt-1 break-words text-xs text-muted-foreground">
+                {String(row.category ?? "No category")} -{" "}
+                {String(row.section ?? "No section")}
+              </div>
+            </div>
+            <Badge
+              className="w-fit max-w-full whitespace-normal break-words"
+              variant={row.active ? "outline" : "secondary"}
+            >
+              {row.active ? "Active" : "Inactive"}
+            </Badge>
+          </div>
+          <div className="mt-3 grid gap-2 min-[390px]:grid-cols-2">
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">
+                Manufacturer
+              </div>
+              <div className="break-words font-medium">
+                {String(row.defaultBrandName ?? "No manufacturer")}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">
+                Barcode
+              </div>
+              <div className="break-words font-medium">
+                {row.barcodeRequired ? "Required" : "Optional"}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+      {rows.length > 8 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm break-words text-amber-800">
+          Showing first 8 products. Use product search or scroll the table below
+          for all products.
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function balanceRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[] {
   return data.balances.map((balance) => ({
     locationName: balance.locationName,
     itemName: balance.itemName,
+    brandName: balance.brandName,
     category: balance.category,
     unitCount: balance.unitCount,
     totalWeightKg: balance.totalWeightKg,
@@ -575,6 +697,91 @@ function balanceRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableR
     combinedWeightKg: balance.combinedWeightKg,
     stockStatus: balance.hasNegativeStock ? "NEGATIVE_STOCK" : "OK",
   }))
+}
+
+function MobileStockBalanceCards({
+  balances,
+}: {
+  balances: Awaited<ReturnType<typeof getStockPageData>>["balances"]
+}) {
+  if (balances.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground md:hidden">
+        No stock balance found for this scope.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2 md:hidden">
+      <div className="text-sm font-medium">Mobile stock balance</div>
+      {balances.slice(0, 8).map((balance) => (
+        <div
+          key={balance.id}
+          className="rounded-md border bg-muted/20 p-3 text-sm"
+        >
+          <div className="flex flex-col gap-2 min-[390px]:flex-row min-[390px]:items-start min-[390px]:justify-between">
+            <div className="min-w-0">
+              <div className="break-words font-semibold">{balance.itemName}</div>
+              <div className="mt-1 break-words text-xs text-muted-foreground">
+                {balance.brandName} - {balance.locationName} -{" "}
+                {balance.category}
+              </div>
+            </div>
+            <Badge
+              className="w-fit max-w-full whitespace-normal break-words"
+              variant={balance.hasNegativeStock ? "destructive" : "outline"}
+            >
+              {balance.hasNegativeStock ? "Alert" : "OK"}
+            </Badge>
+          </div>
+          <div className="mt-3 grid gap-2 min-[390px]:grid-cols-2">
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">
+                Barcode units
+              </div>
+              <div className="text-lg font-semibold tabular-nums">
+                {balance.unitCount.toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">
+                Total kg
+              </div>
+              <div className="text-lg font-semibold tabular-nums">
+                {balance.combinedWeightKg.toLocaleString(undefined, {
+                  maximumFractionDigits: 3,
+                })}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">
+                Total qty
+              </div>
+              <div className="font-medium tabular-nums">
+                {balance.totalQuantity.toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">
+                Barcode kg
+              </div>
+              <div className="font-medium tabular-nums">
+                {balance.totalWeightKg.toLocaleString(undefined, {
+                  maximumFractionDigits: 3,
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+      {balances.length > 8 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Showing first 8 balances. Scroll the table below for full balance.
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 function unitRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[] {
@@ -589,8 +796,8 @@ function unitRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[
     return {
       id: unit.id,
       barcode: unit.barcode,
-      itemName: item?.name ?? "Unknown item",
-      brandName: brand?.name ?? "Unbranded",
+      itemName: stockDisplayItemName(item, brand, "Unknown product"),
+      brandName: brand?.name ?? "No manufacturer",
       originName: origin?.name ?? "Unknown origin",
       locationName: location?.name ?? "Unknown location",
       status: unit.status,
@@ -600,11 +807,96 @@ function unitRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[
   })
 }
 
+function MobileStockUnitCards({ rows }: { rows: TableRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground md:hidden">
+        No barcode stock units found for this scope.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2 md:hidden">
+      <div className="text-sm font-medium">Mobile barcode units</div>
+      {rows.slice(0, 8).map((row) => (
+        <div
+          key={String(row.id)}
+          className="rounded-md border bg-muted/20 p-3 text-sm"
+        >
+          <div className="flex flex-col gap-2 min-[390px]:flex-row min-[390px]:items-start min-[390px]:justify-between">
+            <div className="min-w-0">
+              <div className="break-all font-mono text-xs">
+                {String(row.barcode ?? "No barcode")}
+              </div>
+              <div className="mt-1 break-words font-semibold">
+                {String(row.itemName ?? "Unknown product")}
+              </div>
+              <div className="mt-1 break-words text-xs text-muted-foreground">
+                {String(row.brandName ?? "No manufacturer")} -{" "}
+                {String(row.originName ?? "Unknown origin")}
+              </div>
+            </div>
+            <Badge
+              className="w-fit max-w-full whitespace-normal break-words"
+              variant="outline"
+            >
+              {String(row.status ?? "UNKNOWN")}
+            </Badge>
+          </div>
+          <div className="mt-3 grid gap-2 min-[390px]:grid-cols-2">
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">
+                Weight
+              </div>
+              <div className="font-semibold tabular-nums">
+                {Number(row.netWeightKg ?? 0).toLocaleString(undefined, {
+                  maximumFractionDigits: 3,
+                })}{" "}
+                kg
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">
+                Location
+              </div>
+              <div className="break-words font-medium">
+                {String(row.locationName ?? "Unknown location")}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">
+                Received
+              </div>
+              <div className="font-medium">
+                {String(row.receivedAt ?? "-")}
+              </div>
+            </div>
+            <div className="flex items-end">
+              <Button asChild className="min-h-11 w-full" variant="outline">
+                <Link href={`/stock/units/${String(row.id)}`}>
+                  Open / reprint
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      ))}
+      {rows.length > 8 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Showing first 8 barcode units. Scroll the table below for all units.
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function movementRows(data: Awaited<ReturnType<typeof getStockPageData>>): TableRow[] {
   return data.movements.map((movement) => ({
     createdAt: dateText(movement.createdAt),
     movementType: movement.movementType,
     itemName: movement.itemName,
+    brandName: movement.brandName,
     barcode: movement.barcode,
     fromLocation: movement.fromLocation,
     toLocation: movement.toLocation,
@@ -612,6 +904,93 @@ function movementRows(data: Awaited<ReturnType<typeof getStockPageData>>): Table
     weightKg: movement.weightKg,
     referenceNo: movement.referenceNo,
   }))
+}
+
+function MobileStockMovementCards({
+  movements,
+}: {
+  movements: Awaited<ReturnType<typeof getStockPageData>>["movements"]
+}) {
+  if (movements.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground md:hidden">
+        No stock movements found for this scope.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2 md:hidden">
+      <div className="text-sm font-medium">Mobile movement history</div>
+      {movements.slice(0, 8).map((movement) => (
+        <div
+          key={movement.id}
+          className="rounded-md border bg-muted/20 p-3 text-sm"
+        >
+          <div className="flex flex-col gap-2 min-[390px]:flex-row min-[390px]:items-start min-[390px]:justify-between">
+            <div className="min-w-0">
+              <div className="break-words font-semibold">
+                {movement.movementType.replaceAll("_", " ")}
+              </div>
+              <div className="mt-1 break-words text-xs text-muted-foreground">
+                {movement.itemName}
+              </div>
+              <div className="mt-1 break-words text-xs text-muted-foreground">
+                Manufacturer: {movement.brandName}
+              </div>
+            </div>
+            <div className="font-semibold tabular-nums min-[390px]:shrink-0 min-[390px]:text-right">
+              {movement.weightKg.toLocaleString(undefined, {
+                maximumFractionDigits: 3,
+              })}{" "}
+              kg
+            </div>
+          </div>
+          <div className="mt-3 break-all font-mono text-xs">
+            {movement.barcode || "No barcode"}
+          </div>
+          <div className="mt-3 grid gap-2 min-[390px]:grid-cols-2">
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">
+                From
+              </div>
+              <div className="break-words font-medium">
+                {movement.fromLocation || "-"}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">To</div>
+              <div className="break-words font-medium">
+                {movement.toLocation || "-"}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">Qty</div>
+              <div className="font-medium tabular-nums">
+                {movement.quantity.toLocaleString()}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase text-muted-foreground">
+                Time
+              </div>
+              <div className="font-medium">{dateText(movement.createdAt)}</div>
+            </div>
+          </div>
+          {movement.referenceNo ? (
+            <div className="mt-2 break-all text-xs text-muted-foreground">
+              Ref: {movement.referenceNo}
+            </div>
+          ) : null}
+        </div>
+      ))}
+      {movements.length > 8 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Showing first 8 movements. Scroll the table below for full history.
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 function reportRows(
@@ -634,6 +1013,9 @@ function reportRows(
     const haystack = [
       report.reportName,
       report.locationName,
+      report.itemName,
+      report.brandName,
+      report.originName,
       report.category,
       String(report.count),
       String(report.weightKg),
@@ -646,9 +1028,11 @@ function reportRows(
       (!dateFrom || generatedDate >= dateFrom) &&
       (!dateTo || generatedDate <= dateTo) &&
       (!location || report.locationName.toLowerCase().includes(location)) &&
-      (!item || report.category.toLowerCase().includes(item)) &&
-      (!brand || report.category.toLowerCase().includes(brand)) &&
-      (!origin || report.category.toLowerCase().includes(origin)) &&
+      (!item ||
+        report.itemName.toLowerCase().includes(item) ||
+        report.category.toLowerCase().includes(item)) &&
+      (!brand || report.brandName.toLowerCase().includes(brand)) &&
+      (!origin || report.originName.toLowerCase().includes(origin)) &&
       (!status || report.category.toLowerCase().includes(status)) &&
       (!user || report.category.toLowerCase().includes(user)) &&
       (!movementType || report.category.includes(movementType))
@@ -656,6 +1040,9 @@ function reportRows(
   }).map((report) => ({
     reportName: report.reportName,
     locationName: report.locationName,
+    itemName: report.itemName,
+    brandName: report.brandName,
+    originName: report.originName,
     category: report.category,
     count: report.count,
     weightKg: report.weightKg,
@@ -685,7 +1072,7 @@ function MovementsFilter({ filters }: { filters: MovementFilters }) {
               id="type"
               name="type"
               defaultValue={filters.type ?? ""}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+              className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30 sm:text-sm"
             >
               <option value="">All movement types</option>
               {stockMovementTypes.map((type) => (
@@ -704,8 +1091,8 @@ function MovementsFilter({ filters }: { filters: MovementFilters }) {
             />
           </div>
           <div className="flex items-end">
-            <Button type="submit" className="w-full md:w-auto">
-              <Search className="size-4" />
+            <Button type="submit" className="min-h-11 w-full gap-2 md:w-auto">
+              <Search className="size-4 shrink-0" />
               Filter
             </Button>
           </div>
@@ -756,7 +1143,7 @@ function ReportsFilter({ filters }: { filters: MovementFilters }) {
               id="reportMovementType"
               name="movementType"
               defaultValue={filters.movementType ?? filters.type ?? ""}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+              className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30 sm:text-sm"
             >
               <option value="">All movement types</option>
               {stockMovementTypes.map((type) => (
@@ -767,7 +1154,7 @@ function ReportsFilter({ filters }: { filters: MovementFilters }) {
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="reportItem">Item</Label>
+            <Label htmlFor="reportItem">Product</Label>
             <Input
               id="reportItem"
               name="item"
@@ -775,7 +1162,7 @@ function ReportsFilter({ filters }: { filters: MovementFilters }) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="reportBrand">Brand</Label>
+            <Label htmlFor="reportBrand">Manufacturer</Label>
             <Input
               id="reportBrand"
               name="brand"
@@ -796,7 +1183,7 @@ function ReportsFilter({ filters }: { filters: MovementFilters }) {
               id="reportStatus"
               name="status"
               defaultValue={filters.status ?? ""}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+              className="flex min-h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base shadow-xs focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30 sm:text-sm"
             >
               <option value="">All statuses</option>
               {stockUnitStatuses.map((status) => (
@@ -815,8 +1202,8 @@ function ReportsFilter({ filters }: { filters: MovementFilters }) {
             />
           </div>
           <div className="flex items-end xl:col-span-5">
-            <Button type="submit" className="w-full md:w-auto">
-              <Search className="size-4" />
+            <Button type="submit" className="min-h-11 w-full gap-2 md:w-auto">
+              <Search className="size-4 shrink-0" />
               Filter reports
             </Button>
           </div>
@@ -830,19 +1217,23 @@ function DashboardView({
   data,
   canOperateStock,
   isGeneralWorker,
+  canUseItemSetup,
 }: {
   data: Awaited<ReturnType<typeof getStockPageData>>
   canOperateStock: boolean
   isGeneralWorker: boolean
+  canUseItemSetup: boolean
 }) {
   if (isGeneralWorker) {
-    return <StockWorkerHome />
+    return <StockWorkerHome canUseItemSetup={canUseItemSetup} />
   }
 
   return (
     <>
       <KpiCards kpis={data.dashboard.kpis} />
-      {canOperateStock ? <StockShortcutButtons /> : null}
+      {canOperateStock ? (
+        <StockShortcutButtons canUseItemSetup={canUseItemSetup} />
+      ) : null}
       <StockDashboardCharts
         categoryMix={data.dashboard.categoryMix}
         locationStock={data.dashboard.locationStock}
@@ -854,7 +1245,8 @@ function DashboardView({
           <CardTitle>Latest movements</CardTitle>
           <CardDescription>Most recent stock activity.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          <MobileStockMovementCards movements={data.movements} />
           <DataTable
             columns={movementColumns}
             data={movementRows(data).slice(0, 8)}
@@ -877,10 +1269,18 @@ function ScanAlertPanel({
   return (
     <Card className="border-amber-200 bg-amber-50/70">
       <CardHeader>
-        <CardTitle>Barcode scan alerts</CardTitle>
-        <CardDescription>
-          Recent duplicate scan attempts and barcode weight/decode errors.
-        </CardDescription>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Manager scan issue review</CardTitle>
+            <CardDescription>
+              Open stock scan issues from inbound, outbound, transfer, return,
+              damage/spoilage, and stock take. All open issue types are shown
+              for manager review. Mark corrected records review evidence only;
+              stock changes still use the proper approval workflow.
+            </CardDescription>
+          </div>
+          <Badge variant="warning">{alerts.length} open</Badge>
+        </div>
       </CardHeader>
       <CardContent className="space-y-2">
         {alerts.map((alert) => (
@@ -888,15 +1288,81 @@ function ScanAlertPanel({
             key={alert.id}
             className="rounded-md border border-amber-200 bg-background px-3 py-2 text-sm"
           >
-            <div className="font-medium">{alert.barcode}</div>
-            <div className="text-muted-foreground">
-              {alert.action} - {alert.message}
+            <div className="break-all font-mono text-xs font-medium">
+              {alert.barcode}
+            </div>
+            <div className="mt-1 break-words text-muted-foreground">
+              {(alert.issueType ?? alert.action).replaceAll("_", " ")} -{" "}
+              {alert.message}
+            </div>
+            {alert.expectedStatus || alert.scannedStatus ? (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Expected: {alert.expectedStatus ?? "-"} / Scanned:{" "}
+                {alert.scannedStatus ?? "-"}
+              </div>
+            ) : null}
+            {alert.itemName || alert.selectedItemName ? (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Product: {alert.itemName ?? "-"}
+                {alert.selectedItemName
+                  ? ` / selected ${alert.selectedItemName}`
+                  : ""}
+              </div>
+            ) : null}
+            {alert.expectedLocationId || alert.scannedLocationId ? (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Location: expected{" "}
+                {alert.expectedLocationName ?? alert.expectedLocationId ?? "-"}{" "}
+                / scanned{" "}
+                {alert.scannedLocationName ?? alert.scannedLocationId ?? "-"}
+              </div>
+            ) : null}
+            {Object.keys(alert.relatedContext).length > 0 ? (
+              <div className="mt-1 break-words text-xs text-muted-foreground">
+                Related: {formatIssueContext(alert.relatedContext)}
+              </div>
+            ) : null}
+            <div className="mt-2 text-xs text-muted-foreground">
+              {dateText(alert.createdAt)}
+              {alert.scannedBy ? ` by ${alert.scannedBy}` : ""}
+            </div>
+            <div className="mt-3 grid gap-2 min-[390px]:grid-cols-3">
+              {["APPROVED", "REJECTED", "CORRECTED"].map((status) => (
+                <form key={status} action={reviewStockScanIssueFormAction}>
+                  <input
+                    type="hidden"
+                    name="scanLogId"
+                    value={alert.id.replace("scan-alert-", "")}
+                  />
+                  <input type="hidden" name="reviewStatus" value={status} />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-11 w-full whitespace-normal"
+                  >
+                    {status === "CORRECTED" ? "Mark corrected" : status}
+                  </Button>
+                </form>
+              ))}
             </div>
           </div>
         ))}
+        <Button asChild variant="outline" className="min-h-11 w-full sm:w-auto">
+          <Link href="/stock/reports?q=Barcode%20scan%20errors">
+            Open barcode scan error report
+          </Link>
+        </Button>
       </CardContent>
     </Card>
   )
+}
+
+function formatIssueContext(context: Record<string, unknown>) {
+  return Object.entries(context)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([key, value]) => `${key}: ${String(value)}`)
+    .join(" / ")
 }
 
 function SettingsTables({
@@ -908,7 +1374,7 @@ function SettingsTables({
     <div className="grid gap-4 lg:grid-cols-3">
       <Card>
         <CardHeader>
-          <CardTitle>Brands</CardTitle>
+          <CardTitle>Manufacturers</CardTitle>
         </CardHeader>
         <CardContent>
           <DataTable columns={masterColumns} data={masterRows(data.brands)} />
@@ -954,6 +1420,7 @@ export async function StockPage({
   const profile = await requireCurrentProfile()
   const canOperateStock = hasAnyRole(profile, stockOperatorRoles)
   const isGeneralStockWorker = hasAnyRole(profile, stockWorkerRoles)
+  const canUseItemSetup = hasAnyRole(profile, stockItemMasterRoles)
   const canManageStockTake = hasAnyRole(profile, stockManagerRoles)
   const canDirectorApproveStockTake = hasAnyRole(profile, ["admin", "director"])
 
@@ -1005,6 +1472,7 @@ export async function StockPage({
           data={data}
           canOperateStock={canOperateStock}
           isGeneralWorker={isGeneralStockWorker}
+          canUseItemSetup={canUseItemSetup}
         />
       ) : null}
 
@@ -1013,10 +1481,11 @@ export async function StockPage({
           <ItemMasterForm items={data.items} brands={data.brands} />
           <Card>
             <CardHeader>
-              <CardTitle>Items</CardTitle>
-              <CardDescription>Active item master records.</CardDescription>
+              <CardTitle>Products</CardTitle>
+              <CardDescription>Active product master records.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <MobileItemCards rows={itemRows(data)} />
               <DataTable columns={itemColumns} data={itemRows(data)} />
             </CardContent>
           </Card>
@@ -1033,26 +1502,31 @@ export async function StockPage({
           units={data.units}
           defaultLocationId={profile.stockLocationId}
           scannedByName={profile.fullName || profile.email}
+          canDeleteWholeSession={
+            canManageStockTake || canDirectorApproveStockTake
+          }
         />
       ) : null}
 
       {route === "outbound" ? (
         ordersResult?.ordersData ? (
           <OutboundSalesForm
-            orders={ordersResult.ordersData.orders}
-            orderItems={ordersResult.ordersData.items}
+            customers={ordersResult.ordersData.customers}
             outlets={data.outlets}
             locations={data.locations}
             units={data.units}
             items={data.items}
+            brands={data.brands}
+            returnSupplierRequests={data.returnSupplierRequests}
+            defaultLocationId={profile.stockLocationId}
           />
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle>Order outbound unavailable</CardTitle>
+              <CardTitle>Outbound unavailable</CardTitle>
               <CardDescription>
-                Check that the Orders migrations were applied before using
-                order-based outbound scanning.
+                Check that the Orders customer migrations were applied before
+                using direct sales outbound.
               </CardDescription>
             </CardHeader>
             <CardContent className="text-sm text-destructive">
@@ -1063,16 +1537,34 @@ export async function StockPage({
       ) : null}
 
       {route === "transfer" ? (
-        <TransferForm outlets={data.outlets} locations={data.locations} />
+        <TransferForm
+          outlets={data.outlets}
+          locations={data.locations}
+          units={data.units}
+          defaultLocationId={profile.stockLocationId}
+        />
       ) : null}
 
       {route === "receive-transfer" ? (
-        <ReceiveTransferForm outlets={data.outlets} locations={data.locations} />
+        <ReceiveTransferForm
+          locations={data.locations}
+          units={data.units}
+          defaultLocationId={profile.stockLocationId}
+        />
       ) : null}
 
-      {route === "return" ? <ReturnForm locations={data.locations} /> : null}
-
       {route === "return" ? (
+        <ReturnForm
+          locations={data.locations}
+          items={data.items}
+          brands={data.brands}
+          units={data.units}
+          movements={data.movements}
+          defaultLocationId={profile.stockLocationId}
+        />
+      ) : null}
+
+      {route === "return" && canManageStockTake ? (
         <InspectionReleaseForm canManage={canManageStockTake} />
       ) : null}
 
@@ -1105,7 +1597,8 @@ export async function StockPage({
                 records.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <MobileStockBalanceCards balances={data.balances} />
               <DataTable columns={balanceColumns} data={balanceRows(data)} />
             </CardContent>
           </Card>
@@ -1117,7 +1610,8 @@ export async function StockPage({
                 label.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <MobileStockUnitCards rows={unitRows(data)} />
               <StockUnitsTableClient rows={unitRows(data)} />
             </CardContent>
           </Card>
@@ -1135,7 +1629,8 @@ export async function StockPage({
                 movement activity.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              <MobileStockMovementCards movements={data.movements} />
               <DataTable columns={movementColumns} data={movementRows(data)} />
             </CardContent>
           </Card>
@@ -1147,8 +1642,10 @@ export async function StockPage({
           items={data.items}
           brands={data.brands}
           locations={data.locations}
+          units={data.units}
           sessions={data.stockTakeSessions}
           lines={data.stockTakeLines}
+          defaultLocationId={profile.stockLocationId}
           canOperate={canOperateStock}
           canManage={canManageStockTake}
           canDirectorApprove={canDirectorApproveStockTake}
@@ -1199,7 +1696,8 @@ export async function StockPage({
               Recent stock actions for quick confirmation.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            <MobileStockMovementCards movements={data.movements} />
             <DataTable
               columns={movementColumns}
               data={movementRows(data).slice(0, 10)}

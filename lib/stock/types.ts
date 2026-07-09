@@ -115,6 +115,7 @@ export type Item = {
   itemCode: string
   category: StockCategory
   defaultBrandId: string | null
+  displayName?: string | null
   section: string
   name: string
   chineseName: string | null
@@ -122,6 +123,7 @@ export type Item = {
   barcodeRequired: boolean
   active: boolean
   defaultLowStockLevel: number
+  defaultWeightKg: number | null
 }
 
 export type StockUnit = {
@@ -131,6 +133,7 @@ export type StockUnit = {
   brandId: string | null
   originId: string | null
   locationId: string
+  transferToLocationId?: string | null
   status: StockUnitStatus
   netWeightKg: number
   inboundSource: StockInboundSource
@@ -147,6 +150,8 @@ export type BarcodeWeightRule = {
   barcodeWeightStart: number
   barcodeWeightLength: number
   barcodeWeightDecimals: number
+  barcodeLength: number | null
+  sampleBarcode: string | null
   updatedAt: string
 }
 
@@ -165,6 +170,7 @@ export type StockMovement = {
   movementType: StockMovementType
   stockUnitId: string | null
   itemName: string
+  brandName: string
   barcode: string
   fromLocation: string
   toLocation: string
@@ -182,6 +188,15 @@ export type StockScanLog = {
   success: boolean
   message: string
   scannedBy: string | null
+  issueType?: string | null
+  itemId?: string | null
+  selectedItemId?: string | null
+  expectedLocationId?: string | null
+  scannedLocationId?: string | null
+  expectedStatus?: string | null
+  scannedStatus?: string | null
+  relatedContext?: Record<string, unknown>
+  reviewStatus?: string
   createdAt: string
 }
 
@@ -190,12 +205,27 @@ export type StockScanAlert = {
   barcode: string
   action: string
   message: string
+  scannedBy: string | null
+  issueType: string | null
+  itemName: string | null
+  selectedItemName: string | null
+  expectedLocationId: string | null
+  expectedLocationName: string | null
+  scannedLocationId: string | null
+  scannedLocationName: string | null
+  expectedStatus: string | null
+  scannedStatus: string | null
+  relatedContext: Record<string, unknown>
+  reviewStatus: string
   createdAt: string
 }
 
 export type StockBalanceRow = {
   id: string
+  itemId: string
+  brandId: string | null
   itemName: string
+  brandName: string
   category: StockCategory
   locationName: string
   unitCount: number
@@ -293,6 +323,7 @@ export type StockTakeLine = {
   sourceStockUnitId: string | null
   resolvedStockUnitId: string | null
   notes: string
+  createdAt: string
 }
 
 export type StockDamageRequest = {
@@ -333,6 +364,9 @@ export type StockReportRow = {
   id: string
   reportName: string
   locationName: string
+  itemName: string
+  brandName: string
+  originName: string
   category: string
   count: number
   weightKg: number
