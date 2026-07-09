@@ -1,5 +1,200 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-10 - Stock Inbound length-warning confirm save
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by fixing the saved-rule barcode length-warning path.
+- Different-length barcodes that still decode a weight now show `Confirm weight and save`.
+- The scan still warns and logs `BARCODE_LENGTH_MISMATCH`; it does not auto-save.
+- This gives workers a clear confirmation path instead of leaving the scan stuck after `Save only if correct`.
+- Updated Stock Inbound coverage, completion audit, QA evidence, and owner test list.
+- No migration, server action change, RLS change, stock movement change, barcode uniqueness change, scanner change, or access-scope weakening was added.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live QA should still scan a different-length supplier barcode with a saved rule and confirm the warning + manual save behavior against Supabase.
+- Live phone camera, external scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound pending-label retry wording
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by cleaning up stale pending-label warning copy.
+- Pending internal-label blockers now say `Retry or cancel pending label.` instead of cancel-only wording.
+- This matches the current `Retry save` behavior and keeps worker messages short.
+- Updated Stock mobile coverage and QA evidence for the retry-aware message.
+- No migration, server action change, RLS change, stock movement change, barcode uniqueness change, scanner change, or access-scope weakening was added.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live QA should still confirm the pending-label save/retry behavior against Supabase on a real phone-width session.
+- Live phone camera, external scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound manufacturer/origin RLS coverage guard
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by hardening coverage for the `Other` manufacturer/origin save path.
+- Added Stock RLS coverage proving manufacturer and origin insert/update policies use `public.can_manage_stock()`.
+- Delete coverage remains admin/director-only for manufacturer and origin master data.
+- Updated Stock Inbound completion audit and QA evidence to show the quick-save path has source-level RLS coverage.
+- No migration, app behavior change, RLS logic change, stock movement change, scanner change, or access-scope weakening was added.
+
+Files changed in this pass:
+
+- `scripts/stock-rls-policy-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-rls-policy-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live Supabase QA should still confirm a non-admin stock worker can create/reuse custom manufacturer and origin from `/stock/inbound`.
+- Live phone camera, external scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound pending internal-label retry
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by fixing the internal-label save failure path.
+- If an immediate internal-label save fails, the pending label panel now keeps the generated barcode/weight and shows `Retry save`.
+- `Retry save` resubmits the same pending generated label instead of forcing the worker to cancel, re-enter weight, and generate a new barcode.
+- The pending label copy now says `Save pending. Retry or cancel.` to keep the worker message short and clear.
+- Updated Stock mobile coverage, Stock Inbound completion audit, QA evidence, and owner test list for the retry path.
+- No migration, RLS change, stock movement change, barcode uniqueness change, scanner change, or access-scope weakening was added.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live Supabase QA should simulate a failed internal-label save if possible, then confirm `Retry save` saves the same generated barcode without retyping weight.
+- Live phone camera, external scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
+## 2026-07-10 - Stock Inbound custom origin save before rule learning
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by fixing the custom-origin setup path.
+- Added `createInboundOriginAction` for stock operators, mirroring the existing inbound manufacturer quick-save path.
+- `Other / custom origin` now shows `Save origin first`, saves or reuses the normalized origin, selects it locally, and only then allows barcode/manual scanning.
+- Barcode-rule setup now requires a real saved origin id, so learned rules are keyed to item + manufacturer + origin instead of the temporary `__other` value.
+- The quick-origin save bypasses unrelated scan validation, matching quick product and quick manufacturer setup actions.
+- Updated Stock Inbound coverage, completion audit, QA evidence, and owner test list for the save-origin-first path.
+- No migration, RLS change, stock movement change, barcode uniqueness change, scanner change, or access-scope weakening was added.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `lib/stock/actions.ts`
+- `lib/stock/action-state.ts`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-item-master-coverage.mjs` - passed.
+- `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts\stock-workflow-regression.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Live Supabase QA still needs to confirm a worker can create/reuse a custom origin, save the first barcode rule, and reuse that rule on the next supplier barcode.
+- Live phone camera, external scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
 ## 2026-07-10 - Stock Inbound shorter barcode warning and rule-page scanner controls
 
 Task completed:

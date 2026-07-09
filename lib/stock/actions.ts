@@ -135,6 +135,10 @@ const inboundBrandSchema = z.object({
   brandName: z.string().trim().min(2, "Manufacturer is required."),
 })
 
+const inboundOriginSchema = z.object({
+  originName: z.string().trim().min(2, "Origin is required."),
+})
+
 const mergeBrandSchema = z.object({
   sourceBrandId: z.string().trim().uuid(),
   targetBrandId: z.string().trim().uuid(),
@@ -1728,6 +1732,62 @@ export async function createInboundBrandAction(
     return success("Manufacturer saved.", {
       brandId,
       brandName: brandName ?? parsed.brandName.trim(),
+    })
+  })
+}
+
+export async function createInboundOriginAction(
+  _state: StockActionState,
+  formData: FormData
+): Promise<StockActionState> {
+  const parsed = parseAction(inboundOriginSchema, formData)
+
+  if ("status" in parsed) {
+    return parsed
+  }
+
+  return runStockAction(formData, stockOperatorRoles, async (context) => {
+    const existingId = await findNamedRecordId(
+      context.supabase,
+      "origins",
+      parsed.originName
+    )
+
+    if (existingId) {
+      return success("Origin already saved.", {
+        originId: existingId,
+        originName:
+          (await namedRecordName(context.supabase, "origins", existingId)) ??
+          normalizeOptionalName(parsed.originName) ??
+          parsed.originName.trim(),
+      })
+    }
+
+    const originName = normalizeOptionalName(parsed.originName)
+    const { data, error } = await context.supabase
+      .from("origins")
+      .insert({ name: originName })
+      .select("id")
+      .single()
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    const originId = readString(asRecord(data).id)
+
+    await insertAuditLog(
+      context.supabase,
+      context.profile,
+      "INBOUND_ORIGIN_CREATED",
+      "origins",
+      originId,
+      { name: parsed.originName }
+    )
+
+    return success("Origin saved.", {
+      originId,
+      originName: originName ?? parsed.originName.trim(),
     })
   })
 }

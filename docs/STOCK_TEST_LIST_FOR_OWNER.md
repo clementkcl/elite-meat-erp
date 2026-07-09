@@ -54,13 +54,14 @@ Pass result:
 5. Enter one weight in kg.
 6. Generate the internal label and confirm the barcode is numeric only.
 7. Confirm the 50mm x 30mm label preview shows company name, product name, weight, and barcode.
-8. Print to a Bluetooth label printer if available; otherwise use `PDF fallback`.
-9. Attach the label to the test product.
-10. Confirm stock saves immediately after label generation.
-11. Attach the printed label to the product.
-12. Confirm the page returns immediately to weight entry for the next unit.
-13. Enter a second weight and confirm previous saved item, previous weight, current count, and current total weight update.
-14. Finish the session and confirm the summary shows the same item/manufacturer/location and all saved labels.
+8. If the save fails, confirm the pending label shows `Retry save` and saves the same barcode without retyping weight.
+9. Print to a Bluetooth label printer if available; otherwise use `PDF fallback`.
+10. Attach the label to the test product.
+11. Confirm stock saves immediately after label generation.
+12. Attach the printed label to the product.
+13. Confirm the page returns immediately to weight entry for the next unit.
+14. Enter a second weight and confirm previous saved item, previous weight, current count, and current total weight update.
+15. Finish the session and confirm the summary shows the same item/manufacturer/location and all saved labels.
 
 Pass result:
 
@@ -166,7 +167,7 @@ Latest Codex QA preparation note, 2026-06-25:
 - Local browser/device evidence is still manual: the app starts locally in foreground, but in-app browser automation is blocked in this Windows sandbox by `CreateProcessAsUserW failed: 5`.
 - Barcode Inbound recent templates now use a 390px two-column grid and show `Tap Brand + Product to scan faster.` so workers can start repeat inbound with less scrolling.
 - Barcode Inbound now shows `Saved barcode rule ready` or `No saved barcode rule yet` after item + brand + origin are selected; confirm workers know whether to scan immediately or enter actual kg once and save the rule.
-- Barcode Inbound now shows `Barcode length changed.` when a saved-rule scan has a different barcode length from the latest matching saved unit; confirm it appears as a yellow warning and does not block saving by itself.
+- Barcode Inbound now shows `Barcode length changed.` when a saved-rule scan has a different barcode length from the latest matching saved unit; confirm it appears as a yellow warning, does not auto-save, and lets the worker tap `Confirm weight and save` if the extracted weight is correct.
 - Barcode Inbound blocked duplicate and no-weight scans now create failed scan logs; confirm managers can see them in barcode scan error/report surfaces after live QA data exists.
 - Stock manager dashboard now shows `Manager scan issue review` for all failed barcode scans, including duplicate, wrong-location, unknown-barcode, unavailable-stock, and barcode-rule failures; confirm `Open barcode scan error report` filters the report and shows the barcode.
 - Barcode Inbound previous-scan and recent-scan cards now wrap long product names and stack status badges on narrow phones; confirm saved-scan cards remain readable around 390px.
@@ -373,6 +374,7 @@ Page: `/stock/inbound`
 11. Confirm quick inbound origin buttons appear before the origin dropdown and fit at about 390px width.
 12. Tap a quick origin button and confirm it fills the origin.
 13. Confirm the origin dropdown and Other/custom origin still work as fallback.
+13a. Search a missing origin, tap `Use search text as custom origin`, confirm `Save origin first`, save it, and confirm Barcode Rule Page opens only after the saved origin is selected.
 14. Confirm quick inbound location buttons appear before the location dropdown and fit at about 390px width.
 15. Tap a quick location button and confirm it fills the location.
 16. Confirm the location dropdown still works as a fallback.

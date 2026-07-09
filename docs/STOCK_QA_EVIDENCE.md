@@ -6,6 +6,85 @@ Use this file to record real Supabase, RLS, device, and workflow evidence before
 
 Use `docs/STOCK_COMPLETION_AUDIT.md` to compare local automated evidence with the manual evidence still required.
 
+## 2026-07-10 Stock Inbound Length Warning Confirm Save
+
+Scope:
+
+- `/stock/inbound` saved-rule supplier barcode scanning.
+
+Evidence captured:
+
+- Different-length barcodes that still decode a weight now expose `Confirm weight and save`.
+- The scan still logs `BARCODE_LENGTH_MISMATCH` and does not auto-save.
+- Source check passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`.
+
+Manual QA:
+
+- In a saved-rule inbound session, scan a barcode with a different length that still extracts weight; confirm warning appears, no auto-save happens, and `Confirm weight and save` saves only after worker taps it.
+
+## 2026-07-10 Stock Inbound Pending Label Copy Cleanup
+
+Scope:
+
+- `/stock/inbound` Inbound without Barcode pending-label warnings.
+
+Evidence captured:
+
+- Pending-label blocker messages now say `Retry or cancel pending label.` instead of cancel-only wording.
+- Source check passed: `node scripts\stock-mobile-ux-coverage.mjs`.
+
+Manual QA:
+
+- During a pending internal-label save, confirm Finish/New Session/weight entry blockers point workers to retry or cancel, not cancel only.
+
+## 2026-07-10 Stock Inbound Manufacturer/Origin RLS Guard
+
+Scope:
+
+- Stock Inbound `Other` manufacturer/origin save support.
+
+Evidence captured:
+
+- Stock RLS coverage now guards that manufacturer and origin insert/update policies use `can_manage_stock()`.
+- Delete policies for manufacturer/origin remain admin/director-only.
+- Source check passed: `node scripts\stock-rls-policy-coverage.mjs`.
+
+Manual QA:
+
+- With a non-admin stock worker profile, create/reuse one custom manufacturer and one custom origin from `/stock/inbound`; confirm both save and appear in setup without SQL Editor changes.
+
+## 2026-07-10 Stock Inbound Pending Label Retry
+
+Scope:
+
+- `/stock/inbound` Inbound without Barcode immediate-save flow.
+
+Evidence captured:
+
+- Pending internal-label save now has a `Retry save` action that resubmits the same generated barcode/weight after a failed save.
+- The pending label panel now says `Save pending. Retry or cancel.` so workers do not need to re-enter the weight after a connection/server error.
+- Source checks passed: `node scripts\stock-mobile-ux-coverage.mjs`.
+
+Manual QA:
+
+- During an internal-label session, simulate a failed save if possible, confirm the generated barcode remains visible, tap `Retry save`, and confirm the same label saves without retyping weight.
+
+## 2026-07-10 Stock Inbound Custom Origin Save Before Rule
+
+Scope:
+
+- `/stock/inbound` Page 1 setup and Page 2 barcode-rule learning.
+
+Evidence captured:
+
+- Added a stock-operator quick-save path for custom origins, matching the existing custom manufacturer path.
+- Barcode/manual scanning now requires a saved origin id, so barcode rules are learned against real item + manufacturer + origin ids instead of the temporary `Other` value.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, `node scripts\stock-acceptance-coverage.mjs`, `node scripts\stock-item-master-coverage.mjs`, and `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts\stock-workflow-regression.mjs`.
+
+Manual QA:
+
+- On `/stock/inbound`, search a missing origin, tap `Use search text as custom origin`, confirm `Save origin first`, save it, then continue to Barcode Rule Page and save a first supplier barcode rule.
+
 ## 2026-07-10 Stock Product Duplicate Merge Cleanup
 
 Scope:
@@ -706,7 +785,7 @@ Evidence captured:
 
 - `components/stock/workflow-forms.tsx` adds `finishBlockedByPendingLabel`.
 - The finish button is disabled while a printed label is pending confirmation.
-- The current UI shows `Cancel pending label first.` while the save is still pending.
+- The current UI shows `Retry or cancel pending label.` while the save is still pending.
 - New inbound session reset clears `pendingInternalLabel`, `pendingLabelRef`, and `pendingInternalLabelRef`.
 - `scripts/stock-mobile-ux-coverage.mjs` and `scripts/stock-acceptance-coverage.mjs` guard the finish/reset behavior.
 

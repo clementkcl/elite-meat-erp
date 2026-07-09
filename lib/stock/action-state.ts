@@ -6,6 +6,7 @@ export type StockActionState = {
   brandId?: string
   brandName?: string
   originId?: string
+  originName?: string
   stockUnitId?: string
   voidedStockUnitId?: string
 }

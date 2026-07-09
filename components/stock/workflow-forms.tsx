@@ -24,6 +24,7 @@ import {
   createBrandAction,
   createDamageRequestAction,
   createInboundBrandAction,
+  createInboundOriginAction,
   createReturnSupplierRequestAction,
   createItemAction,
   createLocationAction,
@@ -2049,8 +2050,14 @@ export function BarcodeInboundForm({
     quickBrandCreateAction,
     quickBrandCreatePending,
   ] = useActionState(quickBrandCreateFormAction, initialStockActionState)
+  const [
+    quickOriginCreateState,
+    quickOriginCreateAction,
+    quickOriginCreatePending,
+  ] = useActionState(quickOriginCreateFormAction, initialStockActionState)
   const [localItems, setLocalItems] = useState(items)
   const [localBrands, setLocalBrands] = useState(brands)
+  const [localOrigins, setLocalOrigins] = useState(origins)
   const [initialSessionDraft] = useState(() => {
     return readInboundSessionDraft()
   })
@@ -2418,6 +2425,40 @@ export function BarcodeInboundForm({
     return result
   }
 
+  async function quickOriginCreateFormAction(
+    previousState: StockActionState,
+    formData: FormData
+  ) {
+    const nextOriginName = originName.trim()
+    const result = await createInboundOriginAction(previousState, formData)
+
+    if (result.status === "success" && result.originId) {
+      const savedName =
+        result.originName ?? nextOriginName.replace(/\s+/g, " ").toUpperCase()
+
+      setLocalOrigins((current) =>
+        current.some((origin) => origin.id === result.originId)
+          ? current
+          : [
+              ...current,
+              {
+                id: result.originId ?? "",
+                name: savedName,
+                active: true,
+              },
+            ]
+      )
+      applyInboundSetupPreset({
+        ...preset,
+        originId: result.originId,
+      })
+      setOriginQuery(savedName)
+      setOriginName("")
+    }
+
+    return result
+  }
+
   function recordSessionError(nextBarcode: string, message: string) {
     setSessionErrors((current) => [
       {
@@ -2543,7 +2584,7 @@ export function BarcodeInboundForm({
         next.brandId &&
         next.brandId !== "__other" &&
         next.originId &&
-        (next.originId !== "__other" || originName.trim()) &&
+        next.originId !== "__other" &&
         next.locationId
     )
   }
@@ -2607,7 +2648,9 @@ export function BarcodeInboundForm({
   }
 
   function selectInboundOrigin(nextOriginId: string) {
-    const selectedOrigin = origins.find((origin) => origin.id === nextOriginId)
+    const selectedOrigin = localOrigins.find(
+      (origin) => origin.id === nextOriginId
+    )
 
     if (nextOriginId === "__other") {
       if (!originName.trim() && originQuery.trim()) {
@@ -2903,7 +2946,7 @@ export function BarcodeInboundForm({
   function handleNetWeightChange(value: string) {
     if (pendingInternalLabel) {
       setDecodeStatus("warning")
-      setDecodeMessage("Cancel pending label first.")
+      setDecodeMessage("Retry or cancel pending label.")
       return
     }
 
@@ -3048,7 +3091,7 @@ export function BarcodeInboundForm({
 
     if (pendingInternalLabel) {
       setDecodeStatus("warning")
-      setDecodeMessage("Cancel pending label first.")
+      setDecodeMessage("Retry or cancel pending label.")
       window.setTimeout(() => barcodeInputRef.current?.focus(), 0)
       return
     }
@@ -3091,7 +3134,8 @@ export function BarcodeInboundForm({
 
     if (
       submitter?.dataset.stockAction === "quick-create-item" ||
-      submitter?.dataset.stockAction === "quick-create-brand"
+      submitter?.dataset.stockAction === "quick-create-brand" ||
+      submitter?.dataset.stockAction === "quick-create-origin"
     ) {
       pendingLabelRef.current = null
       return
@@ -3110,8 +3154,8 @@ export function BarcodeInboundForm({
       event.preventDefault()
       pendingLabelRef.current = null
       setDecodeStatus("error")
-      setDecodeMessage("Cancel pending label, then try again.")
-      recordSessionError(barcode, "Cancel pending label, then try again.")
+      setDecodeMessage("Retry or cancel pending label.")
+      recordSessionError(barcode, "Retry or cancel pending label.")
       return
     }
 
@@ -3141,7 +3185,7 @@ export function BarcodeInboundForm({
 
     if (pendingInternalLabel) {
       setDecodeStatus("warning")
-      setDecodeMessage("Cancel pending label first.")
+      setDecodeMessage("Retry or cancel pending label.")
       window.setTimeout(() => barcodeInputRef.current?.focus(), 0)
       return
     }
@@ -3210,6 +3254,24 @@ export function BarcodeInboundForm({
     window.setTimeout(() => netWeightInputRef.current?.select(), 0)
   }
 
+  function retryPendingInternalLabelSave() {
+    if (!pendingInternalLabel) {
+      return
+    }
+
+    if (!isOnline) {
+      setDecodeStatus("error")
+      setDecodeMessage(offlineScanMessage)
+      return
+    }
+
+    pendingLabelRef.current = pendingInternalLabel
+    pendingInternalLabelRef.current = true
+    setDecodeStatus("warning")
+    setDecodeMessage("Retrying save.")
+    window.setTimeout(() => formRef.current?.requestSubmit(), 0)
+  }
+
   function printInboundLabels() {
     setInboundPrintTarget("labels")
     window.setTimeout(() => window.print(), 0)
@@ -3231,7 +3293,7 @@ export function BarcodeInboundForm({
     if (pendingInternalLabel) {
       setInboundStep("manual")
       setDecodeStatus("warning")
-      setDecodeMessage("Scan or cancel the pending label first.")
+      setDecodeMessage("Retry or cancel pending label.")
       return
     }
 
@@ -3261,7 +3323,9 @@ export function BarcodeInboundForm({
 
   const selectedItem = localItems.find((item) => item.id === preset.itemId)
   const selectedBrand = localBrands.find((brand) => brand.id === preset.brandId)
-  const selectedOrigin = origins.find((origin) => origin.id === preset.originId)
+  const selectedOrigin = localOrigins.find(
+    (origin) => origin.id === preset.originId
+  )
   const selectedLocation = locations.find(
     (location) => location.id === preset.locationId
   )
@@ -3335,7 +3399,7 @@ export function BarcodeInboundForm({
   }, [localBrands, brandQuery])
   const activeInboundOrigins = useMemo(() => {
     const query = canonicalUiName(originQuery)
-    const activeOrigins = origins
+    const activeOrigins = localOrigins
       .filter((origin) => origin.active)
       .sort((a, b) => compareText(a.name, b.name))
 
@@ -3346,7 +3410,7 @@ export function BarcodeInboundForm({
     return activeOrigins.filter((origin) =>
       canonicalUiName(origin.name).includes(query)
     )
-  }, [origins, originQuery])
+  }, [localOrigins, originQuery])
   const activeInboundLocations = locations
     .filter((location) => location.active)
     .sort((a, b) => compareText(a.name, b.name))
@@ -3355,11 +3419,11 @@ export function BarcodeInboundForm({
       buildInboundTemplates({
         items: localItems,
         brands: localBrands,
-        origins,
+        origins: localOrigins,
         units,
         barcodeWeightRules,
       }),
-    [localItems, localBrands, origins, units, barcodeWeightRules]
+    [localItems, localBrands, localOrigins, units, barcodeWeightRules]
   )
   const inboundSessionHistory = useMemo(
     () =>
@@ -3367,11 +3431,11 @@ export function BarcodeInboundForm({
         units,
         items: localItems,
         brands: localBrands,
-        origins,
+        origins: localOrigins,
         locations,
         barcodeWeightRules,
       }),
-    [units, localItems, localBrands, origins, locations, barcodeWeightRules]
+    [units, localItems, localBrands, localOrigins, locations, barcodeWeightRules]
   )
   const historyPageSize = 10
   const historyPageCount = Math.max(
@@ -3612,7 +3676,7 @@ export function BarcodeInboundForm({
   function finishInboundSession() {
     if (finishBlockedByPendingLabel) {
       setDecodeStatus("warning")
-      setDecodeMessage("Cancel pending label first.")
+      setDecodeMessage("Retry or cancel pending label.")
       return
     }
 
@@ -3641,7 +3705,7 @@ export function BarcodeInboundForm({
       preset.brandId &&
       preset.brandId !== "__other" &&
       preset.originId &&
-      (preset.originId !== "__other" || originName.trim()) &&
+      preset.originId !== "__other" &&
       preset.locationId
   )
   const inboundScannerContextSummary = scanSetupReady
@@ -3671,6 +3735,7 @@ export function BarcodeInboundForm({
     ruleExtractedPreview.status === "manual_confirmation_required"
       ? ruleExtractedPreview.weightKg
       : ""
+  const barcodeLengthWarningMessage = inboundBarcodeLengthWarning(barcode)
   const rulePreviewInvalid =
     inboundStep === "rule" &&
     Boolean(barcode.trim()) &&
@@ -3679,7 +3744,8 @@ export function BarcodeInboundForm({
     inboundMode === "supplier_barcode" &&
     inboundStep === "scan" &&
     canUseBarcodeRuleForSession &&
-    ruleExtractedPreview.status === "manual_confirmation_required" &&
+    (ruleExtractedPreview.status === "manual_confirmation_required" ||
+      Boolean(barcodeLengthWarningMessage)) &&
     Boolean(barcode.trim()) &&
     Number(netWeightKg) > 0
   const detectedRuleEndPosition =
@@ -3898,7 +3964,7 @@ export function BarcodeInboundForm({
         localItems,
         locations,
         localBrands,
-        origins,
+        localOrigins,
         defaultLocationId
       ),
       barcodeWeightRules
@@ -4997,7 +5063,7 @@ export function BarcodeInboundForm({
                 </div>
               ) : null}
               <OriginSelect
-                origins={origins}
+                origins={localOrigins}
                 value={preset.originId}
                 onChange={selectInboundOrigin}
                 allowOther
@@ -5022,15 +5088,44 @@ export function BarcodeInboundForm({
                 </Button>
               ) : null}
               {preset.originId === "__other" ? (
-                <Input
-                  ref={quickOriginInputRef}
-                  name="originName"
-                  value={originName}
-                  onChange={(event) => setOriginName(event.target.value)}
-                  placeholder="Enter custom origin"
-                  readOnly={scopeLocked}
-                  required
-                />
+                <div
+                  data-stock-action="inbound-save-custom-origin"
+                  className="space-y-2"
+                >
+                  <div
+                    data-stock-action="custom-origin-save-required"
+                    className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
+                  >
+                    Save origin first.
+                  </div>
+                  <Input
+                    ref={quickOriginInputRef}
+                    name="originName"
+                    value={originName}
+                    onChange={(event) => setOriginName(event.target.value)}
+                    placeholder="Enter custom origin"
+                    readOnly={scopeLocked}
+                    required
+                  />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    formAction={quickOriginCreateAction}
+                    formNoValidate
+                    data-stock-action="quick-create-origin"
+                    disabled={
+                      scopeLocked ||
+                      quickOriginCreatePending ||
+                      originName.trim().length < 2
+                    }
+                    className="min-h-11 w-full justify-start whitespace-normal text-left"
+                  >
+                    {quickOriginCreatePending
+                      ? "Saving origin..."
+                      : "Save origin now"}
+                  </Button>
+                  <ActionMessage state={quickOriginCreateState} />
+                </div>
               ) : null}
             </div>
             <div className={inboundStep === "setup" ? "space-y-2" : "hidden"}>
@@ -5823,7 +5918,7 @@ export function BarcodeInboundForm({
             >
               <div className="font-semibold">Pending label</div>
               <div className="mt-1">
-                Saving label. Cancel first.
+                Save pending. Retry or cancel.
               </div>
               <div
                 data-stock-action="pending-internal-label-display-name"
@@ -5851,6 +5946,14 @@ export function BarcodeInboundForm({
                 <div className="space-y-3">
                   <StockLabelPrintNote />
                   <StockLabelPrintActions onPrint={printInboundLabels} />
+                  <Button
+                    type="button"
+                    className="min-h-11 w-full"
+                    disabled={pending}
+                    onClick={retryPendingInternalLabelSave}
+                  >
+                    {pending ? "Saving..." : "Retry save"}
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -5918,7 +6021,7 @@ export function BarcodeInboundForm({
               aria-live="polite"
               className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm break-words text-amber-800"
             >
-              Cancel pending label first.
+              Retry or cancel pending label.
             </div>
           ) : null}
           {finishBlockedByNoSavedScan &&
