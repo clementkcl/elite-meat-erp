@@ -1,5 +1,54 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-10 - Stock Inbound custom name casing guard
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by tightening custom product/manufacturer naming behavior.
+- Custom manufacturer/origin/alternate names now keep clean worker-entered casing after whitespace normalization instead of being saved/displayed in all caps.
+- The Stock Inbound client fallback now also preserves custom manufacturer/origin casing if a server response ever omits the returned name.
+- Duplicate prevention still uses uppercase canonical lookup keys, so `Tican`, `tican`, and `TICAN` resolve to the same existing manufacturer/origin record.
+- Stock Inbound page 1 custom product/manufacturer/origin messages now use shorter worker copy: `Save before scanning.`, `Save manufacturer.`, and `Save origin.`.
+- Setup and pending-label lock messages were shortened to `Finish or delete first.` and `Retry or cancel label.`.
+- Updated stock inbound guided-flow and item-master coverage so casing preservation and canonical duplicate lookup are both guarded.
+- No migration, RLS, stock movement, barcode uniqueness, scanner, label printing, or database workflow behavior changed.
+
+Files changed in this pass:
+
+- `lib/stock/actions.ts`
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-item-master-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None in this pass.
+
+SQL run order:
+
+- Unchanged. Pending display-name migration remains `supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql` after `202606250013_stock_item_merge_v1.sql`.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-item-master-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run typecheck` - passed.
+
+Risks / remaining checks:
+
+- Live Supabase QA should create/reuse custom manufacturer names with different casing and confirm the UI shows readable casing while preventing duplicates.
+- Live Supabase, phone camera, handheld scanner, print/PDF, save/undo, and manager whole-session void QA remain manual owner checks before the full active goal can be marked complete.
+
 ## 2026-07-10 - Stock Inbound session-code wording cleanup
 
 Task completed:

@@ -602,7 +602,7 @@ Scope:
 Evidence captured:
 
 - Unsaved custom manufacturer text no longer counts as ready for barcode-rule, scanner, or manual-entry pages.
-- The setup page now shows `Save manufacturer first.` beside the custom manufacturer save action.
+- The setup page now shows `Save manufacturer.` beside the custom manufacturer save action.
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `npm.cmd run typecheck`, `npm.cmd run smoke`, `npm.cmd run lint`, and `npm.cmd run build`.
 
 Manual QA:
@@ -844,7 +844,7 @@ Scope:
 
 Evidence captured:
 
-- Setup now uses shorter labels: `Auto code.`, `10 per page.`, `Tap product.`, `Product name.`, `Item code:`, `Recent manufacturers`, and `Tap manufacturer.`
+- Setup now uses shorter labels: `Auto code.`, `10 per page.`, `Tap product.`, `Save before scanning.`, `Item code:`, `Recent manufacturers`, and `Tap manufacturer.`
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
 
 Manual QA:

@@ -2402,7 +2402,7 @@ export function BarcodeInboundForm({
 
     if (result.status === "success" && result.brandId) {
       const savedName =
-        result.brandName ?? nextBrandName.replace(/\s+/g, " ").toUpperCase()
+        result.brandName ?? nextBrandName.replace(/\s+/g, " ")
 
       setLocalBrands((current) =>
         current.some((brand) => brand.id === result.brandId)
@@ -2436,7 +2436,7 @@ export function BarcodeInboundForm({
 
     if (result.status === "success" && result.originId) {
       const savedName =
-        result.originName ?? nextOriginName.replace(/\s+/g, " ").toUpperCase()
+        result.originName ?? nextOriginName.replace(/\s+/g, " ")
 
       setLocalOrigins((current) =>
         current.some((origin) => origin.id === result.originId)
@@ -3710,7 +3710,7 @@ export function BarcodeInboundForm({
 
   const summaryStepLockedMessage =
     finishBlockedByPendingLabel
-      ? "Retry or cancel pending label before summary."
+      ? "Retry or cancel label."
       : recentInboundCount > 0
       ? "Open Summary to finish."
       : inboundMode === "internal_label"
@@ -4360,7 +4360,7 @@ export function BarcodeInboundForm({
                 aria-live="polite"
                 className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
               >
-                Setup locked. Finish or delete first.
+                Finish or delete first.
                 <span className="mt-1 block text-xs font-medium">
                   {scopeLockedReason}
                 </span>
@@ -4829,7 +4829,7 @@ export function BarcodeInboundForm({
                   New product
                 </summary>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Product name.
+                  Save before scanning.
                 </p>
                 {!quickProductCreateManufacturerReady ? (
                   <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -5022,7 +5022,7 @@ export function BarcodeInboundForm({
                     data-stock-action="custom-manufacturer-save-required"
                     className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
                   >
-                    Save manufacturer first.
+                    Save manufacturer.
                   </div>
                   <Input
                     ref={quickManufacturerInputRef}
@@ -5129,7 +5129,7 @@ export function BarcodeInboundForm({
                     data-stock-action="custom-origin-save-required"
                     className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
                   >
-                    Save origin first.
+                    Save origin.
                   </div>
                   <Input
                     ref={quickOriginInputRef}

@@ -441,7 +441,7 @@ function normalizeSpacing(value: string | undefined) {
 
 function normalizeOptionalName(value: string | undefined) {
   const normalized = normalizeSpacing(value)
-  return normalized ? normalized.toUpperCase() : null
+  return normalized || null
 }
 
 function normalizeProductField(value: string | undefined, fallback = "") {
@@ -611,6 +611,7 @@ async function findNamedRecordId(
   if (!name) {
     return null
   }
+  const lookupName = canonicalLookupName(name)
 
   const { data: allRows, error: allRowsError } = await supabase
     .from(table)
@@ -623,7 +624,7 @@ async function findNamedRecordId(
   const existingByCanonical = Array.isArray(allRows)
     ? allRows
         .map(asRecord)
-        .find((row) => canonicalLookupName(readString(row.name)) === name)
+        .find((row) => canonicalLookupName(readString(row.name)) === lookupName)
     : null
 
   const existingByCanonicalId = readString(existingByCanonical?.id)

@@ -197,6 +197,8 @@ includesAll(
     "Product already exists for this manufacturer. Select the existing product instead.",
     "normalizeSpacing",
     "canonicalLookupName",
+    "return normalized || null",
+    "const lookupName = canonicalLookupName(name)",
     "is already used.",
     "normalizeItemCode",
     "Inactive products cannot receive new inbound stock.",
