@@ -6,6 +6,142 @@ Use this file to record real Supabase, RLS, device, and workflow evidence before
 
 Use `docs/STOCK_COMPLETION_AUDIT.md` to compare local automated evidence with the manual evidence still required.
 
+## 2026-07-09 Stock Inbound Setup Finish Handler Reuse
+
+Scope:
+
+- `/stock/inbound` setup-change protection warning.
+
+Evidence captured:
+
+- The setup warning `Finish current session` action now calls the shared `finishInboundSession` handler.
+- Finish cleanup is now consistent with the scanner/manual Finish Session path.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs` and `npm.cmd run typecheck`.
+
+Manual QA:
+
+- Save at least one inbound scan, go back to setup, tap `Finish current session`, and confirm the same summary state appears as the main Finish Session action.
+
+## 2026-07-09 Stock Inbound History Barcode Detail Cap
+
+Scope:
+
+- `/stock/inbound` Inbound Session History details.
+
+Evidence captured:
+
+- Session history no longer caps barcode data at 8 before rendering details.
+- Details display stays compact by showing latest 20 barcodes with a short note if more exist.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs` and `npm.cmd run typecheck`.
+
+Manual QA:
+
+- Open an inbound session history entry with more than 20 saved scans and confirm details stay compact while indicating only latest 20 are shown.
+
+## 2026-07-09 Stock Inbound Full-Session Label Totals
+
+Scope:
+
+- `/stock/inbound` current-session labels, totals, summary, and label print data.
+
+Evidence captured:
+
+- Current-session label state is no longer capped at 12 entries.
+- Visible recent list remains capped to the latest 12 for mobile display.
+- Session totals, Print Labels PDF, and Delete Whole Session now have access to all saved scans in the current batch.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-acceptance-coverage.mjs`, and `npm.cmd run typecheck`.
+
+Manual QA:
+
+- Save more than 12 inbound labels in one session.
+- Confirm the visible list says latest 12, while total count/weight and Print Labels PDF include all saved scans.
+
+## 2026-07-09 Stock External Scanner Overwrite Fix
+
+Scope:
+
+- Stock barcode input used by inbound scanner/manual barcode entry.
+
+Evidence captured:
+
+- After an external scanner submits with Enter, the barcode input is selected for the next scan.
+- This keeps rapid handheld scanner input from appending the next barcode to the previous value.
+- Source checks passed: `node scripts\stock-scanner-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `npm.cmd run typecheck`.
+
+Manual QA:
+
+- Focus the barcode input on `/stock/inbound`, scan two barcodes with a handheld scanner, and confirm the second value replaces the first instead of appending.
+
+## 2026-07-09 Stock Inbound Continue Unfinished Route Fix
+
+Scope:
+
+- `/stock/inbound` current unfinished-session card.
+
+Evidence captured:
+
+- Current unfinished supplier-barcode sessions without a saved barcode rule now continue to Barcode Rule.
+- Current unfinished manual sessions, and supplier-barcode sessions with a saved rule, still continue to the active scan/manual page.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs` and `npm.cmd run typecheck`.
+
+Manual QA:
+
+- Start a supplier-barcode inbound setup with no saved rule and tap `Continue unfinished session`; confirm it opens Barcode Rule.
+- Start or resume a manual inbound session and confirm the same button opens Manual Weight Entry.
+
+## 2026-07-09 Stock Inbound Generated Label Preview Restore
+
+Scope:
+
+- `/stock/inbound` manual weight generated-label flow.
+
+Evidence captured:
+
+- Generated internal label state is now set before the immediate stock-save submit.
+- The pending label preview/print area can render the generated label while the save is submitting.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-acceptance-coverage.mjs`, and `node scripts\stock-label-coverage.mjs`.
+
+Manual QA:
+
+- In manual weight mode, enter a weight and press Enter/Done.
+- Confirm the generated 50mm label preview appears while saving, then the saved unit appears in the session list after the save completes.
+
+## 2026-07-09 Stock Scanner Popup Short Copy
+
+Scope:
+
+- Stock scanner popup used by inbound and other stock scanning pages.
+
+Evidence captured:
+
+- Camera permission cue is now `Allow camera. Use manual if blocked.`
+- One-sample scanner cue is now `One sample only.`
+- External scanner cue is now `Enter sends scan.`
+- Blocked-camera error is now `Camera blocked. Allow camera or use manual.`
+- Source checks passed: `node scripts\stock-scanner-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, `node scripts\stock-acceptance-coverage.mjs`, and `node scripts\stock-inbound-guided-flow-coverage.mjs`.
+
+Manual QA:
+
+- Open the phone scanner popup on `/stock/inbound` around 390px width and confirm the shorter messages fit without horizontal scrolling.
+- Block camera permission and confirm the short blocked-camera message appears with manual fallback.
+
+## 2026-07-09 Stock Inbound Saved Manufacturer Gate
+
+Scope:
+
+- `/stock/inbound` setup page and guided inbound step readiness.
+
+Evidence captured:
+
+- Unsaved custom manufacturer text no longer counts as ready for barcode-rule, scanner, or manual-entry pages.
+- The setup page now shows `Save manufacturer before scanning.` beside the custom manufacturer save action.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `npm.cmd run typecheck`, `npm.cmd run smoke`, `npm.cmd run lint`, and `npm.cmd run build`.
+
+Manual QA:
+
+- Search a new manufacturer, choose it as custom, and confirm Next remains blocked until `Save manufacturer now` succeeds.
+- After saving, confirm the saved manufacturer is selected and barcode/manual inbound can continue.
+
 ## 2026-07-09 Stock Inbound Manual Duplicate Previous-Weight Cleanup
 
 Scope:
@@ -223,8 +359,8 @@ Scope:
 Evidence captured:
 
 - Default scanner helper now says `Type barcode if needed.`
-- Camera popup now says `Allow camera. Rear camera preferred. Use manual if blocked.`
-- External scanner cue now says `Keep cursor here. Enter sends scan`.
+- Camera popup now says `Allow camera. Use manual if blocked.`
+- External scanner cue now says `Enter sends scan`.
 - Source checks passed: `node scripts\stock-scanner-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, `node scripts\stock-inbound-guided-flow-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
 
 Manual QA:

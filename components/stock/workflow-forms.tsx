@@ -1774,7 +1774,7 @@ function buildInboundSessionHistory({
     } else {
       next.count += 1
       next.totalWeightKg += Number(unit.netWeightKg || 0)
-      next.barcodes = [unit.barcode, ...next.barcodes].slice(0, 8)
+      next.barcodes = [unit.barcode, ...next.barcodes]
     }
 
     next.startedAt =
@@ -1812,7 +1812,6 @@ function inboundLabelsForBatch(
   return units
     .filter((unit) => unit.batchNo === batchNo)
     .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))
-    .slice(0, 12)
     .map((unit) => {
       const item = items.find((candidate) => candidate.id === unit.itemId)
       const brand = brands.find((candidate) => candidate.id === unit.brandId)
@@ -2110,7 +2109,7 @@ export function BarcodeInboundForm({
           status: "SAVED",
         }
 
-        setRecentLabels((current) => [savedLabel, ...current].slice(0, 12))
+        setRecentLabels((current) => [savedLabel, ...current])
         pendingLabelRef.current = null
       }
 
@@ -2447,7 +2446,7 @@ export function BarcodeInboundForm({
     return Boolean(
       next.itemId &&
         next.brandId &&
-        (next.brandId !== "__other" || brandName.trim()) &&
+        next.brandId !== "__other" &&
         next.originId &&
         (next.originId !== "__other" || originName.trim()) &&
         next.locationId
@@ -3069,6 +3068,7 @@ export function BarcodeInboundForm({
 
     pendingLabelRef.current = nextLabel
     pendingInternalLabelRef.current = true
+    setPendingInternalLabel(nextLabel)
     setInboundMode("internal_label")
     setInboundStep("manual")
     setBarcode(generated.barcode)
@@ -3490,7 +3490,7 @@ export function BarcodeInboundForm({
   const scanSetupReady = Boolean(
     preset.itemId &&
       preset.brandId &&
-      (preset.brandId !== "__other" || brandName.trim()) &&
+      preset.brandId !== "__other" &&
       preset.originId &&
       (preset.originId !== "__other" || originName.trim()) &&
       preset.locationId
@@ -3508,7 +3508,7 @@ export function BarcodeInboundForm({
   const barcodeRuleSetupReady = Boolean(
     preset.itemId &&
       preset.brandId &&
-      (preset.brandId !== "__other" || brandName.trim()) &&
+      preset.brandId !== "__other" &&
       preset.originId &&
       (preset.originId !== "__other" || originName.trim())
   )
@@ -3980,7 +3980,13 @@ export function BarcodeInboundForm({
                 <Button
                   type="button"
                   className="mt-3 min-h-11 w-full"
-                  onClick={() => goInboundStep(activeScanStep)}
+                  onClick={() =>
+                    goInboundStep(
+                      manualMode || canUseBarcodeRuleForSession
+                        ? activeScanStep
+                        : "rule"
+                    )
+                  }
                 >
                   Continue unfinished session
                 </Button>
@@ -4060,8 +4066,14 @@ export function BarcodeInboundForm({
                       <div>Started: {new Date(session.startedAt).toLocaleString()}</div>
                       <div>Last scan: {new Date(session.lastAt).toLocaleString()}</div>
                       <div className="mt-2 break-all font-mono">
-                        {session.barcodes.join(", ") || "No barcode details"}
+                        {session.barcodes.slice(0, 20).join(", ") ||
+                          "No barcode details"}
                       </div>
+                      {session.barcodes.length > 20 ? (
+                        <div className="mt-1 text-muted-foreground">
+                          Showing latest 20 barcodes.
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -4146,10 +4158,7 @@ export function BarcodeInboundForm({
                     data-stock-action="finish-current-session-before-setup-change"
                     variant="outline"
                     className="mt-3 min-h-11 w-full border-amber-300 bg-white text-amber-900 hover:bg-amber-50"
-                    onClick={() => {
-                      setSessionFinishedAt(new Date().toISOString())
-                      setInboundStep("summary")
-                    }}
+                    onClick={finishInboundSession}
                   >
                     Finish current session
                   </Button>
@@ -4755,6 +4764,12 @@ export function BarcodeInboundForm({
                   data-stock-action="inbound-save-custom-manufacturer"
                   className="space-y-2"
                 >
+                  <div
+                    data-stock-action="custom-manufacturer-save-required"
+                    className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900"
+                  >
+                    Save manufacturer before scanning.
+                  </div>
                   <Input
                     name="brandName"
                     value={brandName}
@@ -5882,7 +5897,7 @@ export function BarcodeInboundForm({
               ) : null}
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {recentLabels.map((label) => (
+              {recentLabels.slice(0, 12).map((label) => (
                 <div
                   key={label.id}
                   className="rounded-md border bg-background p-3 text-sm"
@@ -6362,6 +6377,11 @@ export function BarcodeInboundForm({
                 </div>
               ))}
             </div>
+            {recentLabels.length > 12 ? (
+              <div className="mt-2 text-xs text-muted-foreground">
+                Showing latest 12. Session totals include all saved scans.
+              </div>
+            ) : null}
           </div>
         ) : null}
         <StockLabelPrintArea

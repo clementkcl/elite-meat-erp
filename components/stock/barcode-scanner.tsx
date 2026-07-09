@@ -130,6 +130,7 @@ export function BarcodeField({
 
     event.preventDefault()
     handleDetected(typedValue)
+    queueMicrotask(() => manualInputRef.current?.select())
   }
   const focusManualInput = () => {
     queueMicrotask(() => {
@@ -247,7 +248,7 @@ function cameraErrorMessage(scanError: unknown) {
   }
 
   if (scanError.name === "NotAllowedError") {
-    return "Camera blocked. Allow camera permission or use manual entry."
+    return "Camera blocked. Allow camera or use manual."
   }
 
   if (scanError.name === "NotFoundError") {
@@ -650,7 +651,7 @@ export function BarcodeScanner({
                 id={dialogDescriptionId}
                 className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm break-words text-muted-foreground"
               >
-                Allow camera. Rear camera preferred. Use manual if blocked.
+                Allow camera. Use manual if blocked.
               </div>
               {scanContextSummary ? (
                 <div
@@ -678,7 +679,7 @@ export function BarcodeScanner({
                   data-stock-action="one-sample-scan-cue"
                   className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm break-words text-sky-800"
                 >
-                  One sample scan. Camera closes after one barcode.
+                  One sample only.
                 </div>
               )}
               <div
@@ -705,8 +706,7 @@ export function BarcodeScanner({
                   className="mt-2 min-h-11 text-base sm:text-sm"
                 />
                 <p className="mt-1 text-xs break-words text-muted-foreground">
-                  Keep cursor here. Enter sends scan
-                  {continuous ? " and stays ready." : "."}
+                  Enter sends scan{continuous ? ". Stays ready." : "."}
                 </p>
               </div>
               {!isOnline ? (

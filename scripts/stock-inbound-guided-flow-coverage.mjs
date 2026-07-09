@@ -43,6 +43,7 @@ includesAll(
     "return readInboundSessionDraft()",
     "function inboundLabelsForBatch",
     "inboundLabelsForBatch(",
+    "setRecentLabels((current) => [savedLabel, ...current])",
     "const hasReadyDraftSetup = Boolean(",
     "preset.brandId !== \"__other\"",
     "preset.originId !== \"__other\"",
@@ -61,6 +62,9 @@ includesAll(
     "data-stock-action=\"continue-current-inbound-session\"",
     "scanSetupReady || recentLabels.length > 0",
     "Current unfinished session",
+    "manualMode || canUseBarcodeRuleForSession",
+    "? activeScanStep",
+    ": \"rule\"",
     "Continue unfinished session",
     "function applyInboundHistorySetup",
     "data-stock-action=\"use-inbound-history-setup\"",
@@ -72,10 +76,35 @@ includesAll(
     "voided kept for audit",
     "Saved: {session.count}",
     "Voided: {session.voidedCount}",
+    "session.barcodes.slice(0, 20).join",
+    "Showing latest 20 barcodes.",
     "No previous inbound sessions yet.",
     "Page {boundedHistoryPage} / {historyPageCount}",
+    "recentLabels.slice(0, 12).map",
+    "Showing latest 12. Session totals include all saved scans.",
   ],
   "Inbound session history"
+)
+
+const inboundLabelsStart = workflowForms.indexOf("function inboundLabelsForBatch")
+const inboundLabelsEnd = workflowForms.indexOf(
+  "export function BarcodeInboundForm",
+  inboundLabelsStart
+)
+assert(inboundLabelsStart >= 0, "inboundLabelsForBatch function missing")
+assert(inboundLabelsEnd > inboundLabelsStart, "inboundLabelsForBatch boundary missing")
+assert(
+  !workflowForms.slice(inboundLabelsStart, inboundLabelsEnd).includes(".slice(0, 12)"),
+  "Current-session labels must not be capped before totals/printing."
+)
+
+const historyBuildStart = workflowForms.indexOf("function buildInboundSessionHistory")
+const historyBuildEnd = workflowForms.indexOf("function formatProductName", historyBuildStart)
+assert(historyBuildStart >= 0, "buildInboundSessionHistory function missing")
+assert(historyBuildEnd > historyBuildStart, "buildInboundSessionHistory boundary missing")
+assert(
+  !workflowForms.slice(historyBuildStart, historyBuildEnd).includes(".slice(0, 8)"),
+  "Inbound session history details must not cap barcode data before rendering."
 )
 
 const historySetupStart = workflowForms.indexOf(
@@ -171,6 +200,7 @@ includesAll(
     "{setupChangeProtectionMessage}",
     "data-stock-action=\"finish-current-session-before-setup-change\"",
     "Finish current session",
+    "onClick={finishInboundSession}",
     "data-stock-action=\"review-delete-whole-session-from-locked-setup\"",
     "Review summary or delete whole session",
     "Recent inbound templates",
@@ -206,7 +236,7 @@ includesAll(
     "Profile default.",
     "Change Location",
     "Next: Barcode Rule Page",
-    "(next.brandId !== \"__other\" || brandName.trim())",
+    "next.brandId !== \"__other\"",
     "(next.originId !== \"__other\" || originName.trim())",
     "if (nextBrandId === \"__other\")",
     "if (!brandName.trim() && brandQuery.trim())",
@@ -265,6 +295,8 @@ includesAll(
     "setBrandQuery(resolvedBrandName)",
     "data-stock-action=\"manual-manufacturer-entry\"",
     "data-stock-action=\"inbound-save-custom-manufacturer\"",
+    "data-stock-action=\"custom-manufacturer-save-required\"",
+    "Save manufacturer before scanning.",
     "createInboundBrandAction",
     "useActionState(quickBrandCreateFormAction, initialStockActionState)",
     "async function quickBrandCreateFormAction",
@@ -582,6 +614,7 @@ includesAll(
     'status: "PENDING"',
     "pendingLabelRef.current = nextLabel",
     "pendingInternalLabelRef.current = true",
+    "setPendingInternalLabel(nextLabel)",
     "setBarcode(generated.barcode)",
     "Label generated. Saving stock now.",
     "formRef.current?.requestSubmit()",
