@@ -522,7 +522,7 @@ includesAll(
     "window.setTimeout(() => formRef.current?.requestSubmit(), 0)",
     "Duplicate barcode. Inbound is blocked.",
     "inboundScannerContextSummary",
-    "`Batch: ${batchNo}`",
+    "`Inbound session code: ${batchNo}`",
     "`Display product: ${selectedProductDisplayName}`",
     "`Product: ${selectedProductName}`",
     "`Manufacturer: ${selectedManufacturerName}`",

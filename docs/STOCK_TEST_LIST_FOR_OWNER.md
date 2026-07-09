@@ -192,7 +192,7 @@ Latest Codex QA preparation note, 2026-06-25:
 - Stock manual barcode fallback now requests the phone numeric keyboard with a Done key and disables autocorrect/capitalization for faster long-barcode typing.
 - Barcode Inbound weight entry now requests a decimal phone keyboard with a Done key, and barcode weight-rule number fields request a numeric phone keyboard.
 - Barcode Inbound product search now requests the phone search keyboard, and quick product creation uses a Done key.
-- Barcode Inbound batch number now uses a phone Done key and avoids browser autofill while keeping the auto-generated value editable.
+- Barcode Inbound now shows an auto-generated read-only inbound session code.
 - Return/Damage supplier and photo-reference fallback fields now use a phone Done key and avoid browser autofill.
 - Optional Stock reference-number fields now use a phone Done key and avoid browser autofill across inbound, outbound, transfer, receive-transfer, and return.
 - No-barcode stock guidance now uses a full-width phone-size `Open Barcode Inbound` in-app link so workers can move to label/inbound flow quickly.
@@ -241,7 +241,7 @@ Latest Codex QA preparation note, 2026-06-25:
 10. Open `Weight rule and notes`, tap weight start/digits/decimals and confirm numeric keyboards appear with a Done key.
 11. Tap `Search product or item code` and confirm the phone shows a search keyboard/action.
 12. Open `New product`, tap `Product name`, and confirm the keyboard has a Done key.
-13. Open `Weight rule and notes`, tap `Batch no.`, and confirm the keyboard has a Done key. Leave the generated batch number unchanged and confirm inbound still works.
+13. Open `Weight rule and notes`, confirm `Inbound session code` is visible and read-only. No typing is needed.
 14. Open `Weight rule and notes`, tap optional `Reference no.`, and confirm the keyboard has a Done key. Leave it blank and confirm inbound still works.
 8. Confirm the green `Scanning inbound` card appears above the scanner with the active brand, product, origin, and location.
 9. Scan or manually enter two unique inbound test barcodes and confirm continuous scanning, previous scan product/weight, saved count, and saved total weight stay visible.
@@ -385,7 +385,7 @@ Page: `/stock/inbound`
 20. Confirm location can be edited only to allowed stock locations before the first saved scan.
 21. Confirm brand and origin are required before scanning or saving.
 22. Confirm Scan Barcode/manual entry stays disabled and shows `Choose product, brand, origin, and location first.` directly under the barcode field until the setup is complete.
-22. Confirm a batch number is auto-generated when the page opens.
+22. Confirm an inbound session code is auto-generated when the page opens.
 23. Confirm no Start Batch button is required.
 
 Pass result:

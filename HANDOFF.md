@@ -1,5 +1,54 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-10 - Stock Inbound session-code wording cleanup
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by removing the last stale `Batch no.` label from the barcode-rule/notes area.
+- The read-only generated field, scanner context, and session summary print rows now consistently say `Inbound session code` with the short helper `Auto code.`.
+- The detected barcode-rule preview now labels the inferred start/end range as `Weight position` instead of the less precise `Weight digits`.
+- Updated mobile UX coverage, QA evidence, runbook, owner test list, and remote QA wording so the guard and manual steps match the current worker-facing copy.
+- Added owner-QA coverage to prevent `Batch no.`, `Auto session code`, old Barcode Inbound batch-number wording, and stale `current/full/mistaken batch` QA wording from returning in Stock Inbound docs or UI.
+- No server action, RLS, stock movement, barcode uniqueness, scanner, label printing, or database behavior changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_QA_RUNBOOK.md`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `HANDOFF.md`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+
+Migration SQL added:
+
+- None in this pass.
+
+SQL run order:
+
+- Unchanged. Pending display-name migration remains `supabase/migrations/202606250014_stock_item_display_name_trigger_v1.sql` after `202606250013_stock_item_merge_v1.sql`.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `rg -n "Batch no\.|Batch no|batch no|Auto session code" components\stock docs scripts` - no stale matches.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run build` - passed.
+- `npm.cmd run typecheck` - passed.
+
+Risks / remaining checks:
+
+- Manual phone QA should confirm the field is still read-only and does not distract workers during rule setup.
+
 ## 2026-07-10 - Stock Inbound session history sort guard
 
 Task completed:

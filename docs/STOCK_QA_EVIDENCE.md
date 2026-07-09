@@ -516,7 +516,7 @@ Evidence captured:
 
 - Current-session label state is no longer capped at 12 entries.
 - Visible recent list remains capped to the latest 12 for mobile display.
-- Session totals, Print Labels PDF, and Delete Whole Session now have access to all saved scans in the current batch.
+- Session totals, Print Labels PDF, and Delete Whole Session now have access to all saved scans in the current inbound session.
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-acceptance-coverage.mjs`, and `npm.cmd run typecheck`.
 
 Manual QA:
@@ -984,7 +984,7 @@ Scope:
 
 - Continued the guided Stock Inbound session-summary goal.
 - `Undo/Delete whole session` now calls a server-side transaction RPC instead of undoing each saved scan from the browser one by one.
-- The RPC validates the full batch before voiding stock, so a failed validation should leave the session unchanged.
+- The RPC validates the full inbound session before voiding stock, so a failed validation should leave the session unchanged.
 
 Evidence captured:
 
@@ -4408,18 +4408,18 @@ Manual QA still required:
 - If using a screen reader or browser accessibility inspector, confirm the camera sheet is announced as a dialog with the permission/rear-camera help text.
 - Confirm the close button is easy to tap and the camera stops after closing.
 
-## 2026-06-24 Stock Inbound Batch-Number Keyboard Hint
+## 2026-06-24 Stock Inbound Session-Code Read-Only Field
 
 Scope:
 
-- Improved the advanced Barcode Inbound batch-number field for phone users.
-- The auto-generated, editable batch number now requests a mobile `Done` action and disables browser autofill.
+- Improved the advanced Barcode Inbound session-code field for phone users.
+- The auto-generated inbound session code is read-only, so workers do not type it.
 - No server action, RPC, RLS policy, database schema, migration, role access, validation rule, approval workflow, barcode scanning behavior, or stock movement behavior was changed.
 
 Prepared / source-guarded coverage added:
 
-- `components/stock/workflow-forms.tsx` now sets `autoComplete="off"` and `enterKeyHint="done"` on the `batchNo` input.
-- `scripts/stock-mobile-ux-coverage.mjs` guards the batch-number keyboard hint.
+- `components/stock/workflow-forms.tsx` shows `Inbound session code` as a read-only generated value.
+- `scripts/stock-mobile-ux-coverage.mjs` guards the read-only inbound session-code field.
 - `docs/STOCK_TEST_LIST_FOR_OWNER.md` and `docs/STOCK_REMOTE_QA_VERCEL.md` now include owner/Vercel QA steps for this field.
 
 Latest check results:
@@ -4434,8 +4434,8 @@ Latest check results:
 Manual QA still required:
 
 - Open `/stock/inbound` on a real phone.
-- Open `Weight rule and notes`, tap `Batch no.`, and confirm the keyboard has a Done key.
-- Confirm the auto-generated batch number can be left unchanged and normal inbound scanning still works.
+- Open `Weight rule and notes`, confirm `Inbound session code` is visible and read-only.
+- Confirm no typing is needed and normal inbound scanning still works.
 
 ## 2026-06-24 Stock Reference-Number Keyboard Hints
 
@@ -6905,7 +6905,7 @@ Manual QA:
 
 - Finish an inbound session at phone width around 390px.
 - Confirm the summary shows total units, total weight, and duplicate/error scans.
-- Confirm the warning says whole-session undo is only for a mistaken batch.
+- Confirm the warning says whole-session undo is only for a mistaken inbound session.
 - Tap `Undo/Delete whole session`, cancel the confirmation, and confirm stock remains unchanged.
 - Repeat only in a safe demo session, accept the confirmation, and confirm units are voided with movement history kept.
 

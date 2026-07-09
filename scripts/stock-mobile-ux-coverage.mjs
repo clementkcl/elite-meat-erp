@@ -298,7 +298,7 @@ includesAll(
     "data-stock-action=\"detected-barcode-rule-preview\"",
     "Detected barcode rule",
     "Sample length:",
-    "Weight digits:",
+    "Weight position:",
     "Save first barcode. Rule reused.",
     "Barcode rule setup",
     "Manufacturer:",
@@ -366,7 +366,7 @@ includesAll(
     "inboundScannerContextSummary",
     "scanContextSummary={inboundScannerContextSummary}",
     "Current inbound setup",
-    "`Batch: ${batchNo}`",
+    "`Inbound session code: ${batchNo}`",
     "`Display product: ${selectedProductDisplayName}`",
     "`Product: ${selectedProductName}`",
     "`Manufacturer: ${selectedManufacturerName}`",
@@ -1134,7 +1134,9 @@ assert(
 assert(
   /id="batchNo"[\s\S]*?name="batchNo"[\s\S]*?readOnly[\s\S]*?aria-readonly="true"/.test(
     workflowForms
-  ) && workflowForms.includes("Auto session code."),
+  ) &&
+    workflowForms.includes("Inbound session code") &&
+    workflowForms.includes("Auto code."),
   "Stock inbound session code must be auto-generated and read-only."
 )
 assert(

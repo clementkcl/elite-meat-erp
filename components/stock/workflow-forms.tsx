@@ -3726,7 +3726,7 @@ export function BarcodeInboundForm({
   )
   const inboundScannerContextSummary = scanSetupReady
     ? [
-        `Batch: ${batchNo}`,
+        `Inbound session code: ${batchNo}`,
         `Display product: ${selectedProductDisplayName}`,
         `Product: ${selectedProductName}`,
         `Manufacturer: ${selectedManufacturerName}`,
@@ -3898,7 +3898,7 @@ export function BarcodeInboundForm({
     ["Total weight", `${recentInboundWeightKg.toFixed(3)} kg`],
     ["Duplicate/error scans", sessionErrors.length.toLocaleString()],
     ["Scanned by", scannedByName],
-    ["Batch", batchNo],
+    ["Inbound session code", batchNo],
     ["Started", sessionStartedText],
     ["Finished", sessionFinishedText],
   ] as const
@@ -5425,7 +5425,7 @@ export function BarcodeInboundForm({
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="batchNo">Batch no.</Label>
+                  <Label htmlFor="batchNo">Inbound session code</Label>
                   <Input
                     id="batchNo"
                     name="batchNo"
@@ -5433,9 +5433,7 @@ export function BarcodeInboundForm({
                     readOnly
                     aria-readonly="true"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Auto session code.
-                  </p>
+                  <p className="text-xs text-muted-foreground">Auto code.</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="referenceNo">Reference no.</Label>
@@ -5744,7 +5742,7 @@ export function BarcodeInboundForm({
                   <span className="font-semibold">{barcode.trim().length}</span>
                 </div>
                 <div>
-                  Weight digits:{" "}
+                  Weight position:{" "}
                   <span className="font-semibold">
                     {preset.barcodeWeightStart}-{detectedRuleEndPosition}
                   </span>
@@ -6786,7 +6784,7 @@ export function BarcodeInboundForm({
                 Elite Meat inbound session summary
               </div>
               <div className="stock-inbound-summary-subtitle">
-                {selectedProductDisplayName} / {batchNo}
+                {selectedProductDisplayName} / Session {batchNo}
               </div>
               <div className="stock-inbound-summary-grid">
                 {sessionSummaryPrintRows.map(([label, value]) => (

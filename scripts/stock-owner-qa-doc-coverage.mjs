@@ -21,6 +21,7 @@ function includesAll(source, fragments, label) {
 
 const ownerList = read("docs/STOCK_TEST_LIST_FOR_OWNER.md")
 const remoteQa = read("docs/STOCK_REMOTE_QA_VERCEL.md")
+const qaEvidence = read("docs/STOCK_QA_EVIDENCE.md")
 const mobileAudit = read("docs/STOCK_MOBILE_UX_REQUIREMENT_AUDIT.md")
 const migrationChecklist = read("docs/STOCK_MIGRATION_CHECKLIST.md")
 const migration053 = read(
@@ -89,6 +90,23 @@ includesAll(
 assert(
   !ownerList.includes("customer selection is optional before scanning"),
   "Owner stock test list must not say Direct Sales customer selection is optional."
+)
+
+for (const source of [ownerList, remoteQa, qaEvidence, workflowForms]) {
+  assert(
+    !/Batch no\.|Batch no|batch no|Auto session code|Barcode Inbound batch number|Confirm batch number auto-generates/.test(source),
+    "Stock Inbound docs/UI must say inbound session code, not batch no."
+  )
+}
+
+assert(
+  !/current batch|full batch|mistaken batch/.test(qaEvidence),
+  "Stock Inbound QA evidence must use session wording, not batch wording."
+)
+
+assert(
+  !workflowForms.includes("`Batch: ${batchNo}`"),
+  "Stock Inbound scanner context must label the generated code as inbound session code."
 )
 
 includesAll(

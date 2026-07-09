@@ -50,7 +50,7 @@ For each test, capture:
 
 | # | Test | User / Route | Expected evidence |
 | --- | --- | --- | --- |
-| 1 | Inbound scan works | Stock operator at `/stock/inbound` | Recent templates appear first; assigned stock location is selected by default; batch no. is auto-generated; atomic new `stock_units` row, `INBOUND` `stock_movements` row, successful `barcode_scan_logs` row, `audit_logs` row, saved scan count, saved total weight, previous scan weight, and recent inbound scan list |
+| 1 | Inbound scan works | Stock operator at `/stock/inbound` | Recent templates appear first; assigned stock location is selected by default; inbound session code is auto-generated; atomic new `stock_units` row, `INBOUND` `stock_movements` row, successful `barcode_scan_logs` row, `audit_logs` row, saved scan count, saved total weight, previous scan weight, and recent inbound scan list |
 | 2 | Duplicate barcode blocked | Same barcode at `/stock/inbound` | UI/action error, camera auto-save does not submit a known duplicate, failed `barcode_scan_logs` row if submitted/bypassed, and no second `stock_units` row |
 | 3 | Barcode weight rule saved/reused | Save rule for item+brand+origin, then scan same scope | Atomic `barcode_weight_rules` row with `location_id = null`; next scan pre-fills matching rule |
 | 4 | Barcode label printing works | Scan a no-weight barcode at `/stock/inbound`; generate label at `/stock/inbound`; reprint at `/stock/units/[id]` | No-weight supplier barcode is blocked with label-print instruction; 50mm x 30mm print/PDF preview with company, product, weight, barcode |
