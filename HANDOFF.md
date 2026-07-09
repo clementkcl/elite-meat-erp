@@ -1,5 +1,611 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-09 - Stock Inbound invalid-rule wording alignment
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by aligning an invalid barcode-rule warning with the current mode name.
+- The rule page now says `No valid weight extracted. Adjust rule or use Inbound without Barcode.`
+- Current QA wording now says `Inbound with Barcode` instead of `Supplier barcode` for the mode name.
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound immediate-label docs sync
+
+Task completed:
+
+- Continued the active Stock Inbound manual-weight goal by removing stale scan-back wording from current docs/handoff notes.
+- Manual no-barcode QA now describes the current immediate-save flow: enter weight, generate label, save stock, print/attach, then continue.
+- The live manual barcode field label now says `Generated barcode`.
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `docs/MODULE_STATUS.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound manual label save copy
+
+Task completed:
+
+- Continued the active Stock Inbound manual-weight goal by aligning manual label copy with the current immediate-save flow.
+- Manual mode scanner helper now says `Weight saves label.` instead of telling workers to scan the printed label to save.
+- Pending-label helper now says `After save, next weight.`
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock label reprint shorter copy
+
+Task completed:
+
+- Continued the active Stock Inbound label/reprint goal by shortening the stock-unit label reprint helper copy.
+- Reprint page now says `Reprint label from phone. No reason needed.` and `Mobile reprint label.`
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/stock-unit-detail.tsx`
+- `scripts/stock-label-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock scanner shorter worker copy
+
+Task completed:
+
+- Continued the active Stock Inbound mobile workflow goal by shortening shared stock scanner helper copy.
+- Default manual input hint now says `Type barcode if needed.`
+- Camera permission cue and external scanner cue are shorter while keeping the same camera/manual fallback behavior.
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/barcode-scanner.tsx`
+- `scripts/stock-scanner-coverage.mjs`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock manufacturer merge A-Z dropdown
+
+Task completed:
+
+- Continued the active Stock Inbound item/manufacturer naming goal by sorting the manager/admin manufacturer merge dropdown A-Z.
+- This keeps duplicate manufacturer cleanup consistent with the inbound manufacturer dropdown.
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-item-master-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-item-master-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound shorter setup labels
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by trimming setup/session-history helper labels.
+- Shortened the session code, history count, quick product, quick manufacturer, and generated item-code helper copy.
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound shorter delete/fixed-weight copy
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by shortening remaining fixed-weight and whole-session delete helper text.
+- Fixed-weight fallback now says `Set default fixed kg first.`
+- Whole-session delete confirmation now uses shorter manager/audit wording while keeping the same guarded delete flow.
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound shorter net-weight label
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by shortening one remaining live scanner field label.
+- Replaced `Actual net weight kg` with `Net weight kg` for the barcode scanner weight field.
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound shorter rule-weight hints
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by shortening remaining rule-weight helper text.
+- Replaced visible `actual kg` prompts with shorter `kg` prompts.
+- Replaced `No supplier weight? Use internal label.` with `No weight? Use internal label.`
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-label-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound mode label alignment
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by aligning visible mode labels to the requested wording.
+- Replaced remaining worker-facing `Supplier barcode` / `No supplier barcode` mode labels with `Inbound with Barcode` / `Inbound without Barcode`.
+- Updated the internal-label fallback and legacy no-barcode page wording to point workers to `Inbound without Barcode`.
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-scanner-coverage.mjs`
+- `docs/STOCK_INBOUND_GUIDED_COMPLETION_AUDIT.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-scanner-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound internal-label fallback cue fix
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by aligning the fallback cue with the shortened worker copy.
+- The internal-label fallback cue now listens for `Use internal label` messages, so no-weight/no-rule scans still show the helper after the copy cleanup.
+- The rule-page escape button now says `Use Inbound without Barcode`, matching the Page 1 mode label.
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound shorter setup and rule hints
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by shortening setup/rule helper copy.
+- Replaced long setup prompts with `Choose setup first.`
+- Replaced first-rule prompt with `Scan barcode, enter kg once.`
+- Replaced summary helper with `Review session.`
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound shorter barcode-rule error copy
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by shortening barcode-rule/no-weight worker messages.
+- `No weight found. Generate an internal label, print it, then attach it.` is now `No weight found. Use internal label.`
+- `No matching weight position found...` paths now show `No weight position found. Use internal label.`
+- Ambiguous sample copy now says `Weight appears twice. Scan another sample.`
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `scripts/stock-label-coverage.mjs`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `scripts/stock-owner-qa-doc-coverage.mjs`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `node scripts\stock-owner-qa-doc-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound active page duplicate summary cleanup
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by removing duplicate saved-count/weight cards below the active scan/manual sticky summary.
+- The active scanner/manual pages now rely on the sticky session summary for saved count and total weight, keeping the phone view lighter.
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound shorter manual-label guidance
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal by shortening worker-facing manual-label helper text.
+- The active manual-weight page now says `Setup locked. Save, print, attach.`
+- Saved-label feedback now says `Print and attach labels.`
+- No business logic, RLS, stock movements, barcode uniqueness, or session controls changed.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-mobile-ux-coverage.mjs`
+- `scripts/stock-label-coverage.mjs`
+- `scripts/stock-acceptance-coverage.mjs`
+- `docs/STOCK_REMOTE_QA_VERCEL.md`
+- `docs/STOCK_QA_EVIDENCE.md`
+- `docs/STOCK_TEST_LIST_FOR_OWNER.md`
+- `docs/MODULE_STATUS.md`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-mobile-ux-coverage.mjs` - passed.
+- `node scripts\stock-label-coverage.mjs` - passed.
+- `node scripts\stock-acceptance-coverage.mjs` - passed.
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
+## 2026-07-09 - Stock Inbound summary finished-state label
+
+Task completed:
+
+- Continued the active Stock Inbound guided workflow goal with a small worker UX fix.
+- The completed session summary action grid now shows `Session finished` instead of a disabled `Finish Session` action.
+- This keeps the Session Summary page action set visible while making the finished state clearer on mobile.
+
+Files changed in this pass:
+
+- `components/stock/workflow-forms.tsx`
+- `scripts/stock-inbound-guided-flow-coverage.mjs`
+- `HANDOFF.md`
+
+Migration SQL added:
+
+- None.
+
+Commands run and results:
+
+- `node scripts\stock-inbound-guided-flow-coverage.mjs` - passed.
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run lint` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run build` - passed.
+
+Risks / remaining checks:
+
+- Real phone camera, external scanner, Bluetooth/PDF label printing, live Supabase save/reuse behavior, live manufacturer merge, and live RLS evidence remain manual owner/device checks before the active Stock Inbound goal can be marked complete.
+
 ## 2026-07-09 - Stock Settings manufacturer merge path
 
 Task completed:
@@ -3071,7 +3677,7 @@ Task completed:
   - manual typing fallback.
 - Kept editable rule fields for weight start position, digit count, and decimals.
 - Kept the extracted weight preview read-only and recalculating from the current sample barcode/rule fields.
-- Added a short red invalid-preview warning: `No valid weight extracted. Adjust rule fields or use No supplier barcode.`
+- Added a short red invalid-preview warning. Current copy is `No valid weight extracted. Adjust rule or use Inbound without Barcode.`
 - Kept the no-supplier-barcode/internal-label escape path for supplier barcodes that cannot be decoded.
 - Kept Back navigation to setup and updated the forward action to `Next: Scanner Page - Open scanner`.
 - Did not change stock saving logic, barcode uniqueness, stock movement logic, RLS, migrations, or approval behavior.
@@ -7629,7 +8235,7 @@ Task completed:
 - Continued the active guided Stock Inbound multi-page flow goal with a focused no-supplier-barcode reliability fix.
 - When a worker scans or enters the printed internal label, the pending label data is now pinned before the form submits.
 - The submit handler also preserves the pending internal label when `pendingInternalLabelRef` is active, avoiding dependence on React state flush timing for barcode/weight fields.
-- This makes the internal-label flow more reliable: enter kg, generate label, print/attach, scan printed label, save stock, clear weight, and focus the next weight entry.
+- This makes the internal-label flow more reliable: enter kg, generate label, save stock, print/attach, clear weight, and focus the next weight entry.
 - Preserved barcode uniqueness, stock save behavior, movement history, undo actions, role/scope logic, RLS intent, approval rules, camera scanning, external scanner input, live scanner feedback, and session summary behavior.
 - Added Stock label, acceptance, and mobile UX coverage for the pinned pending-label save path.
 
@@ -7663,7 +8269,7 @@ Risks / remaining checks:
 
 Next recommended task:
 
-- With a logged-in stock user, test no-supplier-barcode inbound: enter kg, generate label, print/attach, scan printed label, confirm stock saves with the generated barcode/weight, then verify the weight input clears and focuses for the next unit.
+- With a logged-in stock user, test no-supplier-barcode inbound: enter kg, generate label, confirm stock saves with the generated barcode/weight, print/attach, then verify the weight input clears and focuses for the next unit.
 
 ## 2026-06-30 - Stock inbound popup external-scanner availability
 
@@ -8079,7 +8685,7 @@ Risks / remaining checks:
 
 Next recommended task:
 
-- Restore local/staging Supabase auth reachability, then test no-supplier-barcode inbound at 390px: enter kg, generate label, print/attach, scan printed label, and confirm focus returns to the weight field for the next unit.
+- Restore local/staging Supabase auth reachability, then test no-supplier-barcode inbound at 390px: enter kg, generate label, confirm stock saves, print/attach, and confirm focus returns to the weight field for the next unit.
 
 ## 2026-06-30 - Stock inbound barcode-rule internal-label escape
 
@@ -10861,10 +11467,10 @@ Next recommended task:
 Task completed:
 
 - Continued the active guided Stock Inbound goal with a no-barcode/manual-weight safety fix.
-- Stock Inbound now blocks `Finish Inbound Session` while an internal barcode label has been generated but not scanned back.
-- Workers see `Scan printed label or cancel it before finishing this session.` so the next step is clear.
+- Stock Inbound now blocks `Finish Inbound Session` while an internal barcode label save is pending.
+- Current worker copy says `Cancel pending label before finishing this session.` while the save is still pending.
 - `New inbound session` now clears pending internal-label state and refs, preventing stale printed-label state from leaking into the next session.
-- Kept barcode uniqueness, label confirmation before stock save, stock movement history, RLS, approval behavior, and existing void/undo behavior unchanged.
+- Kept barcode uniqueness, immediate label save, stock movement history, RLS, approval behavior, and existing void/undo behavior unchanged.
 
 Files changed in this pass:
 
@@ -25386,7 +25992,7 @@ Risks / remaining checks:
 Task completed:
 
 - Continued the Stock Module Mobile UX goal only.
-- Updated shared Stock barcode field helper text to `Manual entry: paste barcode if camera cannot scan.`
+- Updated shared Stock barcode field helper text; current copy is `Type barcode if needed.`
 - Kept camera scanning as the primary worker action and manual barcode entry as fallback.
 - Kept scanner startup, validation rules, RLS, migrations, and stock movement behavior unchanged.
 - Extended Stock scanner/mobile UX coverage so the new helper is source-guarded and the stale typing-first wording is rejected.
@@ -40115,7 +40721,7 @@ Task completed:
 
 - Continued the active Stock Inbound mobile workflow cleanup.
 - Replaced the long save-error recovery hint with the short worker message `Connection issue. Retry this barcode.`
-- Changed the manual-label scanner helper to `Scan printed label to save.` so the worker sees the next action.
+- Updated the manual-label scanner helper; current copy is `Weight saves label.`
 - Added source coverage so the old long internet helper does not come back.
 - No stock actions, RLS, migrations, barcode uniqueness, or movement logic changed.
 

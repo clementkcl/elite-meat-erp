@@ -166,8 +166,7 @@ export function StockUnitDetailView({
               {demoMode ? <Badge variant="warning">Demo data</Badge> : null}
             </div>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              View barcode status, movement history, and reprint the old label
-              from a phone. No reason is required.
+              Reprint label from phone. No reason needed.
             </p>
           </div>
         </div>
@@ -250,7 +249,7 @@ export function StockUnitDetailView({
         <Card>
           <CardHeader>
             <CardTitle>Label preview</CardTitle>
-            <CardDescription>Simple mobile reprint label.</CardDescription>
+            <CardDescription>Mobile reprint label.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <StockLabelPreview label={label} />

@@ -118,7 +118,7 @@ Latest Codex QA preparation note, 2026-06-25:
 - Stock Item Master edit now starts blank; open `/stock/items`, select a product, and confirm active/barcode-required toggles are under `Advanced item settings`.
 - Barcode Inbound internal-label saves now return focus to `Net weight kg`; generate two internal labels in one session and confirm the worker can enter the next weight without tapping back into the field.
 - Stock barcode fields now treat Enter in the manual barcode input as a scan; test one USB/Bluetooth scanner that sends Enter on inbound, outbound, transfer, receive, return, and stock-take.
-- Barcode Inbound now tells workers `No matching weight position found. Generate an internal label instead.` when a typed actual kg cannot teach a supplier barcode weight-position rule; test this before label generation.
+- Barcode Inbound now tells workers `No weight position found. Use internal label.` when a typed actual kg cannot teach a supplier barcode weight-position rule; test this before label generation.
 - Stock Outbound direct scan prerequisites are now guarded inside the scan handler, not only by disabled fields; confirm direct Sales is blocked until a customer is selected, while Damage/photo, Return Supplier/supplier, and Transfer/destination blockers reject camera/manual scans before adding a row.
 - Stock table sort buttons now use phone-size tap targets and Stock table values wrap instead of clipping; confirm table headers under the mobile cards are easier to tap and long barcodes/locations/references remain readable at 390px.
 - Stock alert cards now wrap negative-stock, old-stock, and overdue-transfer item/location/reason text; confirm red/yellow/orange alert cards stay readable at 390px.
@@ -151,7 +151,7 @@ Latest Codex QA preparation note, 2026-06-25:
 - Barcode Inbound blocked/error session rows now wrap long barcode text; confirm duplicate/no-weight/error scan rows do not create horizontal scrolling at 390px.
 - Shared Stock success, error, warning, and offline scan messages now wrap long text; confirm action messages do not create horizontal scrolling at 390px.
 - Stock worker home shortcut buttons now keep icons from shrinking and wrap labels inside the button; confirm the six buttons fit at 390px with no horizontal scrolling.
-- Shared Stock barcode fields now say `Manual entry: paste barcode if camera cannot scan.`; confirm this helper appears under manual barcode inputs and camera scanning remains the main action.
+- Shared Stock barcode fields now say `Type barcode if needed.`; confirm this helper appears under manual barcode inputs and camera scanning remains the main action.
 - Shared Stock scanner now uses `Camera scanning is not available. Use manual entry.` if the browser cannot provide camera scanning; confirm the manual-entry fallback is available.
 - Shared Stock scanner camera error messages now point workers to `Use manual entry` instead of saying to type the barcode manually.
 - Shared Stock scanner permission help now says `If permission is blocked, tap Use manual entry.`; confirm the helper does not tell workers to close the scanner first.
@@ -159,7 +159,7 @@ Latest Codex QA preparation note, 2026-06-25:
 - Shared Stock scanner camera errors now show both `Try camera again` and `Use manual entry` inside the error card; confirm `Use manual entry` closes the scanner and focuses the barcode input.
 - Shared Stock scanner now shows `Try camera again` inside the scanner sheet when camera startup fails; deny/interrupt camera access if possible and confirm the retry button is available.
 - Shared Stock scanner now clears stale camera error text and the camera-only duplicate debounce whenever `Scan Barcode` opens; close/reopen the scanner and confirm it is immediately ready for the next scan.
-- Barcode Inbound now shows `Print and attach saved labels before moving stock.` beside generated-label print actions when saved labels are available; confirm this appears after generating an internal label.
+- Barcode Inbound now shows `Print and attach labels.` beside generated-label print actions when saved labels are available; confirm this appears after generating an internal label.
 - Shared Stock scanner now shows `Detected. Ready for next scan.` after a successful continuous camera read; confirm this appears after scanning a label while the camera sheet stays open.
 - Shared Stock scanner now shows a `Camera session scans` count inside the camera sheet and resets it every time the scanner opens; scan two labels continuously to confirm it increments, then close/reopen the scanner to confirm it resets.
 - Current pass reviewed the requested Stock mobile QA list and confirmed source guards for Stock home buttons, inbound, continuous scanning, duplicate/no-weight warnings, label generation/reprint, order/direct outbound, damage/spoilage request, transfer, receive-transfer wrong-location blocking, stock-take progress, unknown-barcode exceptions, and online-only scan blocking.

@@ -93,7 +93,7 @@ export function BarcodeField({
   continuousScan = false,
   inputRef,
   placeholder,
-  helperText = "Manual entry: paste barcode if camera cannot scan.",
+  helperText = "Type barcode if needed.",
   scanButtonLabel = "Scan Barcode",
   disabled = false,
   disabledReason = "",
@@ -650,8 +650,7 @@ export function BarcodeScanner({
                 id={dialogDescriptionId}
                 className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm break-words text-muted-foreground"
               >
-                Allow camera. Use rear camera if available. If blocked, tap
-                Use manual entry.
+                Allow camera. Rear camera preferred. Use manual if blocked.
               </div>
               {scanContextSummary ? (
                 <div
@@ -672,7 +671,7 @@ export function BarcodeScanner({
                   data-stock-action="continuous-scan-auto-save-cue"
                   className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm break-words text-emerald-700"
                 >
-                  Scanner stays open until Close.
+                  Stays open until Close.
                 </div>
               ) : (
                 <div
@@ -706,8 +705,8 @@ export function BarcodeScanner({
                   className="mt-2 min-h-11 text-base sm:text-sm"
                 />
                 <p className="mt-1 text-xs break-words text-muted-foreground">
-                  Keep cursor here for handheld scanner. Enter sends the scan
-                  {continuous ? " and keeps this box ready." : "."}
+                  Keep cursor here. Enter sends scan
+                  {continuous ? " and stays ready." : "."}
                 </p>
               </div>
               {!isOnline ? (

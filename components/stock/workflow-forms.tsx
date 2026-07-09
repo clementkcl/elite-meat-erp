@@ -1258,7 +1258,9 @@ export function ItemMasterForm({
 }
 
 function MergeManufacturerForm({ brands }: { brands: Brand[] }) {
-  const activeBrands = brands.filter((brand) => brand.active)
+  const activeBrands = brands
+    .filter((brand) => brand.active)
+    .sort((a, b) => compareText(a.name, b.name))
 
   return (
     <WorkflowCard
@@ -2543,26 +2545,26 @@ export function BarcodeInboundForm({
       (nextStep === "rule" || nextStep === "scan")
     ) {
       setDecodeStatus("warning")
-      setDecodeMessage("Use Manual Weight for no supplier barcode stock.")
+      setDecodeMessage("Use Inbound without Barcode.")
       return
     }
 
     if (inboundMode === "supplier_barcode" && nextStep === "manual") {
       setDecodeStatus("warning")
-      setDecodeMessage("Choose No supplier barcode first.")
+      setDecodeMessage("Choose Inbound without Barcode first.")
       return
     }
 
     if (nextStep === "rule" && !barcodeRuleSetupReady) {
       setDecodeStatus("warning")
-      setDecodeMessage("Choose product, manufacturer, and origin first.")
+      setDecodeMessage("Choose product setup first.")
       return
     }
 
     if (nextStep === "manual" && !scanSetupReady) {
       setDecodeStatus("warning")
       setDecodeMessage(
-        "Choose product, manufacturer, origin, and location first."
+        "Choose setup first."
       )
       return
     }
@@ -2570,7 +2572,7 @@ export function BarcodeInboundForm({
     if (nextStep === "scan" && !scanSetupReady) {
       setDecodeStatus("warning")
       setDecodeMessage(
-        "Choose product, manufacturer, origin, and location first."
+        "Choose setup first."
       )
       return
     }
@@ -2708,7 +2710,7 @@ export function BarcodeInboundForm({
         !preset.originId ||
         !preset.locationId)
     ) {
-      const message = "Choose product, manufacturer, origin, and location first."
+      const message = "Choose setup first."
 
       setDecodeStatus("error")
       setDecodeMessage(message)
@@ -2724,7 +2726,7 @@ export function BarcodeInboundForm({
       setNetWeightKg("")
       setDecodeStatus("warning")
       setDecodeMessage(
-        "Sample scanned. Enter actual kg, then save to learn this rule."
+        "Sample scanned. Enter kg, then save rule."
       )
       window.setTimeout(() => netWeightInputRef.current?.focus(), 0)
       return
@@ -2733,8 +2735,8 @@ export function BarcodeInboundForm({
     if (submitAfterScan && decoded.status === "error") {
       const message =
         lengthWarning
-          ? `${lengthWarning} Generate an internal label, print it, then attach it.`
-          : "No weight found. Generate an internal label, print it, then attach it."
+          ? `${lengthWarning} Use internal label.`
+          : "No weight found. Use internal label."
       setInboundMode("internal_label")
       setInboundStep("manual")
       setDecodeStatus("error")
@@ -2804,7 +2806,7 @@ export function BarcodeInboundForm({
 
       if (inference.status === "ambiguous") {
         const message =
-          "Weight appears in more than one place. Scan another sample barcode."
+          "Weight appears twice. Scan another sample."
         setDecodeStatus("warning")
         setDecodeMessage(message)
         recordSessionError(barcode, message)
@@ -2821,7 +2823,7 @@ export function BarcodeInboundForm({
 
       if (inference.status === "not_found") {
         const message =
-          "No matching weight position found. Switched to Manual Weight."
+          "No weight position found. Use internal label."
         setInboundMode("internal_label")
         setInboundStep("manual")
         setDecodeStatus("warning")
@@ -2875,7 +2877,7 @@ export function BarcodeInboundForm({
 
     if (inference.status === "ambiguous") {
       const message =
-        "Weight appears in more than one place. Scan another sample barcode."
+        "Weight appears twice. Scan another sample."
       setDecodeStatus("warning")
       setDecodeMessage(message)
       recordSessionError(barcode, message)
@@ -2893,7 +2895,7 @@ export function BarcodeInboundForm({
     if (inference.status === "not_found") {
       if (barcode.trim() && Number(value) > 0) {
         const message =
-          "No matching weight position found. Generate an internal label instead."
+          "No weight position found. Use internal label."
         setInboundMode("internal_label")
         setInboundStep("manual")
         setDecodeStatus("warning")
@@ -3034,7 +3036,7 @@ export function BarcodeInboundForm({
 
     if (!scanSetupReady || !selectedItem) {
       setDecodeStatus("error")
-      setDecodeMessage("Choose product, manufacturer, origin, and location first.")
+      setDecodeMessage("Choose setup first.")
       return
     }
 
@@ -3135,7 +3137,7 @@ export function BarcodeInboundForm({
     setSessionSetupNotice(
       scanSetupReady
         ? `New inbound session ready. Kept setup: ${selectedProductDisplayName}, ${selectedManufacturerName}, ${selectedOriginName}, ${selectedLocation?.name ?? "selected location"}.`
-        : "New inbound session ready. Choose product, manufacturer, origin, and location."
+        : "New inbound session ready. Choose setup."
     )
   }
 
@@ -3624,14 +3626,13 @@ export function BarcodeInboundForm({
     scannerVisible &&
     !sessionFinishedAt &&
     !pendingInternalLabel &&
-    (decodeMessage.includes("Generate an internal label") ||
-      decodeMessage.includes("No matching weight position"))
+    decodeMessage.includes("Use internal label")
   const inboundSummaryNextAction = manualMode
     ? "Print and attach labels."
     : "Move stock when ready."
   const inboundCardTitle = manualMode
-    ? "No supplier barcode inbound"
-    : "Supplier barcode inbound"
+    ? "Inbound without Barcode"
+    : "Inbound with Barcode"
   const inboundCardDescription = manualMode
     ? "Choose setup once, then enter weights."
     : "Choose setup once, then scan barcodes."
@@ -3650,10 +3651,10 @@ export function BarcodeInboundForm({
   const inboundPageHelp: Record<InboundStep, string> = {
     setup: "Choose setup once.",
     rule:
-      "Scan one sample and enter actual kg.",
+      "Scan sample, enter kg.",
     scan: "Keep scanning. Valid scans save.",
     manual: "Enter weight. Stock saves immediately.",
-    summary: "Review counts, weight, labels, and undo.",
+    summary: "Review session.",
   }
   const sessionStartedText = new Date(sessionStartedAt).toLocaleString()
   const inboundSummaryTitle = manualMode
@@ -3669,7 +3670,7 @@ export function BarcodeInboundForm({
     ["Manufacturer", selectedManufacturerName],
     ["Origin", selectedOriginName],
     ["Location", selectedLocation?.name ?? "No location"],
-    ["Inbound mode", manualMode ? "No supplier barcode" : "Supplier barcode"],
+    ["Inbound mode", manualMode ? "Inbound without Barcode" : "Inbound with Barcode"],
     [
       manualMode ? "Total count" : "Total barcode units",
       recentInboundCount.toLocaleString(),
@@ -3731,7 +3732,7 @@ export function BarcodeInboundForm({
         ? "Choose location, then scan."
         : template.hasRule
         ? "Ready. Scan next barcode."
-        : "Scan supplier barcode, then enter actual kg once."
+        : "Scan barcode, enter kg once."
     )
     if (inboundPresetCanScan(next)) {
       setInboundStep(template.hasRule ? "scan" : "rule")
@@ -3802,7 +3803,7 @@ export function BarcodeInboundForm({
     setDecodeMessage(
       session.hasRule
         ? "Ready. Scan next barcode."
-        : "Scan sample, then enter actual kg."
+        : "Scan sample, enter kg."
     )
     setInboundStep(session.hasRule ? "scan" : "rule")
     window.setTimeout(() => barcodeInputRef.current?.focus(), 0)
@@ -3941,7 +3942,7 @@ export function BarcodeInboundForm({
               {batchNo}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              Auto-generated. Cannot edit.
+              Auto code.
             </div>
           </div>
 
@@ -3954,7 +3955,7 @@ export function BarcodeInboundForm({
               <div>
                 <div className="font-semibold">Inbound Session History</div>
                 <div className="text-xs text-muted-foreground">
-                  Recent 10 per page.
+                  10 per page.
                 </div>
               </div>
               <Button
@@ -4194,7 +4195,7 @@ export function BarcodeInboundForm({
               data-stock-action="inbound-mode-guidance"
               className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-medium"
             >
-              {manualMode ? "Mode: print internal labels" : "Mode: scan supplier barcodes"}
+              {manualMode ? "Mode: enter weights" : "Mode: scan barcodes"}
             </div>
             <div
               data-stock-action="inbound-page-one-required-setup"
@@ -4301,7 +4302,7 @@ export function BarcodeInboundForm({
               ) : null}
               {!scanSetupReady && !sessionFinishedAt ? (
                 <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
-                  Choose product, manufacturer, origin, and location first.
+                  Choose setup first.
                 </div>
               ) : null}
               {sessionFinishedAt ? (
@@ -4370,7 +4371,7 @@ export function BarcodeInboundForm({
                   inboundStep === "rule"
                     ? "Sample barcode"
                     : manualMode
-                      ? "Scan printed label"
+                      ? "Generated barcode"
                       : "Barcode"
                 }
                 value={barcode}
@@ -4433,14 +4434,14 @@ export function BarcodeInboundForm({
                   inboundStep === "rule"
                     ? "Scan sample barcode"
                     : manualMode
-                      ? "Scan printed label"
+                      ? "Label barcode"
                       : "Scan or type barcode"
                 }
                 helperText={
                   inboundStep === "rule"
-                    ? "Scan sample, then enter actual kg."
+                    ? "Scan sample, enter kg."
                     : manualMode
-                      ? "Scan printed label to save."
+                      ? "Weight saves label."
                       : "Continuous scan is on."
                 }
                 scanButtonLabel="Use Phone Scanner"
@@ -4451,7 +4452,7 @@ export function BarcodeInboundForm({
                     : sessionFinishedAt
                       ? "Session finished. Review only."
                       : !scanSetupReady
-                        ? "Choose product, manufacturer, origin, and location first."
+                        ? "Choose setup first."
                         : ""
                 }
               />
@@ -4476,7 +4477,7 @@ export function BarcodeInboundForm({
                     </Button>
                   </div>
                   <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                    No supplier weight? Use internal label.
+                    No weight? Use internal label.
                   </div>
                 </>
               ) : null}
@@ -4538,7 +4539,7 @@ export function BarcodeInboundForm({
                     })}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Tap product to avoid typing.
+                    Tap product.
                   </p>
                 </div>
               ) : null}
@@ -4568,7 +4569,7 @@ export function BarcodeInboundForm({
                   New product
                 </summary>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Product only.
+                  Product name.
                 </p>
                 {!quickProductCreateManufacturerReady ? (
                   <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -4662,7 +4663,7 @@ export function BarcodeInboundForm({
                 <input type="hidden" name="barcodeRequired" value="true" />
                 <input type="hidden" name="defaultLowStockLevel" value="0" />
                 <div className="mt-2 text-xs text-muted-foreground">
-                  New item code: {quickItemCode}
+                  Item code: {quickItemCode}
                 </div>
                 <ActionMessage state={quickCreateState} />
               </details>
@@ -4683,7 +4684,7 @@ export function BarcodeInboundForm({
               {activeInboundBrands.length > 0 ? (
                 <div className="space-y-2">
                   <div className="text-sm font-medium">
-                    Quick inbound manufacturers
+                    Recent manufacturers
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {activeInboundBrands.slice(0, 6).map((brand) => {
@@ -4705,7 +4706,7 @@ export function BarcodeInboundForm({
                     })}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Tap manufacturer to avoid dropdown.
+                    Tap manufacturer.
                   </p>
                 </div>
               ) : null}
@@ -4923,7 +4924,7 @@ export function BarcodeInboundForm({
               }
             >
               <Label htmlFor="netWeightKg">
-                {manualMode ? "Enter one unit weight kg" : "Actual net weight kg"}
+                {manualMode ? "Enter one unit weight kg" : "Net weight kg"}
               </Label>
               <Input
                 ref={netWeightInputRef}
@@ -4944,7 +4945,7 @@ export function BarcodeInboundForm({
                   ? "Enter kg. Press Enter to save."
                   : currentBarcodeWeightRule
                   ? "Auto-filled from saved barcode rule after scan."
-                  : "Scan supplier barcode, then enter actual kg once to learn the rule."}
+                  : "Scan barcode, enter kg once."}
               </p>
               <Button
                 type="button"
@@ -5116,7 +5117,7 @@ export function BarcodeInboundForm({
                   <p className="text-xs text-muted-foreground">
                     {selectedItemDefaultWeightKg
                       ? `Default: ${selectedItemDefaultWeightKg} kg.`
-                      : "Set default fixed kg in Product Master first."}
+                      : "Set default fixed kg first."}
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -5345,7 +5346,7 @@ export function BarcodeInboundForm({
                   ? "Rule ready. Keep scanning."
                   : sessionBarcodeRuleSaved
                     ? "Rule saved. Keep scanning."
-                  : "Scan barcode, enter actual kg once."}
+                  : "Scan barcode, enter kg once."}
               </div>
               {currentBarcodeWeightRule?.sampleBarcode ? (
                 <div className="mt-1 break-all text-xs">
@@ -5389,8 +5390,8 @@ export function BarcodeInboundForm({
               ) : null}
               {rulePreviewInvalid ? (
                 <p className="mt-2 text-xs font-medium" role="alert">
-                  No valid weight extracted. Adjust rule fields or use No
-                  supplier barcode.
+                  No valid weight extracted. Adjust rule or use Inbound without
+                  Barcode.
                 </p>
               ) : null}
             </div>
@@ -5486,7 +5487,7 @@ export function BarcodeInboundForm({
                   window.setTimeout(() => netWeightInputRef.current?.focus(), 0)
                 }}
               >
-                Use No supplier barcode
+                Use Inbound without Barcode
               </Button>
             </div>
           ) : null}
@@ -5564,8 +5565,7 @@ export function BarcodeInboundForm({
                   </div>
                 </div>
                 <div className="mt-3 rounded-md border border-emerald-200 bg-white/70 px-3 py-2 text-xs font-medium text-emerald-800">
-                  Session locked to this setup. Enter weight, save, then print
-                  and attach the label.
+                  Setup locked. Save, print, attach.
                 </div>
                 <div
                 data-stock-action="manual-weight-enter-shortcut"
@@ -5591,31 +5591,6 @@ export function BarcodeInboundForm({
               </div>
             </div>
           ) : null}
-
-          <div
-            className={
-              inboundStep === "scan" || inboundStep === "manual"
-                ? "grid gap-3 sm:grid-cols-2"
-                : "hidden"
-            }
-          >
-            <div className="rounded-md border bg-background p-3">
-              <div className="text-xs uppercase text-muted-foreground">
-                {manualMode ? "Saved units" : "Saved scans"}
-              </div>
-              <div className="mt-1 text-2xl font-semibold">
-                {recentInboundCount}
-              </div>
-            </div>
-            <div className="rounded-md border bg-background p-3">
-              <div className="text-xs uppercase text-muted-foreground">
-                {manualMode ? "Saved total weight" : "Saved weight"}
-              </div>
-              <div className="mt-1 text-2xl font-semibold">
-                {recentInboundWeightKg.toFixed(3)} kg
-              </div>
-            </div>
-          </div>
 
           {latestSavedScan &&
           (inboundStep === "scan" || inboundStep === "manual") ? (
@@ -5692,7 +5667,7 @@ export function BarcodeInboundForm({
                 </span>
               </div>
               <div className="mt-2 rounded-md border border-amber-200 bg-white/80 px-3 py-2 text-xs font-medium text-amber-900">
-                After save, the weight box is ready again.
+                After save, next weight.
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start">
                 <StockLabelPreview label={pendingInternalLabel} />
@@ -5893,7 +5868,7 @@ export function BarcodeInboundForm({
                 {activePrintLabels.length > 0 ? (
                   <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
                     {manualMode
-                      ? "Print and attach saved labels before moving stock."
+                      ? "Print and attach labels."
                       : "Labels can be reprinted if needed."}
                   </div>
                 ) : null}
@@ -6025,7 +6000,7 @@ export function BarcodeInboundForm({
             <div className="mt-3 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
               <div>
                 Inbound mode:{" "}
-                {manualMode ? "No supplier barcode" : "Supplier barcode"}
+                {manualMode ? "Inbound without Barcode" : "Inbound with Barcode"}
               </div>
               <div>Product: {selectedProductName}</div>
               <div>Manufacturer: {selectedManufacturerName}</div>
@@ -6049,7 +6024,7 @@ export function BarcodeInboundForm({
               </div>
             )}
             <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-              Manager-approved Delete Whole Session only. Audit kept.
+              Manager approval required. Audit kept.
             </div>
             <div
               data-stock-action="future-session-summary-print-area"
@@ -6250,14 +6225,13 @@ export function BarcodeInboundForm({
                 className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
               >
                 <div className="font-semibold">
-                  Confirm manager-approved Delete Whole Session
+                  Confirm Delete Whole Session
                 </div>
                 <div className="mt-1">
-                  This will delete this session by voiding {recentInboundCount} saved{" "}
+                  Voids {recentInboundCount} saved{" "}
                   {manualMode ? "unit" : "barcode"}
-                  {recentInboundCount === 1 ? "" : "s"} totaling{" "}
-                  {recentInboundWeightKg.toFixed(3)} kg for batch {batchNo}.
-                  Manager-approved only. Audit kept.
+                  {recentInboundCount === 1 ? "" : "s"} (
+                  {recentInboundWeightKg.toFixed(3)} kg) for {batchNo}. Audit kept.
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <Button
@@ -6306,7 +6280,7 @@ export function BarcodeInboundForm({
                 className="min-h-11 w-full whitespace-normal"
                 disabled
               >
-                Finish Session
+                Session finished
               </Button>
               <Button
                 type="button"
@@ -9740,7 +9714,7 @@ export function NoBarcodeInboundForm() {
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           New loose no-barcode balances are disabled. Legacy no-barcode records
           remain visible in reports for compatibility. Open Barcode Inbound and
-          choose No supplier barcode.
+          choose Inbound without Barcode.
         </div>
         <Button asChild className="min-h-11 w-full sm:w-auto">
           <Link href="/stock/inbound">Open Barcode Inbound</Link>

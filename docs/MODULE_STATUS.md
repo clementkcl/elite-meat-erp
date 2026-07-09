@@ -52,7 +52,7 @@ Last audited: 2026-06-24
 - Stock Item Master edit now starts with no selected item and keeps active/barcode-required toggles under advanced item settings after a product is chosen, avoiding accidental edits to the first item.
 - Barcode Inbound internal-label saves now return focus to the weight field instead of the barcode field, reducing taps for repeated no-barcode/internal-label entries under the same locked session.
 - Shared Stock barcode fields now treat Enter in the manual barcode input as a scan, so external USB/Bluetooth keyboard scanners use the same path as camera scans.
-- Barcode Inbound now tells workers `No matching weight position found. Generate an internal label instead.` when they type actual kg but the supplier barcode cannot teach a usable weight-position rule.
+- Barcode Inbound now tells workers `No weight position found. Use internal label.` when they type actual kg but the supplier barcode cannot teach a usable weight-position rule.
 - Stock Outbound direct scan handler now enforces the same worker prerequisites as the disabled scanner UI; direct Sales requires a customer before scanning, Damage/Spoilage still requires a photo, Return Supplier still requires supplier, and Transfer still requires destination before any camera/manual scan is accepted.
 - Barcode Inbound now turns `Save weight rule for future scans` back on whenever the selected item + brand + origin has no saved rule, preventing an old browser setting from blocking first-scan learning.
 - Stock Transfer now shows `Sending from assigned location: ...` and blocks choosing that assigned source as the destination before scanning.
@@ -104,7 +104,7 @@ Last audited: 2026-06-24
 - Barcode Inbound blocked/error session rows now wrap long barcode text, reducing horizontal overflow risk when workers scan long supplier/GS1 barcodes at 390px width.
 - Shared Stock action messages and offline scan alerts now use wrapping text so long worker-facing messages do not force horizontal overflow on phone-width screens.
 - Stock worker home shortcut buttons now keep icons from shrinking and wrap labels inside `min-w-0` text, reducing overflow risk for long labels at 390px width.
-- Shared Stock barcode fields now say `Manual entry: paste barcode if camera cannot scan.`, keeping camera scanning as the main worker path and manual entry as fallback.
+- Shared Stock barcode fields now say `Type barcode if needed.`, keeping camera scanning as the main worker path and manual entry as fallback.
 - Latest Stock scanner manual-entry helper copy pass on 2026-06-24 passed focused Stock acceptance/scanner/mobile/doc guards plus `npm.cmd run smoke`, `npm.cmd run lint`, `npm.cmd run typecheck`, and `npm.cmd run build`.
 - Shared Stock scanner now uses `Camera scanning is not available. Use manual entry.` when the browser cannot provide camera scanning.
 - Latest Stock scanner browser-unavailable copy pass on 2026-06-24 passed focused Stock scanner/mobile/doc guards, `npm.cmd run lint`, `npm.cmd run typecheck`, and `npm.cmd run build`; full `npm.cmd run smoke` failed before Stock checks on an unrelated Delivery migration policy ordering guard in `202606240006_delivery_completion_rls_fix_v1.sql`.
@@ -114,7 +114,7 @@ Last audited: 2026-06-24
 - Shared Stock scanner camera errors now show both `Try camera again` and `Use manual entry` inside the error card, so workers can recover immediately.
 - Shared Stock scanner now shows `Try camera again` inside the scanner sheet when camera startup fails, so workers can retry without closing the scanner.
 - Shared Stock scanner now clears stale camera error text and the camera-only duplicate debounce whenever `Scan Barcode` opens, so reopening the camera is ready for the next worker scan.
-- Barcode Inbound now shows `Print and attach saved labels before moving stock.` beside generated-label print actions when saved labels are available.
+- Barcode Inbound now shows `Print and attach labels.` beside generated-label print actions when saved labels are available.
 - Shared Stock scanner now shows `Detected. Ready for next scan.` after a successful continuous camera read, giving workers immediate green feedback without claiming the server save has completed.
 - Shared Stock scanner now shows a `Camera session scans` count inside the camera sheet and resets it every time the scanner opens, so workers can see continuous camera reads during a batch.
 - Shared Stock barcode fields now have their own online-only guard: if the browser is offline, the manual barcode input and `Scan Barcode` button are disabled with `Connection lost. Please reconnect before scanning.`, and an open camera scanner stops before any scan is passed to the workflow.

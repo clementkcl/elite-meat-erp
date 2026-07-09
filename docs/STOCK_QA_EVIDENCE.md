@@ -6,6 +6,121 @@ Use this file to record real Supabase, RLS, device, and workflow evidence before
 
 Use `docs/STOCK_COMPLETION_AUDIT.md` to compare local automated evidence with the manual evidence still required.
 
+## 2026-07-09 Stock Inbound Invalid-Rule Wording Alignment
+
+Scope:
+
+- `/stock/inbound` barcode-rule invalid-preview warning.
+
+Evidence captured:
+
+- Invalid rule preview now says `No valid weight extracted. Adjust rule or use Inbound without Barcode.`
+- Current QA wording now uses `Inbound with Barcode` for the barcode mode name.
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs` and `node scripts\stock-owner-qa-doc-coverage.mjs`.
+
+Manual QA:
+
+- Open barcode rule setup, enter invalid rule fields, and confirm the warning points to `Inbound without Barcode`.
+
+## 2026-07-09 Stock Inbound Immediate-Label Docs Sync
+
+Scope:
+
+- Current Stock Inbound no-barcode/manual-label documentation and live field label.
+
+Evidence captured:
+
+- Stale scan-back wording was removed from current owner QA/evidence/handoff notes.
+- Manual no-barcode QA now follows the current immediate-save flow.
+- Live manual barcode field label now says `Generated barcode`.
+- Source checks passed: `node scripts\stock-owner-qa-doc-coverage.mjs` and `node scripts\stock-inbound-guided-flow-coverage.mjs`.
+
+Manual QA:
+
+- Open Inbound without Barcode, enter one weight, confirm stock saves immediately, then print/attach the generated label.
+
+## 2026-07-09 Stock Inbound Manual Label Save Copy
+
+Scope:
+
+- `/stock/inbound` manual weight entry helper copy.
+
+Evidence captured:
+
+- Manual label scanner helper now says `Weight saves label.`
+- Pending-label helper now says `After save, next weight.`
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, `node scripts\stock-acceptance-coverage.mjs`, and `node scripts\stock-label-coverage.mjs`.
+
+Manual QA:
+
+- Open Inbound without Barcode, enter one weight, and confirm the generated label saves immediately before returning to the next weight.
+
+## 2026-07-09 Stock Label Reprint Shorter Copy
+
+Scope:
+
+- `/stock/units/[id]` mobile label reprint helper copy.
+
+Evidence captured:
+
+- Reprint page now says `Reprint label from phone. No reason needed.`
+- Label preview card now says `Mobile reprint label.`
+- Source checks passed: `node scripts\stock-label-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- Open a real `/stock/units/[id]` page on phone width, confirm the shorter reprint copy, and print/PDF the label.
+
+## 2026-07-09 Stock Scanner Shorter Worker Copy
+
+Scope:
+
+- Shared stock barcode scanner field and phone scanner popup.
+
+Evidence captured:
+
+- Default scanner helper now says `Type barcode if needed.`
+- Camera popup now says `Allow camera. Rear camera preferred. Use manual if blocked.`
+- External scanner cue now says `Keep cursor here. Enter sends scan`.
+- Source checks passed: `node scripts\stock-scanner-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, `node scripts\stock-inbound-guided-flow-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- Open `/stock/inbound` on phone width and confirm the scan field and camera popup use short worker messages.
+- Test real camera and handheld scanner when device access is available.
+
+## 2026-07-09 Stock Inbound Shorter Setup Labels
+
+Scope:
+
+- `/stock/inbound` setup and session-history labels.
+
+Evidence captured:
+
+- Setup now uses shorter labels: `Auto code.`, `10 per page.`, `Tap product.`, `Product name.`, `Item code:`, `Recent manufacturers`, and `Tap manufacturer.`
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- Open `/stock/inbound` around 390px width and confirm setup/history labels are short and readable.
+
+## 2026-07-09 Stock Inbound Shorter Delete/Fixed-Weight Copy
+
+Scope:
+
+- `/stock/inbound` fixed-weight fallback helper and session summary delete confirmation.
+
+Evidence captured:
+
+- Fixed-weight fallback now shows `Set default fixed kg first.`
+- Whole-session delete now shows `Confirm Delete Whole Session`, shorter void count/weight text, and `Manager approval required. Audit kept.`
+- Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
+
+Manual QA:
+
+- Open `/stock/inbound`, choose a product without default fixed weight, and confirm the short fixed-weight message.
+- Finish a session with saved scans, open Delete Whole Session, and confirm the shorter manager/audit warning appears before delete.
+
 ## Test Run Details
 
 | Field | Evidence |
@@ -147,7 +262,7 @@ Scope:
 
 - Continued the guided Stock Inbound no-barcode/manual-weight goal.
 - Recent inbound templates are now mode-aware.
-- If the worker is in `No supplier barcode`, tapping a recent template keeps the session in Manual Weight instead of switching to Supplier Barcode.
+- If the worker is in `Inbound without Barcode`, tapping a recent template keeps the session in Manual Weight instead of switching to Inbound with Barcode.
 - When the selected template has enough setup data, the form jumps straight to Manual Weight and focuses the weight field.
 
 Evidence captured:
@@ -168,7 +283,7 @@ Latest check result:
 
 Manual QA still required:
 
-- On `/stock/inbound`, choose `No supplier barcode`.
+- On `/stock/inbound`, choose `Inbound without Barcode`.
 - Tap a recent inbound template.
 - Confirm the form stays in Manual Weight and focuses the weight field.
 - Confirm Supplier Barcode mode still sends saved-rule templates to scanner/rule setup.
@@ -178,15 +293,15 @@ Manual QA still required:
 Scope:
 
 - Continued the guided Stock Inbound no-barcode/manual-weight goal.
-- Prevented workers from finishing a session while an internal barcode label has been generated but not scanned back.
-- This keeps the no-barcode flow honest: enter weight, print/attach label, scan printed label, then finish summary.
+- Prevented workers from finishing a session while an internal barcode label save is still pending.
+- Current no-barcode flow: enter weight, generate label, save stock immediately, print/attach label, then finish summary.
 - New inbound session reset now clears pending internal-label state and refs.
 
 Evidence captured:
 
 - `components/stock/workflow-forms.tsx` adds `finishBlockedByPendingLabel`.
 - The finish button is disabled while a printed label is pending confirmation.
-- The UI shows `Scan printed label or cancel it before finishing this session.`
+- The current UI shows `Cancel pending label before finishing this session.` while the save is still pending.
 - New inbound session reset clears `pendingInternalLabel`, `pendingLabelRef`, and `pendingInternalLabelRef`.
 - `scripts/stock-mobile-ux-coverage.mjs` and `scripts/stock-acceptance-coverage.mjs` guard the finish/reset behavior.
 
@@ -198,7 +313,7 @@ Latest check result:
 
 Manual QA still required:
 
-- On `/stock/inbound`, choose `No supplier barcode`.
+- On `/stock/inbound`, choose `Inbound without Barcode`.
 - Enter weight and generate an internal label.
 - Confirm `Finish Inbound Session` is blocked until the printed label is scanned back or cancelled.
 - Start a new inbound session and confirm no old pending label remains.
@@ -321,7 +436,7 @@ Latest check result:
 
 Manual QA still required:
 
-- On `/stock/inbound`, switch to `No supplier barcode`.
+- On `/stock/inbound`, switch to `Inbound without Barcode`.
 - Enter a weight and press Enter; confirm the label preview is generated without tapping the button.
 - Print/attach the label, scan it, and confirm the field clears/focuses for the next weight.
 
@@ -453,7 +568,7 @@ Scope:
 Evidence captured:
 
 - `components/stock/workflow-forms.tsx` sets `inboundMode` to `internal_label` and `inboundStep` to `manual` when no rule suggestion is found on Page 2.
-- The worker message is `No matching weight position found. Switched to Manual Weight.`
+- The worker message is `No weight position found. Use internal label.`
 - `scripts/stock-mobile-ux-coverage.mjs` guards the fallback message.
 
 Latest check result:
@@ -541,7 +656,7 @@ Scope:
 
 Evidence captured:
 
-- `components/stock/workflow-forms.tsx` shows `Sample scanned. Enter actual kg, then save to learn this rule.`
+- `components/stock/workflow-forms.tsx` shows `Sample scanned. Enter kg, then save rule.`
 - `components/stock/workflow-forms.tsx` excludes `inboundStep === "rule"` from the automatic submit path.
 - `components/stock/workflow-forms.tsx` disables Page 2 save through `ruleSampleNeedsActualKg` until sample barcode and actual kg exist.
 - `scripts/stock-mobile-ux-coverage.mjs` guards the Page 2 sample-save behavior.
@@ -653,8 +768,8 @@ Manual QA still required:
 
 - Sign in locally or on Vercel.
 - Open `/stock/inbound` at about 390px width.
-- Confirm `Supplier barcode` flow shows setup, barcode rule, scanner, previous scan, undo previous scan, and summary.
-- Confirm `No supplier barcode` flow shows setup, manual weight, generated label preview, scan printed label, previous weight, count, total weight, and summary.
+- Confirm `Inbound with Barcode` flow shows setup, barcode rule, scanner, previous scan, undo previous scan, and summary.
+- Confirm `Inbound without Barcode` flow shows setup, manual weight, generated label preview, immediate save, previous weight, count, total weight, and summary.
 - Confirm no horizontal scrolling and no generic `Save inbound` button in manual mode.
 
 ## 2026-06-25 Inbound Barcode Rule Sample Metadata
@@ -1499,7 +1614,7 @@ Scope:
 - Saved-rule recent inbound templates now say `Tap to scan`.
 - No-rule recent inbound templates now say `Tap to learn rule`.
 - Selecting a saved-rule template shows `Ready. Scan next barcode.`
-- Selecting a no-rule template shows `Scan supplier barcode, then enter actual kg once.`
+- Selecting a no-rule template shows `Scan barcode, enter kg once.`
 - Existing template loading, barcode-field focus, barcode decode, rule learning, duplicate blocking, server actions, RLS, and schema were not changed.
 
 Prepared / source-guarded coverage added:
@@ -1519,7 +1634,7 @@ Manual QA still required:
 
 - Open `/stock/inbound` around 390px width.
 - Tap a saved-rule recent template and confirm the message says `Ready. Scan next barcode.`
-- Tap a no-rule recent template and confirm the message says `Scan supplier barcode, then enter actual kg once.`
+- Tap a no-rule recent template and confirm the message says `Scan barcode, enter kg once.`
 
 ## 2026-06-25 Barcode Inbound Weight-Field Guidance
 
@@ -1937,7 +2052,7 @@ Manual QA still required:
 
 Scope:
 
-- Barcode Inbound now shows `No matching weight position found. Generate an internal label instead.` when a worker types actual kg but the supplier barcode cannot teach a usable weight-position rule.
+- Barcode Inbound now shows `No weight position found. Use internal label.` when a worker types actual kg but the supplier barcode cannot teach a usable weight-position rule.
 - Existing generated-label save flow, duplicate blocking, barcode-rule saving, inbound RPC, and RLS were not changed.
 
 Prepared / source-guarded coverage added:
@@ -3053,7 +3168,7 @@ Manual QA still required:
 
 Scope:
 
-- Updated the shared Stock barcode field helper to `Manual entry: paste barcode if camera cannot scan.`
+- Updated the shared Stock barcode field helper. Current copy is `Type barcode if needed.`
 - This is copy-only and keeps camera scanning as the main worker path while preserving manual barcode fallback.
 - No scanner startup, validation, RLS, server action, or stock movement behavior changed.
 
@@ -3078,7 +3193,7 @@ Manual QA still required:
 
 - Open inbound, outbound, transfer, receive-transfer, return/damage, and stock-take scan pages around 390px width.
 - Confirm the large `Scan Barcode` button remains the primary action.
-- Confirm the helper below the barcode input says `Manual entry: paste barcode if camera cannot scan.`
+- Confirm the helper below the barcode input says `Type barcode if needed.`
 - Confirm workers can still use manual entry when camera scanning is unavailable.
 
 ## 2026-06-24 Stock Scanner Browser-Unavailable Copy
@@ -3300,7 +3415,7 @@ Manual QA still required:
 
 Scope:
 
-- Improved Barcode Inbound generated-label feedback by showing `Print and attach saved labels before moving stock.` beside the print actions when saved labels are available.
+- Improved Barcode Inbound generated-label feedback by showing `Print and attach labels.` beside the print actions when saved labels are available.
 - The cue is worker-facing and appears only after there are saved labels to print.
 - No server action, RPC, RLS policy, database schema, migration, role access, validation rule, barcode generation rule, label print behavior, undo behavior, or stock movement behavior was changed.
 
@@ -3324,7 +3439,7 @@ Manual QA still required:
 
 - Open `/stock/inbound` on a real phone or 390px browser viewport.
 - Generate an internal label and confirm the stock save succeeds.
-- Confirm `Print and attach saved labels before moving stock.` appears near `Print label` / `PDF fallback`.
+- Confirm `Print and attach labels.` appears near `Print label` / `PDF fallback`.
 - Print or save the label, attach it, and confirm the 50mm x 30mm label remains readable.
 
 ## 2026-06-24 Stock Scanner Continuous Success Cue
@@ -4945,7 +5060,7 @@ Scope:
 Prepared / source-guarded QA coverage added:
 
 - `components/stock/workflow-forms.tsx` renders `Quick inbound products` with large buttons and selected state.
-- `scripts/stock-mobile-ux-coverage.mjs` guards `Quick inbound products` and `Tap product to avoid typing.`
+- `scripts/stock-mobile-ux-coverage.mjs` guards `Quick inbound products` and `Tap product.`
 - Owner and Vercel QA checklists now ask testers to confirm quick product buttons fit around 390px width and still keep search/dropdown fallbacks.
 
 Manual QA still required:
@@ -5487,7 +5602,7 @@ Prepared evidence:
 | Inbound session | Source guard checks recent templates, product search, scan disabled until product + brand + origin + location are chosen, larger Stock workflow inputs, finish session, session lock wording, saved count, saved weight, previous scan, and 390px layout markers. | Inbound 2-3 real test barcodes and confirm item + brand + origin + location lock after first saved scan. |
 | Continuous scanning UI | Source guard checks continuous scanner copy, full-width large scan button on phone widths, larger manual fallback input, large scanner close buttons, wrapped long barcode display, accessible success/warning/error announcements, success vibration, worker-friendly camera errors, and session counters. | On a phone, scan multiple barcodes without restarting the scanner and confirm the scanner stays ready. |
 | Duplicate warning | Source guard checks `Duplicate barcode. Inbound is blocked.`, the red blocked/error session list, and duplicate prevention remains in server-side stock actions. | Scan the same test barcode twice and confirm a short red warning and no second stock unit. |
-| No-weight warning | Source guard checks `No weight found. Generate an internal label, print it, then attach it.` | Scan a no-weight barcode and confirm save is blocked until label generation. |
+| No-weight warning | Source guard checks `No weight found. Use internal label.` | Scan a no-weight barcode and confirm save is blocked until label generation. |
 | Label generation | Source guard checks generated label/reprint copy, phone-width print/PDF action labels, full-width touch targets, Code 128 SVG barcode rendering, and numeric label expectations. | Enter a weight, generate the internal label, confirm stock is pending, print/PDF the 50mm x 30mm label, and scan the printed Code 128 barcode back into the app to save. |
 | Label reprint | Source guard checks stock-unit detail has `Print label`, `PDF fallback`, and uses the same full-width mobile print controls and Code 128 barcode renderer without a reason field. | Open `/stock/units/[id]` on a phone and reprint without entering a reason, then scan the reprinted barcode. |
 | Outbound by order | Source guard checks quick ready-order buttons, order selection, `Select order first.`, previous outbound scan feedback, substitution warning, no typed reason copy, and announced red blocked panels for missing/blocked/wrong-destination barcodes. | Tap a quick ready order, scan matching and substitute barcodes, confirm `Previous outbound scan` updates, and confirm warnings are readable at 390px. |
@@ -6123,7 +6238,7 @@ Browser check attempt:
 Manual QA:
 
 - Open `/stock/inbound` at about 390px width.
-- Walk both `Supplier barcode` and `No supplier barcode` flows from setup to summary.
+- Walk both `Inbound with Barcode` and `Inbound without Barcode` flows from setup to summary.
 - Confirm camera/manual/external scanner paths, previous scan, live count/weight, undo previous scan, print summary, and whole-session undo confirmation.
 
 ## 2026-06-29 First-Time Barcode Rule Scan Gate

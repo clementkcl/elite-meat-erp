@@ -269,6 +269,7 @@ includesAll(
     "{selectedItem ? (",
     "Enter name and a numeric item code before creating the item.",
     "function MergeManufacturerForm",
+    ".sort((a, b) => compareText(a.name, b.name))",
     "Merge manufacturers",
     "Admin cleanup for duplicate manufacturer names.",
     "Source becomes inactive. Audit kept.",
