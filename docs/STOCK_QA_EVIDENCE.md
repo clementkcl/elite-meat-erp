@@ -1039,7 +1039,7 @@ Scope:
 
 Evidence captured:
 
-- The destructive confirmation now says `Confirm Delete Whole Session`.
+- The destructive confirmation now says `Confirm manager-approved Delete Whole Session`.
 - Existing manager/admin/director server-side action gate remains unchanged.
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
 
@@ -1219,7 +1219,7 @@ Scope:
 Evidence captured:
 
 - Fixed-weight fallback now shows `Set default fixed kg first.`
-- Whole-session delete now shows `Confirm Delete Whole Session`, shorter void count/weight text, and `Corrections need manager approval. Audit kept.`
+- Whole-session delete now shows `Confirm manager-approved Delete Whole Session`, shorter void count/weight text, and `Corrections need manager approval. Audit kept.`
 - Source checks passed: `node scripts\stock-inbound-guided-flow-coverage.mjs`, `node scripts\stock-mobile-ux-coverage.mjs`, and `node scripts\stock-acceptance-coverage.mjs`.
 
 Manual QA:
@@ -1674,7 +1674,7 @@ Scope:
 Evidence captured:
 
 - `components/stock/workflow-forms.tsx` sets `inboundMode` to `internal_label` and `inboundStep` to `manual` when no rule suggestion is found on Page 2.
-- The worker message is `No weight position found. Use internal label.`
+- The worker message is `No weight position found. Use labels.`
 - `scripts/stock-mobile-ux-coverage.mjs` guards the fallback message.
 
 Latest check result:
@@ -3158,7 +3158,7 @@ Manual QA still required:
 
 Scope:
 
-- Barcode Inbound now shows `No weight position found. Use internal label.` when a worker types actual kg but the supplier barcode cannot teach a usable weight-position rule.
+- Barcode Inbound now shows `No weight position found. Use labels.` when a worker types actual kg but the supplier barcode cannot teach a usable weight-position rule.
 - Existing generated-label save flow, duplicate blocking, barcode-rule saving, inbound RPC, and RLS were not changed.
 
 Prepared / source-guarded coverage added:
@@ -6708,7 +6708,7 @@ Prepared evidence:
 | Inbound session | Source guard checks recent templates, product search, scan disabled until product + brand + origin + location are chosen, larger Stock workflow inputs, finish session, session lock wording, saved count, saved weight, previous scan, and 390px layout markers. | Inbound 2-3 real test barcodes and confirm item + brand + origin + location lock after first saved scan. |
 | Continuous scanning UI | Source guard checks continuous scanner copy, full-width large scan button on phone widths, larger manual fallback input, large scanner close buttons, wrapped long barcode display, accessible success/warning/error announcements, success vibration, worker-friendly camera errors, and session counters. | On a phone, scan multiple barcodes without restarting the scanner and confirm the scanner stays ready. |
 | Duplicate warning | Source guard checks `Duplicate barcode. Inbound is blocked.`, the red blocked/error session list, and duplicate prevention remains in server-side stock actions. | Scan the same test barcode twice and confirm a short red warning and no second stock unit. |
-| No-weight warning | Source guard checks `No weight found. Use internal label.` | Scan a no-weight barcode and confirm save is blocked until label generation. |
+| No-weight warning | Source guard checks `No weight found. Use labels.` | Scan a no-weight barcode and confirm save is blocked until label generation. |
 | Label generation | Source guard checks generated label/reprint copy, phone-width print/PDF action labels, full-width touch targets, Code 128 SVG barcode rendering, and numeric label expectations. | Enter a weight, generate the internal label, confirm stock is pending, print/PDF the 50mm x 30mm label, and scan the printed Code 128 barcode back into the app to save. |
 | Label reprint | Source guard checks stock-unit detail has `Print label`, `PDF fallback`, and uses the same full-width mobile print controls and Code 128 barcode renderer without a reason field. | Open `/stock/units/[id]` on a phone and reprint without entering a reason, then scan the reprinted barcode. |
 | Outbound by order | Source guard checks quick ready-order buttons, order selection, `Select order first.`, previous outbound scan feedback, substitution warning, no typed reason copy, and announced red blocked panels for missing/blocked/wrong-destination barcodes. | Tap a quick ready order, scan matching and substitute barcodes, confirm `Previous outbound scan` updates, and confirm warnings are readable at 390px. |
@@ -7573,6 +7573,28 @@ Result:
 
 - Browser-localhost access is blocked here, so real logged-in 390px UI evidence still needs owner/Vercel or local browser testing.
 - Source, smoke, lint, typecheck, and build checks remain the available verification for this pass.
+
+## 2026-07-10 Inbound Session History Detail Rows
+
+Scope:
+
+- `/stock/inbound` recent session history details.
+
+What changed:
+
+- `View details` now shows each recent saved barcode with weight, status, and scan time.
+- The details remain compact and capped to the latest 20 rows.
+- Voided barcode rows stay visible in details for audit, while active totals still exclude voided stock.
+- Session summary label printing now repeats the existing `Bluetooth first. PDF fallback.` note beside `Print Labels PDF`.
+- No stock action, RLS, movement, barcode uniqueness, or migration logic changed.
+
+Manual QA:
+
+- Open `/stock/inbound` around 390px width with past inbound sessions.
+- Tap `View details`.
+- Confirm barcode rows show barcode, kg, status, and scan time without horizontal scrolling.
+- If the session has voided stock, confirm the voided barcode row is visible but not counted in active totals.
+- Confirm the summary `Print Labels PDF` area shows the Bluetooth/PDF fallback note before printing.
 
 ## Final Sign-Off
 

@@ -22,6 +22,7 @@ function includesAll(source, fragments, label) {
 const workflowForms = read("components/stock/workflow-forms.tsx")
 const scanner = read("components/stock/barcode-scanner.tsx")
 const displayNames = read("lib/stock/display-names.ts")
+const barcodeLabel = read("lib/stock/barcode-label.ts")
 const data = read("lib/stock/data.ts")
 const label = read("components/stock/stock-label.tsx")
 const stockPage = read("components/stock/stock-page.tsx")
@@ -93,7 +94,12 @@ includesAll(
     "voided kept for audit",
     "Saved: {session.count}",
     "Voided: {session.voidedCount}",
-    "session.barcodes.slice(0, 20).join",
+    "entries: {",
+    "data-stock-action=\"inbound-session-history-detail-rows\"",
+    "session.entries.slice(0, 20).map",
+    "{entry.weightKg.toFixed(3)} kg / {entry.status}",
+    "next.entries = [entry, ...next.entries]",
+    "new Date(entry.receivedAt).toLocaleString()",
     "Latest 20 shown.",
     "No sessions yet.",
     "Page {boundedHistoryPage} / {historyPageCount}",
@@ -130,6 +136,10 @@ includesAll(
 assert(
   !workflowForms.slice(historyBuildStart, historyBuildEnd).includes(".slice(0, 8)"),
   "Inbound session history details must not cap barcode data before rendering."
+)
+assert(
+  !workflowForms.slice(historyBuildStart, historyBuildEnd).includes("next.barcodes"),
+  "Inbound session history should use detail entries instead of duplicate barcode-only state."
 )
 
 const historySetupStart = workflowForms.indexOf(
@@ -286,7 +296,7 @@ includesAll(
     "Finish current session",
     "onClick={finishInboundSession}",
     "data-stock-action=\"review-delete-whole-session-from-locked-setup\"",
-    "Review summary or delete whole session",
+    "Review summary",
     "Recent inbound templates",
     "function applyInboundTemplate",
     "setInboundStep(template.hasRule ? \"scan\" : \"rule\")",
@@ -551,6 +561,9 @@ includesAll(
     "inferBarcodeWeightRuleWithStatus",
     "decimalsText: preset.barcodeWeightDecimals",
     "Weight appears twice. Scan another sample.",
+    "setBarcode(\"\")",
+    "setNetWeightKg(\"\")",
+    "barcodeInputRef.current?.focus()",
     "mustSaveCurrentRule",
     "Save first barcode + rule",
     "First scan saves rule.",
@@ -713,15 +726,25 @@ assert(
   !scannerActionSlot.includes("inboundStep === \"rule\""),
   "Barcode-rule sample scanner should not show Finish Session controls."
 )
+assert(
+  scannerActionSlot.includes("space-y-2") &&
+    !scannerActionSlot.includes("grid-cols-2") &&
+    !scannerActionSlot.includes("min-[390px]:grid-cols"),
+  "Inbound scanner popup actions must stay one-column at phone width."
+)
 
 includesAll(
-  workflowForms + label,
+  workflowForms + label + barcodeLabel,
   [
     "data-stock-action=\"manual-label-next-unit\"",
     "data-stock-action=\"manual-weight-enter-shortcut\"",
     "data-stock-action=\"manual-weight-progress-card\"",
     "Enter next unit",
     "Enter saves next weight.",
+    "Generate label first.",
+    "Weight too high.",
+    "Start new session.",
+    "Label cancelled. Check weight.",
     "Enter kg. Print label. Repeat.",
     "Previous entered weight",
     "manualPreviousWeightText",
@@ -733,6 +756,7 @@ includesAll(
     "Use labels",
     "switchInboundMode(\"internal_label\")",
     "No weight? Use labels.",
+    "Enter kg. Print label.",
     "Generate internal label",
     "generateLabelBarcode()",
     'status: "PENDING"',
@@ -745,6 +769,7 @@ includesAll(
     "Saved units",
     "data-stock-action=\"inbound-summary-print-labels-pdf-area\"",
     "Print Labels PDF",
+    "<StockLabelPrintNote />",
     "StockLabelPreview",
     "StockLabelPrintActions",
     "thermal-50x30",
@@ -759,6 +784,12 @@ includesAll(
     "label.productName",
     "label.weightKg",
     "label.barcode",
+    "export function makeInternalBarcode",
+    "const sessionPart = sessionCode?.replace(/\\D/g, \"\") ?? \"\"",
+    "const weightGrams = Math.round(Number(weightKg) * 1000)",
+    "const serialPart = String(serial).padStart(4, \"0\")",
+    "const weightPart = String(weightGrams).padStart(6, \"0\").slice(-6)",
+    "return `${sessionPart}${serialPart}${weightPart}`",
   ],
   "No-supplier-barcode manual label flow"
 )
@@ -895,6 +926,10 @@ assert(
   !workflowForms.includes("function inboundTemplateStatusText"),
   "Recent inbound templates should not render extra status helper copy."
 )
+assert(
+  !workflowForms.includes("Use internal label"),
+  "Stock Inbound worker copy should use short 'Use labels' wording."
+)
 
 for (const staleCopy of [
   "Finish inbound session before opening summary.",
@@ -902,6 +937,9 @@ for (const staleCopy of [
   "Cancel pending label before entering another weight.",
   "Cancel pending label before generating another.",
   "Enter weight before generating a label.",
+  "Enter kg, save, print label.",
+  "Label cancelled. Check weight, then generate again.",
+  "Enter weight, save stock, then print label.",
   "Finish or delete this session before starting a new one.",
   "Setup locked. Finish or delete this session to change setup.",
   "Choose a product or tap a recent template before scanning.",
@@ -912,11 +950,14 @@ for (const staleCopy of [
   "Session locked. Finish before changes.",
   "Undo before finishing this session.",
   "No weight? Use internal label.",
+  "Review summary or delete whole session",
   "Choose setup once, then enter weights.",
   "Choose setup once, then scan barcodes.",
   "Keep scanning. Valid scans save.",
   "Stock saves immediately.",
   "No valid weight extracted. Adjust rule or use Inbound without Barcode.",
+  "Barcode weight could not be decoded confidently.",
+  "Use labels flow.",
 ]) {
   assert(
     !workflowForms.includes(staleCopy),
@@ -952,6 +993,10 @@ includesAll(
     "Display name: {selectedProductDisplayName}",
     "Inbound location: {selectedLocation?.name ?? \"No location\"}",
     "Scanned by: {scannedByName}",
+    "Started: {sessionStartedText}",
+    "Finished: {sessionFinishedText}",
+    "[\"Started\", sessionStartedText]",
+    "[\"Finished\", sessionFinishedText]",
     "data-stock-action=\"future-session-summary-print-area\"",
     "Print summary",
     "Print or save PDF.",
@@ -1015,7 +1060,7 @@ includesAll(
     "canManageStockTake ||",
     "canDirectorApproveStockTake",
     "data-stock-action=\"whole-session-undo-confirmation\"",
-    "Confirm Delete Whole Session",
+    "Confirm manager-approved Delete Whole Session",
     "Voids {recentInboundCount} saved",
     "kg) for {batchNo}. Audit kept.",
     "Keep session",
@@ -1035,6 +1080,28 @@ includesAll(
   "Session summary and safe whole-session undo"
 )
 
+const duplicateInboundStart = workflowForms.indexOf(
+  "function isDuplicateInboundBarcode"
+)
+const duplicateInboundEnd = workflowForms.indexOf(
+  "function inboundBarcodeLengthWarning",
+  duplicateInboundStart
+)
+assert(duplicateInboundStart >= 0, "isDuplicateInboundBarcode function missing")
+assert(
+  duplicateInboundEnd > duplicateInboundStart,
+  "isDuplicateInboundBarcode boundary missing"
+)
+includesAll(
+  workflowForms.slice(duplicateInboundStart, duplicateInboundEnd),
+  [
+    "value.trim()",
+    "units.some((unit) => unit.barcode === nextBarcode)",
+    "recentLabels.some((label) => label.barcode === nextBarcode)",
+  ],
+  "Inbound duplicate barcode guard"
+)
+
 assert(
   !workflowForms.includes("scan-back"),
   "Manual label flow saves immediately and must not mention scan-back."
@@ -1042,6 +1109,26 @@ assert(
 assert(
   !workflowForms.includes("mt-2 grid grid-cols-2 gap-2"),
   "Inbound sticky summary Saved/Weight cards must stay one-column on phone."
+)
+const summaryActionGridStart = workflowForms.indexOf(
+  'data-stock-action="inbound-summary-action-grid"'
+)
+const summaryActionGridEnd = workflowForms.indexOf(
+  'data-stock-action="print-inbound-session-summary"',
+  summaryActionGridStart
+)
+assert(
+  summaryActionGridStart >= 0 && summaryActionGridEnd > summaryActionGridStart,
+  "Inbound summary action grid must be easy to inspect."
+)
+const summaryActionGrid = workflowForms.slice(
+  summaryActionGridStart,
+  summaryActionGridEnd
+)
+assert(
+  !summaryActionGrid.includes("min-[390px]:grid-cols") &&
+    !summaryActionGrid.includes(" grid-cols-2"),
+  "Inbound summary actions must stay one-column at phone width."
 )
 const manualSummaryStart = workflowForms.indexOf(
   'data-stock-action="manual-label-next-unit"'

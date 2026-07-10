@@ -1502,7 +1502,12 @@ type InboundSessionHistory = {
   totalWeightKg: number
   startedAt: string
   lastAt: string
-  barcodes: string[]
+  entries: {
+    barcode: string
+    weightKg: number
+    status: StockUnit["status"]
+    receivedAt: string
+  }[]
 }
 
 type InboundMode = "supplier_barcode" | "internal_label"
@@ -1861,7 +1866,13 @@ function buildInboundSessionHistory({
       totalWeightKg: 0,
       startedAt: unit.receivedAt,
       lastAt: unit.receivedAt,
-      barcodes: [],
+      entries: [],
+    }
+    const entry = {
+      barcode: unit.barcode,
+      weightKg: Number(unit.netWeightKg || 0),
+      status: unit.status,
+      receivedAt: unit.receivedAt,
     }
 
     if (unit.status === "VOIDED") {
@@ -1869,8 +1880,8 @@ function buildInboundSessionHistory({
     } else {
       next.count += 1
       next.totalWeightKg += Number(unit.netWeightKg || 0)
-      next.barcodes = [unit.barcode, ...next.barcodes]
     }
+    next.entries = [entry, ...next.entries]
 
     next.startedAt =
       unit.receivedAt < next.startedAt ? unit.receivedAt : next.startedAt
@@ -2740,7 +2751,7 @@ export function BarcodeInboundForm({
       (nextStep === "rule" || nextStep === "scan")
     ) {
       setDecodeStatus("warning")
-      setDecodeMessage("Use labels flow.")
+      setDecodeMessage("Use labels.")
       return
     }
 
@@ -2934,8 +2945,8 @@ export function BarcodeInboundForm({
     if (submitAfterScan && decoded.status === "error") {
       const message =
         lengthWarning
-          ? `${lengthWarning} Use internal label.`
-          : "No weight found. Use internal label."
+          ? `${lengthWarning} Use labels.`
+          : "No weight found. Use labels."
       setInboundMode("internal_label")
       setInboundStep("manual")
       setDecodeStatus("error")
@@ -3023,7 +3034,7 @@ export function BarcodeInboundForm({
 
       if (inference.status === "not_found") {
         const message =
-          "No weight position found. Use internal label."
+          "No weight position found. Use labels."
         setInboundMode("internal_label")
         setInboundStep("manual")
         setDecodeStatus("warning")
@@ -3094,7 +3105,7 @@ export function BarcodeInboundForm({
     if (inference.status === "not_found") {
       if (barcode.trim() && Number(value) > 0) {
         const message =
-          "No weight position found. Use internal label."
+          "No weight position found. Use labels."
         setInboundMode("internal_label")
         setInboundStep("manual")
         setDecodeStatus("warning")
@@ -3208,8 +3219,8 @@ export function BarcodeInboundForm({
       event.preventDefault()
       pendingLabelRef.current = null
       setDecodeStatus("error")
-      setDecodeMessage("Enter weight, save stock, then print label.")
-      recordSessionError(barcode, "Enter weight, save stock, then print label.")
+      setDecodeMessage("Generate label first.")
+      recordSessionError(barcode, "Generate label first.")
       window.setTimeout(() => netWeightInputRef.current?.focus(), 0)
       return
     }
@@ -3259,7 +3270,13 @@ export function BarcodeInboundForm({
 
     if (!generated.barcode) {
       setDecodeStatus("error")
-      setDecodeMessage("Enter weight first.")
+      setDecodeMessage(
+        Number(netWeightKg) * 1000 > 999999
+          ? "Weight too high."
+          : nextSerial > 9999
+            ? "Start new session."
+          : "Enter weight first."
+      )
       return
     }
 
@@ -3295,7 +3312,7 @@ export function BarcodeInboundForm({
     pendingLabelRef.current = null
     setBarcode("")
     setDecodeStatus("warning")
-    setDecodeMessage("Label cancelled. Check weight, then generate again.")
+    setDecodeMessage("Label cancelled. Check weight.")
     window.setTimeout(() => netWeightInputRef.current?.select(), 0)
   }
 
@@ -3894,7 +3911,7 @@ export function BarcodeInboundForm({
     scannerVisible &&
     !sessionFinishedAt &&
     !pendingInternalLabel &&
-    decodeMessage.includes("Use internal label")
+    decodeMessage.includes("Use labels")
   const inboundSummaryNextAction = manualMode
     ? "Print labels."
     : "Move stock when ready."
@@ -4308,11 +4325,31 @@ export function BarcodeInboundForm({
                       <div>Voided: {session.voidedCount}</div>
                       <div>Started: {new Date(session.startedAt).toLocaleString()}</div>
                       <div>Last scan: {new Date(session.lastAt).toLocaleString()}</div>
-                      <div className="mt-2 break-all font-mono">
-                        {session.barcodes.slice(0, 20).join(", ") ||
-                          "No barcode details"}
+                      <div
+                        data-stock-action="inbound-session-history-detail-rows"
+                        className="mt-2 grid gap-1"
+                      >
+                        {session.entries.slice(0, 20).map((entry) => (
+                          <div
+                            key={`${session.batchNo}-${entry.barcode}`}
+                            className="rounded border bg-muted/30 px-2 py-1"
+                          >
+                            <div className="break-all font-mono">
+                              {entry.barcode}
+                            </div>
+                            <div className="text-muted-foreground">
+                              {entry.weightKg.toFixed(3)} kg / {entry.status} /{" "}
+                              {new Date(entry.receivedAt).toLocaleString()}
+                            </div>
+                          </div>
+                        ))}
+                        {session.entries.length === 0 ? (
+                          <div className="break-all font-mono">
+                            No barcode details
+                          </div>
+                        ) : null}
                       </div>
-                      {session.barcodes.length > 20 ? (
+                      {session.entries.length > 20 ? (
                         <div className="mt-1 text-muted-foreground">
                           Latest 20 shown.
                         </div>
@@ -4414,7 +4451,7 @@ export function BarcodeInboundForm({
                     className="mt-3 min-h-11 w-full border-amber-300 bg-white text-amber-900 hover:bg-amber-50"
                     onClick={() => goInboundStep("summary")}
                   >
-                    Review summary or delete whole session
+                    Review summary
                   </Button>
                 ) : null}
               </div>
@@ -6050,9 +6087,9 @@ export function BarcodeInboundForm({
               aria-live="polite"
               className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
             >
-            <div className="font-medium">Use internal label inbound</div>
+            <div className="font-medium">Use labels</div>
             <div className="mt-1">
-                Enter kg, save, print label.
+                Enter kg. Print label.
             </div>
               <Button
                 type="button"
@@ -6541,6 +6578,9 @@ export function BarcodeInboundForm({
                   {activePrintLabels.length} label
                   {activePrintLabels.length === 1 ? "" : "s"} ready.
                 </div>
+                <div className="mt-3">
+                  <StockLabelPrintNote />
+                </div>
                 <StockLabelPrintActions
                   className="mt-3"
                   onPrint={printInboundLabels}
@@ -6570,7 +6610,7 @@ export function BarcodeInboundForm({
                 className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
               >
                 <div className="font-semibold">
-                  Confirm Delete Whole Session
+                  Confirm manager-approved Delete Whole Session
                 </div>
                 <div className="mt-1">
                   Voids {recentInboundCount} saved{" "}

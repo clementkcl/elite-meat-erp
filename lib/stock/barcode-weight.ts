@@ -256,7 +256,6 @@ export function decodeBarcodeWeight(
     status: "error",
     weightKg: "",
     source: "NONE",
-    message:
-      "Barcode weight could not be decoded confidently. Enter the weight manually and confirm before saving.",
+    message: "No weight found. Use labels.",
   }
 }

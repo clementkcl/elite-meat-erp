@@ -12,7 +12,8 @@ export function makeInternalBarcode(
     serial < 1 ||
     serial > 9999 ||
     !Number.isFinite(weightGrams) ||
-    weightGrams <= 0
+    weightGrams <= 0 ||
+    weightGrams > 999999
   ) {
     return ""
   }
@@ -29,9 +30,14 @@ export function makeUniqueInternalBarcode(
   existingBarcodes: string[],
   startSerial = 1
 ) {
-  const blockedBarcodes = new Set(existingBarcodes.map((barcode) => barcode.trim()))
+  const blockedBarcodes = new Set(
+    existingBarcodes.map((barcode) => barcode.trim()).filter(Boolean)
+  )
+  const firstSerial = Number.isFinite(startSerial)
+    ? Math.max(1, Math.ceil(startSerial))
+    : 1
 
-  for (let serial = Math.max(1, startSerial); serial <= 9999; serial += 1) {
+  for (let serial = firstSerial; serial <= 9999; serial += 1) {
     const barcode = makeInternalBarcode(sessionCode, weightKg, serial)
 
     if (barcode && !blockedBarcodes.has(barcode)) {
@@ -39,7 +45,7 @@ export function makeUniqueInternalBarcode(
     }
   }
 
-  return { barcode: "", serial: startSerial }
+  return { barcode: "", serial: firstSerial }
 }
 
 export function internalBarcodeSerial(

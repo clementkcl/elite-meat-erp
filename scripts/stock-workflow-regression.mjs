@@ -116,6 +116,11 @@ assertDecode(
     message: "Fixed-weight fallback should require manual confirmation.",
   }
 )
+assert.equal(
+  decodeBarcodeWeight({ barcode: "000844512473539709000" }).message,
+  "No weight found. Use labels.",
+  "No-weight barcode errors should stay short for workers."
+)
 
 assert.deepEqual(
   inferBarcodeWeightRule({
@@ -242,6 +247,11 @@ assert.equal(
   "",
   "Generated barcode should not wrap serial numbers after 9999."
 )
+assert.equal(
+  makeInternalBarcode("INB-20260612-083000", "1000.000", 1),
+  "",
+  "Generated barcode should reject weights that overflow six gram digits."
+)
 
 const uniqueGenerated = makeUniqueInternalBarcode(
   "INB-20260612-083000",
@@ -254,6 +264,31 @@ assert.deepEqual(
   uniqueGenerated,
   { barcode: "202606120830000043010250", serial: 43 },
   "Generated barcode should skip existing labels and use the next serial."
+)
+assert.deepEqual(
+  makeUniqueInternalBarcode(
+    "INB-20260612-083000",
+    "10.250",
+    ["", "  ", " 202606120830000042010250 "],
+    42
+  ),
+  { barcode: "202606120830000043010250", serial: 43 },
+  "Generated barcode should trim existing labels and ignore blank blockers."
+)
+assert.deepEqual(
+  makeUniqueInternalBarcode("INB-20260612-083000", "10.250", [], 10000),
+  { barcode: "", serial: 10000 },
+  "Generated barcode should stop when session serials are exhausted."
+)
+assert.deepEqual(
+  makeUniqueInternalBarcode("INB-20260612-083000", "10.250", [], 42.5),
+  { barcode: "202606120830000043010250", serial: 43 },
+  "Generated barcode should round decimal start serials up."
+)
+assert.deepEqual(
+  makeUniqueInternalBarcode("INB-20260612-083000", "10.250", [], Number.NaN),
+  { barcode: "202606120830000001010250", serial: 1 },
+  "Generated barcode should recover from invalid start serials."
 )
 assert.equal(
   internalBarcodeSerial("INB-20260612-083000", generated),

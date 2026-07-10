@@ -171,7 +171,7 @@ includesAll(
     "Finish Session",
     "Session Summary",
     "Undo scan",
-    "No weight found. Use internal label.",
+    "No weight found. Use labels.",
     "Scan errors",
     "Recent inbound scans",
     "StockLabelPrintActions",

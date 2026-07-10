@@ -277,7 +277,7 @@ includesAll(
     "Save weight rule for future scans",
     "Undo Last Scan",
     "Finish Session",
-    "No weight found. Use internal label.",
+    "No weight found. Use labels.",
     "Generate internal label",
     "StockLabelPrintActions",
   ],
