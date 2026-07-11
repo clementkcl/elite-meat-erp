@@ -1,5 +1,51 @@
 # Elite Meat ERP Handoff
 
+## 2026-07-11 - Delivery lorry-shift driver workflow
+
+Completed:
+
+- Reworked `/delivery/driver` around one shared daily lorry shift for drivers and assistants.
+- Added lorry selection/join, crew header, shift summaries, quick actions, Delivering/Delivered/Failed tabs, one next stop, route ordering, crew cash records, shift-linked expenses, manual stops, vehicle issue reporting, change-lorry confirmation, and guarded shift ending.
+- Kept canonical `deliveries`, proof/GPS watermark upload, linked-order status sync, status logs, address suggestions, storage buckets, and finance-field protection.
+- Extended server and RLS checks so either active crew member can act while every proof, status, expense, cash, route, and shift action records the real user.
+
+Files changed:
+
+- `supabase/migrations/202607110001_delivery_lorry_shifts_v1.sql`
+- `lib/delivery/types.ts`
+- `lib/delivery/queries.ts`
+- `lib/delivery/actions.ts`
+- `app/(erp)/delivery/driver/page.tsx`
+- `components/delivery/driver-mobile-delivery-page.tsx`
+- `scripts/smoke-routes.mjs`
+- `scripts/delivery-preview-verify.mjs`
+- `HANDOFF.md`
+
+Remaining checks:
+
+- Apply the new migration to staging before authenticated crew QA.
+- Test two real phones joining the same lorry, camera/GPS allow and deny paths, concurrent status taps, route refresh, cash, expenses, change lorry, and end-shift warnings.
+- Shared crew state revalidates after every action and refreshes every 10 seconds; add Supabase Realtime only if UAT requires sub-10-second updates.
+- Available stops now show only Accept Delivery plus contact/navigation links; Address Issue appears after acceptance and Report Failed appears only after Start Delivery, matching server transition rules.
+- Canonical status updates now compare the expected previous status, so simultaneous crew taps produce one winning transition and no duplicate status log/order update.
+- Change Lorry now restores the original membership if the new join fails; if the new membership succeeded before a later response error, it keeps that active shift instead of creating two memberships.
+- Route arrangement now includes only unfinished accepted stops and saves all sequence changes plus the actor audit entry in one database transaction.
+- Cash and expense records now validate their optional delivery link against the active shift in both server actions and RLS.
+- Simplified before staging: shift auditing now uses the ERP audit log, Join/Change Lorry use one transactional RPC, obsolete individual-driver loaders were removed, and the redundant shift index was dropped.
+- End Shift now closes the shift and all active crew memberships atomically, preventing stale membership from blocking another shift.
+- A database constraint now prevents simultaneous crew taps from starting two active stops for one lorry shift.
+- Updated the real-phone and limited-UAT checklists from the retired individual-driver tabs to the shared two-phone lorry workflow.
+
+Validation:
+
+- `npm.cmd run smoke` - passed.
+- `npm.cmd run typecheck` - passed.
+- `npm.cmd run lint` - passed with no warnings.
+- `npm.cmd run build` - passed; only the existing multiple-lockfile workspace-root warning remains.
+- Local 390x844 browser QA passed for `/delivery/driver` lorry selection: no overflow, error overlay, console warning, or finance-sensitive wording. Active-shift QA requires the migration and seeded shift data.
+
+Next recommended task: apply the migration to staging and run two-user phone UAT for one shared shift.
+
 ## Current State
 
 This handoff reflects the codebase inspection for the existing frozen pork / meat processing ERP. No business behavior was changed in this documentation pass.

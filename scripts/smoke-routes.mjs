@@ -1148,26 +1148,49 @@ const deliveryPhoneQa = read("docs/DELIVERY_V1_PHONE_QA.md")
 const deliveryUatGate = read("docs/DELIVERY_V1_LIMITED_UAT_GATE.md")
 const packageJson = read("package.json")
 const deliveryPreviewVerifier = read("scripts/delivery-preview-verify.mjs")
+const deliveryShiftMigration = read("supabase/migrations/202607110001_delivery_lorry_shifts_v1.sql")
 assert(
   deliveryDriverRoute.includes("DriverMobileDeliveryPage") &&
     !deliveryDriverRoute.includes('import { DeliveryPage }') &&
     !deliveryDriverRoute.includes('DeliveryPage route="driver"') &&
-    deliveryDriverPage.includes('"Available"') &&
-    deliveryDriverPage.includes('"My Deliveries"') &&
-    deliveryDriverPage.includes('"Completed"') &&
+    deliveryDriverPage.includes('"Delivering"') &&
+    deliveryDriverPage.includes('"Delivered"') &&
     deliveryDriverPage.includes('"Failed"') &&
-    deliveryDriverPage.includes('"Expenses"') &&
+    deliveryDriverPage.includes("Select Today&apos;s Lorry") &&
+    deliveryDriverPage.includes("Add Expense") &&
+    deliveryDriverPage.includes("Arrange Route") &&
+    deliveryDriverPage.includes("Record Cash") &&
     deliveryDriverPage.includes("Complete Delivery") &&
     deliveryDriverPage.includes("Report Failed") &&
-    deliveryDriverPage.includes("Mark Loaded") &&
+    deliveryDriverPage.includes('delivery.status === "OUT_FOR_DELIVERY" && failed') &&
+    deliveryDriverPage.includes("Goods Loaded") &&
     deliveryDriverPage.includes("View Summary") &&
-    deliveryDriverPage.includes("goodsReadiness") &&
-    deliveryDriverPage.includes("Goods Ready") &&
-    deliveryDriverPage.includes("Partially Ready") &&
-    deliveryDriverPage.includes("defaultDriverId") &&
-    deliveryDriverPage.includes("No default vehicle assigned. Ask manager to assign vehicle.") &&
+    deliveryDriverPage.includes("Save Current Location as Suggested Customer GPS") &&
     !deliveryDriverPage.includes("New Order"),
-  "Delivery driver route must render V1 tabs and next-action UI, not legacy delivery"
+  "Delivery driver route must render the lorry-shift V1 workflow, not legacy delivery"
+)
+assert(
+  deliveryShiftMigration.includes("delivery_shifts") &&
+    deliveryShiftMigration.includes("delivery_shift_members") &&
+  deliveryShiftMigration.includes("delivery_cash_records") &&
+    deliveryShiftMigration.includes("is_delivery_shift_member") &&
+    deliveryShiftMigration.includes("reorder_delivery_shift_route") &&
+    deliveryShiftMigration.includes("Delivery route changed. Refresh and arrange it again.") &&
+    deliveryShiftMigration.includes("delivery.id = delivery_cash_records.delivery_id") &&
+    deliveryShiftMigration.includes("delivery.id = delivery_expenses.delivery_id") &&
+    deliveryShiftMigration.includes("DELIVERY_ROUTE_REORDERED") &&
+    !deliveryShiftMigration.includes("create table if not exists public.delivery_shift_logs"),
+  "Delivery lorry shifts must keep shared crew data, cash, audit, and RLS"
+)
+assert(
+  deliveryActions.includes('.rpc("reorder_delivery_shift_route"') &&
+    deliveryDriverPage.includes('["ACCEPTED", "LOADED", "OUT_FOR_DELIVERY"]'),
+  "Route arrangement must save atomically and exclude closed or unaccepted stops"
+)
+assert(
+  deliveryActions.includes('readString(delivery.shift_id) !== parsed.shiftId') &&
+    deliveryActions.includes('readString(delivery.shift_id) !== shiftId'),
+  "Shift expenses and cash must reject delivery links from another shift"
 )
 assert(
   deliveryQueries.includes('select("id, status")') &&
@@ -1180,11 +1203,30 @@ assert(
   "Delivery readiness must use safe order statuses only, not finance fields"
 )
 assert(
+  deliveryActions.includes('.eq("status", expectedStatus)') &&
+    deliveryActions.includes("Another crew member already completed this action"),
+  "Delivery status updates must reject duplicate crew actions"
+)
+assert(
+  deliveryActions.includes('.rpc("join_delivery_shift"') &&
+    deliveryShiftMigration.includes("p_change_lorry boolean default false") &&
+    deliveryActions.includes('.rpc("end_delivery_shift"') &&
+    deliveryShiftMigration.includes("create or replace function public.end_delivery_shift") &&
+    deliveryShiftMigration.includes("update public.delivery_shift_members") &&
+    deliveryShiftMigration.includes("set left_at = now()") &&
+    deliveryShiftMigration.includes("idx_deliveries_one_active_stop_per_shift") &&
+    deliveryShiftMigration.includes("can_access_delivery_scope(null, vehicle_team_id)"),
+  "Join and Change Lorry must use one atomic database operation"
+)
+assert(
   deliveryPhoneQa.includes("Android Chrome") &&
     deliveryPhoneQa.includes("iPhone Safari") &&
     deliveryPhoneQa.includes("delivery.driver.qa@elitempsb.com") &&
+    deliveryPhoneQa.includes("select the same lorry") &&
+    deliveryPhoneQa.includes("Confirm tabs: Delivering, Delivered, Failed") &&
     deliveryPhoneQa.includes("Do not record passwords") &&
     deliveryUatGate.includes("Limited UAT is **not ready**") &&
+    deliveryUatGate.includes("202607110001_delivery_lorry_shifts_v1.sql") &&
     deliveryUatGate.includes("NO-GO for limited UAT") &&
     deliveryUatGate.includes("Stock outbound/loading remains in the Stock module"),
   "Delivery real-phone QA and limited UAT gate docs must stay present"
@@ -1203,7 +1245,7 @@ assert(
     deliveryPreviewVerifier.includes("DELIVERY_QA_PASSWORD") &&
     deliveryPreviewVerifier.includes("/debug/build") &&
     deliveryPreviewVerifier.includes("/delivery/driver") &&
-    deliveryPreviewVerifier.includes("My Deliveries") &&
+    deliveryPreviewVerifier.includes("Delivering") &&
     deliveryPreviewVerifier.includes("New Order"),
   "Delivery preview verifier must login and reject stale legacy driver deployments"
 )

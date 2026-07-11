@@ -96,13 +96,13 @@ async function main() {
     redirect: "manual",
   })
   const driverHtml = await driver.text()
-  const v1Tabs = ["Available", "My Deliveries", "Completed", "Failed", "Expenses"]
+  const v1Tabs = ["Delivering", "Delivered", "Failed"]
   const legacyTabs = ["Dashboard", "Orders", "New Order", "Driver", "Vehicles"]
 
   assert(driver.status === 200, `/delivery/driver returned ${driver.status}`)
   assert(
     v1Tabs.every((tab) => driverHtml.includes(tab)),
-    "/delivery/driver is missing V1 tabs"
+    "/delivery/driver is missing lorry-shift V1 tabs"
   )
   assert(
     !legacyTabs.every((tab) => driverHtml.includes(tab)),

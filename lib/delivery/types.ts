@@ -36,6 +36,9 @@ export const deliveryJobTypes = [
   "CUSTOMER_DELIVERY",
   "INTERNAL_TRANSFER_DELIVERY",
   "RETURN_COLLECTION",
+  "SUPPLIER_PICKUP",
+  "COLLECT_DOCUMENT",
+  "OTHER_STOP",
 ] as const
 export const deliveryFailedReasons = [
   "CUSTOMER_NOT_AVAILABLE",
@@ -74,6 +77,7 @@ export type DeliveryGoodsIssueReason = (typeof deliveryGoodsIssueReasons)[number
 export type DeliveryExpenseType = (typeof deliveryExpenseTypes)[number]
 export type DeliveryExpenseStatus = (typeof deliveryExpenseStatuses)[number]
 export type DeliveryProofType = "DELIVERED" | "FAILED"
+export type DeliveryCrewRole = "DRIVER" | "ASSISTANT"
 export type DeliveryGoodsReadiness =
   | "Goods Ready"
   | "Not Ready"
@@ -97,6 +101,8 @@ export type Vehicle = {
   gpsProviderName?: string
   gpsProviderVehicleRef?: string
   gpsEnabled?: boolean
+  currentCrew?: string[]
+  shiftStatus?: "ACTIVE" | "AVAILABLE"
 }
 
 export type TruckGpsProvider = {
@@ -387,6 +393,39 @@ export type Delivery = {
   completedAt: string | null
   goodsReadiness: DeliveryGoodsReadiness
   createdAt: string
+  shiftId: string | null
+  routeSequence: number | null
+  managerPinned: boolean
+  plannedDeliveryAt: string | null
+  cashReceived: number
+}
+
+export type DeliveryShiftMember = {
+  userId: string
+  fullName: string
+  crewRole: DeliveryCrewRole
+  joinedAt: string
+}
+
+export type DeliveryShift = {
+  id: string
+  shiftDate: string
+  vehicleId: string
+  vehicleNo: string
+  outletId: string | null
+  deliveryTeamId: string | null
+  status: "ACTIVE" | "ENDED"
+  startedAt: string
+  endedAt: string | null
+  members: DeliveryShiftMember[]
+}
+
+export type DeliveryShiftHome = {
+  shift: DeliveryShift | null
+  vehicles: Vehicle[]
+  deliveries: Delivery[]
+  expenses: DeliveryExpense[]
+  cashReceived: number
 }
 
 export type DeliveryLinkedOrder = {
@@ -497,6 +536,7 @@ export type CreateDeliveryExpensePayload = {
   amount: number
   receiptFile: File
   remark?: string | null
+  shiftId?: string | null
 }
 
 export type DeliveryExpenseFilters = {

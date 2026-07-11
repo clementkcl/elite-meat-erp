@@ -36,6 +36,8 @@ import {
   type DeliveryLinkedOrder,
   type DeliveryProof,
   type DeliveryStatusTimelineEntry,
+  type DeliveryShift,
+  type DeliveryShiftHome,
   type Vehicle,
 } from "@/lib/delivery/types"
 
@@ -306,6 +308,173 @@ function mapDelivery(
     completedAt: readNullableString(row.completed_at),
     goodsReadiness,
     createdAt: readString(row.created_at, new Date().toISOString()),
+    shiftId: readNullableString(row.shift_id),
+    routeSequence:
+      row.route_sequence === null || row.route_sequence === undefined
+        ? null
+        : readNumber(row.route_sequence),
+    managerPinned: readBoolean(row.manager_pinned),
+    plannedDeliveryAt: readNullableString(row.planned_delivery_at),
+    cashReceived: readNumber(row.cash_received),
+  }
+}
+
+async function getActiveDeliveryShift(
+  context: DeliveryQueryContext
+): Promise<DeliveryShift | null> {
+  const today = todayIsoDate()
+  const { data: membership, error: membershipError } = await context.supabase
+    .from("delivery_shift_members")
+    .select("shift_id")
+    .eq("user_id", context.profile.id)
+    .eq("shift_date", today)
+    .is("left_at", null)
+    .maybeSingle()
+
+  if (membershipError) {
+    throw new Error(membershipError.message)
+  }
+
+  const shiftId = readString(asRecord(membership).shift_id)
+  if (!shiftId) return null
+
+  const [{ data: shiftRow, error: shiftError }, { data: memberRows }] =
+    await Promise.all([
+      context.supabase
+        .from("delivery_shifts")
+        .select("*")
+        .eq("id", shiftId)
+        .eq("status", "ACTIVE")
+        .maybeSingle(),
+      context.supabase
+        .from("delivery_shift_members")
+        .select("user_id, crew_role, joined_at")
+        .eq("shift_id", shiftId)
+        .is("left_at", null),
+    ])
+
+  if (shiftError) throw new Error(shiftError.message)
+  const shift = asRecord(shiftRow)
+  if (!shift.id) return null
+
+  const members = asRecordArray(memberRows)
+  const names = await loadProfiles(
+    context.supabase,
+    members.map((member) => ({ driver_id: member.user_id }))
+  )
+  const vehicleId = readString(shift.vehicle_id)
+  const { data: vehicle } = await context.supabase
+    .from("vehicles")
+    .select("vehicle_no")
+    .eq("id", vehicleId)
+    .maybeSingle()
+
+  return {
+    id: shiftId,
+    shiftDate: readString(shift.shift_date, today),
+    vehicleId,
+    vehicleNo: readString(asRecord(vehicle).vehicle_no, "Lorry"),
+    outletId: readNullableString(shift.outlet_id),
+    deliveryTeamId: readNullableString(shift.delivery_team_id),
+    status: "ACTIVE",
+    startedAt: readString(shift.started_at),
+    endedAt: readNullableString(shift.ended_at),
+    members: members.map((member) => ({
+      userId: readString(member.user_id),
+      fullName: names.get(readString(member.user_id)) ?? "Crew member",
+      crewRole: readString(member.crew_role) === "DRIVER" ? "DRIVER" : "ASSISTANT",
+      joinedAt: readString(member.joined_at),
+    })),
+  }
+}
+
+export async function getDeliveryShiftHome(): Promise<DeliveryShiftHome> {
+  const context = await getQueryContext()
+  if (!context) return { shift: null, vehicles: [], deliveries: [], expenses: [], cashReceived: 0 }
+
+  const shift = await getActiveDeliveryShift(context)
+  const vehicles = await getDeliveryVehicles()
+  const { data: activeShiftRows } = await context.supabase
+    .from("delivery_shifts")
+    .select("id, vehicle_id")
+    .eq("shift_date", todayIsoDate())
+    .eq("status", "ACTIVE")
+  const shifts = asRecordArray(activeShiftRows)
+  const shiftIds = shifts.map((row) => readString(row.id)).filter(Boolean)
+  const { data: crewRows } = shiftIds.length
+    ? await context.supabase
+        .from("delivery_shift_members")
+        .select("shift_id, user_id")
+        .in("shift_id", shiftIds)
+        .is("left_at", null)
+    : { data: [] }
+  const crew = asRecordArray(crewRows)
+  const crewNames = await loadProfiles(
+    context.supabase,
+    crew.map((row) => ({ driver_id: row.user_id }))
+  )
+  const shiftByVehicle = new Map(
+    shifts.map((row) => [readString(row.vehicle_id), readString(row.id)])
+  )
+  const scopedVehicles = vehicles.map((vehicle) => {
+    const vehicleShiftId = shiftByVehicle.get(vehicle.id)
+    return {
+      ...vehicle,
+      shiftStatus: vehicleShiftId ? "ACTIVE" as const : "AVAILABLE" as const,
+      currentCrew: vehicleShiftId
+        ? crew
+            .filter((row) => readString(row.shift_id) === vehicleShiftId)
+            .map((row) => crewNames.get(readString(row.user_id)) ?? "Crew member")
+        : [],
+    }
+  })
+  if (!shift) return { shift: null, vehicles: scopedVehicles, deliveries: [], expenses: [], cashReceived: 0 }
+
+  const today = todayIsoDate()
+  const [{ data: deliveryRows, error: deliveryError }, expenses, cashResult] =
+    await Promise.all([
+      context.supabase
+        .from("deliveries")
+        .select("*")
+        .or(`shift_id.eq.${shift.id},and(status.eq.AVAILABLE,or(requested_delivery_date.eq.${today},requested_delivery_date.is.null))`)
+        .order("manager_pinned", { ascending: false })
+        .order("planned_delivery_at", { ascending: true, nullsFirst: false })
+        .order("route_sequence", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true }),
+      context.supabase
+        .from("delivery_expenses")
+        .select("*")
+        .eq("shift_id", shift.id)
+        .order("created_at", { ascending: false }),
+      context.supabase
+        .from("delivery_cash_records")
+        .select("delivery_id, amount")
+        .eq("shift_id", shift.id),
+    ])
+
+  if (deliveryError) throw new Error(deliveryError.message)
+  if (expenses.error) throw new Error(expenses.error.message)
+
+  const cashRows = asRecordArray(cashResult.data)
+  const cashByDelivery = new Map<string, number>()
+  for (const row of cashRows) {
+    const deliveryId = readString(row.delivery_id)
+    if (deliveryId) cashByDelivery.set(deliveryId, (cashByDelivery.get(deliveryId) ?? 0) + readNumber(row.amount))
+  }
+  const deliveries = await mapDeliveries(context.supabase, asRecordArray(deliveryRows))
+
+  return {
+    shift,
+    vehicles: scopedVehicles,
+    deliveries: deliveries.map((delivery) => ({
+      ...delivery,
+      cashReceived: cashByDelivery.get(delivery.id) ?? 0,
+    })),
+    expenses: await mapExpenses(context.supabase, asRecordArray(expenses.data)),
+    cashReceived: cashRows.reduce(
+      (total, row) => total + readNumber(row.amount),
+      0
+    ),
   }
 }
 
@@ -461,28 +630,6 @@ async function withSignedExpenseUrls(
       return { ...expense, receiptUrl: data?.signedUrl ?? "" }
     })
   )
-}
-
-export async function getAvailableDeliveries(): Promise<Delivery[]> {
-  const context = await getQueryContext()
-
-  if (!context) {
-    return []
-  }
-
-  const { data, error } = await context.supabase
-    .from("deliveries")
-    .select("*")
-    .eq("status", "AVAILABLE")
-    .or(`requested_delivery_date.eq.${todayIsoDate()},requested_delivery_date.is.null`)
-    .order("requested_delivery_date", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: true })
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return mapDeliveries(context.supabase, asRecordArray(data))
 }
 
 function mapAddressSuggestion(
@@ -646,37 +793,6 @@ export async function getDeliveryDrivers() {
     fullName: readString(profile.full_name, readString(profile.email, "Driver")),
     email: readString(profile.email),
   }))
-}
-
-export async function getTodayDriverDeliveries(): Promise<Delivery[]> {
-  const context = await getQueryContext()
-
-  if (!context) {
-    return []
-  }
-
-  const today = todayIsoDate()
-  const { data, error } = await context.supabase
-    .from("deliveries")
-    .select("*")
-    .eq("driver_id", context.profile.id)
-    .in("status", [
-      "ACCEPTED",
-      "LOADED",
-      "OUT_FOR_DELIVERY",
-      "DELIVERED",
-      "FAILED",
-    ])
-    .or(
-      `requested_delivery_date.eq.${today},requested_delivery_date.is.null,created_at.gte.${today}T00:00:00.000Z`
-    )
-    .order("created_at", { ascending: false })
-
-  if (error) {
-    throw new Error(error.message)
-  }
-
-  return mapDeliveries(context.supabase, asRecordArray(data))
 }
 
 export async function getDeliveryDashboard(

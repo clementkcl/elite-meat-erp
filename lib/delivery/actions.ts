@@ -17,10 +17,8 @@ import {
 } from "@/lib/supabase/server"
 import type { DeliveryActionState } from "@/lib/delivery/action-state"
 import {
-  getAvailableDeliveries as queryAvailableDeliveries,
   getDeliveryById as queryDeliveryById,
   getDeliveryDashboard as queryDeliveryDashboard,
-  getTodayDriverDeliveries as queryTodayDriverDeliveries,
 } from "@/lib/delivery/queries"
 import {
   deliveryPaymentStatuses,
@@ -40,6 +38,7 @@ import {
   type DeliveryFailedReason,
   type DeliveryGpsInput,
   type DeliveryLifecycleStatus,
+  type DeliveryJobType,
 } from "@/lib/delivery/types"
 
 const deliveryAccessRoles: UserRole[] = [
@@ -271,9 +270,32 @@ const serviceAddressIssueSchema = z.object({
 const serviceExpenseSchema = z.object({
   deliveryId: serviceOptionalUuid,
   vehicleId: serviceOptionalUuid,
+  shiftId: serviceOptionalUuid,
   expenseType: z.enum(deliveryExpenseTypes),
   amount: z.number().positive(),
   remark: serviceOptionalText,
+})
+
+const shiftStopTypes = [
+  "RETURN_COLLECTION",
+  "INTERNAL_TRANSFER_DELIVERY",
+  "SUPPLIER_PICKUP",
+  "COLLECT_DOCUMENT",
+  "OTHER_STOP",
+] as const
+
+const shiftStopSchema = z.object({
+  shiftId: serviceUuid,
+  deliveryType: z.enum(shiftStopTypes),
+  locationName: z.string().trim().min(2),
+  phone: serviceOptionalText,
+  address: serviceOptionalText,
+  note: serviceOptionalText,
+})
+
+const routeOrderSchema = z.object({
+  shiftId: serviceUuid,
+  deliveryIds: z.array(serviceUuid).min(1),
 })
 
 const managerDeliveryDriverSchema = z.object({
@@ -844,7 +866,8 @@ function assertPhotoFile(file: File, label: string) {
   }
 }
 
-function assertDriverCanChangeDelivery(
+async function assertDriverCanChangeDelivery(
+  supabase: SupabaseServerClient,
   delivery: Record<string, unknown>,
   profile: CurrentProfile
 ) {
@@ -862,6 +885,19 @@ function assertDriverCanChangeDelivery(
 
   if (driverId === profile.id) {
     return
+  }
+
+  const shiftId = readString(delivery.shift_id)
+  if (shiftId) {
+    const { data } = await supabase
+      .from("delivery_shift_members")
+      .select("id")
+      .eq("shift_id", shiftId)
+      .eq("user_id", profile.id)
+      .is("left_at", null)
+      .maybeSingle()
+
+    if (readString(asRecord(data).id)) return
   }
 
   throw new Error("This delivery is not assigned to you.")
@@ -908,6 +944,31 @@ async function getDeliveryForUpdate(
   }
 
   return delivery
+}
+
+async function getActiveShiftForUser(context: DeliveryActionContext) {
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: member, error } = await context.supabase
+    .from("delivery_shift_members")
+    .select("shift_id")
+    .eq("user_id", context.profile.id)
+    .eq("shift_date", today)
+    .is("left_at", null)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+
+  const shiftId = readString(asRecord(member).shift_id)
+  if (!shiftId) throw new Error("Select today's lorry before starting delivery work.")
+
+  const { data: shift, error: shiftError } = await context.supabase
+    .from("delivery_shifts")
+    .select("*")
+    .eq("id", shiftId)
+    .eq("status", "ACTIVE")
+    .maybeSingle()
+  if (shiftError) throw new Error(shiftError.message)
+  if (!asRecord(shift).id) throw new Error("Today's lorry shift is no longer active.")
+  return asRecord(shift)
 }
 
 async function getDeliveryExpenseForReview(
@@ -988,11 +1049,12 @@ async function insertDeliveryStatusLog(
 async function updateDeliveryStatus(
   context: DeliveryActionContext,
   deliveryId: string,
+  expectedStatus: DeliveryLifecycleStatus,
   status: DeliveryLifecycleStatus,
   updates: Record<string, unknown>,
   notes: string | null
 ) {
-  const { error } = await context.supabase
+  const { data, error } = await context.supabase
     .from("deliveries")
     .update({
       ...updates,
@@ -1000,9 +1062,19 @@ async function updateDeliveryStatus(
       updated_by: context.profile.id,
     })
     .eq("id", deliveryId)
+    .eq("status", expectedStatus)
+    .select("id")
+    .maybeSingle()
 
   if (error) {
+    if (status === "OUT_FOR_DELIVERY" && error.code === "23505") {
+      throw new Error("Complete the current stop before starting the next one.")
+    }
     throw new Error(error.message)
+  }
+
+  if (!asRecord(data).id) {
+    throw new Error("Another crew member already completed this action. Refreshing the delivery.")
   }
 
   await insertDeliveryStatusLog(context, deliveryId, status, notes)
@@ -1203,7 +1275,7 @@ async function createProofAndComplete(
   }
 
   const delivery = await getDeliveryForUpdate(context.supabase, deliveryId)
-  assertDriverCanChangeDelivery(delivery, context.profile)
+  await assertDriverCanChangeDelivery(context.supabase, delivery, context.profile)
 
   if (readString(delivery.status) !== "OUT_FOR_DELIVERY") {
     throw new Error("Start delivery before uploading proof.")
@@ -1248,6 +1320,7 @@ async function createProofAndComplete(
   await updateDeliveryStatus(
     context,
     deliveryId,
+    "OUT_FOR_DELIVERY",
     outcome,
     {
       completed_at: new Date().toISOString(),
@@ -1303,14 +1376,6 @@ async function createProofAndComplete(
   )
 
   return { deliveryId, status: outcome, proofFileId: fileId }
-}
-
-export async function getAvailableDeliveries() {
-  return queryAvailableDeliveries()
-}
-
-export async function getTodayDriverDeliveries() {
-  return queryTodayDriverDeliveries()
 }
 
 export async function getDeliveryDashboard(filters: DeliveryDashboardFilters = {}) {
@@ -1464,26 +1529,32 @@ export async function acceptDelivery(deliveryId: string, vehicleId?: string | nu
     : null
 
   return runDeliveryService(deliveryDriverRoles, async (context) => {
+    const shift = await getActiveShiftForUser(context)
     const delivery = await getDeliveryForUpdate(context.supabase, parsedDeliveryId)
 
     if (readString(delivery.status) !== "AVAILABLE") {
       throw new Error("This delivery is no longer available.")
     }
 
-    const teamId = readString(delivery.delivery_team_id) || context.profile.departmentId
-    const vehicleId =
-      parsedVehicleId ||
-      readString(delivery.vehicle_id) ||
-      readString(delivery.default_vehicle_id) ||
-      (await defaultVehicleId(context.supabase, teamId))
+    const selectedVehicleId = parsedVehicleId || readString(shift.vehicle_id)
+    if (selectedVehicleId !== readString(shift.vehicle_id)) {
+      throw new Error("This delivery must use today's selected lorry.")
+    }
+    const { count } = await context.supabase
+      .from("deliveries")
+      .select("id", { count: "exact", head: true })
+      .eq("shift_id", readString(shift.id))
 
     await updateDeliveryStatus(
       context,
       parsedDeliveryId,
+      "AVAILABLE",
       "ACCEPTED",
       {
         driver_id: context.profile.id,
-        vehicle_id: vehicleId,
+        vehicle_id: selectedVehicleId,
+        shift_id: readString(shift.id),
+        route_sequence: (count ?? 0) + 1,
         accepted_at: new Date().toISOString(),
       },
       "Delivery accepted."
@@ -1496,9 +1567,8 @@ export async function acceptDelivery(deliveryId: string, vehicleId?: string | nu
       "DELIVERY_ACCEPTED",
       "deliveries",
       parsedDeliveryId,
-      { vehicleId }
+      { vehicleId: selectedVehicleId, shiftId: readString(shift.id) }
     )
-
     return { deliveryId: parsedDeliveryId, status: "ACCEPTED" as const }
   })
 }
@@ -1508,7 +1578,7 @@ export async function markDeliveryLoaded(deliveryId: string) {
 
   return runDeliveryService(deliveryDriverRoles, async (context) => {
     const delivery = await getDeliveryForUpdate(context.supabase, parsedDeliveryId)
-    assertDriverCanChangeDelivery(delivery, context.profile)
+    await assertDriverCanChangeDelivery(context.supabase, delivery, context.profile)
 
     if (readString(delivery.status) !== "ACCEPTED") {
       throw new Error("Accept this delivery before marking it loaded.")
@@ -1517,6 +1587,7 @@ export async function markDeliveryLoaded(deliveryId: string) {
     await updateDeliveryStatus(
       context,
       parsedDeliveryId,
+      "ACCEPTED",
       "LOADED",
       { loaded_at: new Date().toISOString() },
       "Driver confirmed loading."
@@ -1541,15 +1612,29 @@ export async function startDelivery(deliveryId: string) {
 
   return runDeliveryService(deliveryDriverRoles, async (context) => {
     const delivery = await getDeliveryForUpdate(context.supabase, parsedDeliveryId)
-    assertDriverCanChangeDelivery(delivery, context.profile)
+    await assertDriverCanChangeDelivery(context.supabase, delivery, context.profile)
 
     if (readString(delivery.status) !== "LOADED") {
       throw new Error("Mark this delivery loaded before starting delivery.")
     }
 
+    const shiftId = readString(delivery.shift_id)
+    if (shiftId) {
+      const { count } = await context.supabase
+        .from("deliveries")
+        .select("id", { count: "exact", head: true })
+        .eq("shift_id", shiftId)
+        .eq("status", "OUT_FOR_DELIVERY")
+        .neq("id", parsedDeliveryId)
+      if ((count ?? 0) > 0) {
+        throw new Error("Complete the current stop before starting the next one.")
+      }
+    }
+
     await updateDeliveryStatus(
       context,
       parsedDeliveryId,
+      "LOADED",
       "OUT_FOR_DELIVERY",
       { started_at: new Date().toISOString() },
       "Delivery started."
@@ -1621,7 +1706,7 @@ export async function reportAddressIssue(
 
   return runDeliveryService(deliveryDriverRoles, async (context) => {
     const delivery = await getDeliveryForUpdate(context.supabase, parsedDeliveryId)
-    assertDriverCanChangeDelivery(delivery, context.profile)
+    await assertDriverCanChangeDelivery(context.supabase, delivery, context.profile)
     await createDeliveryAddressSuggestion(context, delivery, payload)
 
     await insertAuditLog(
@@ -1657,7 +1742,7 @@ export async function saveSuggestedCustomerGps(
 
   return runDeliveryService(deliveryDriverRoles, async (context) => {
     const delivery = await getDeliveryForUpdate(context.supabase, parsedDeliveryId)
-    assertDriverCanChangeDelivery(delivery, context.profile)
+    await assertDriverCanChangeDelivery(context.supabase, delivery, context.profile)
 
     await createDeliveryAddressSuggestion(context, delivery, {
       suggestedAddress: readString(delivery.delivery_address),
@@ -1691,9 +1776,22 @@ export async function createDeliveryExpense(payload: CreateDeliveryExpensePayloa
     let deliveryTeamId = scopedServiceTeamId(context.profile, null)
     let deliveryVehicleId = parsed.vehicleId
 
+    if (parsed.shiftId) {
+      const shift = await getActiveShiftForUser(context)
+      if (readString(shift.id) !== parsed.shiftId) {
+        throw new Error("This expense is outside your active lorry shift.")
+      }
+      deliveryOutletId = readString(shift.outlet_id) || deliveryOutletId
+      deliveryTeamId = readString(shift.delivery_team_id) || deliveryTeamId
+      deliveryVehicleId = readString(shift.vehicle_id)
+    }
+
     if (parsed.deliveryId) {
       const delivery = await getDeliveryForUpdate(context.supabase, parsed.deliveryId)
-      assertDriverCanChangeDelivery(delivery, context.profile)
+      await assertDriverCanChangeDelivery(context.supabase, delivery, context.profile)
+      if (parsed.shiftId && readString(delivery.shift_id) !== parsed.shiftId) {
+        throw new Error("This delivery is outside your active lorry shift.")
+      }
       deliveryOutletId = readString(delivery.outlet_id) || deliveryOutletId
       deliveryTeamId = readString(delivery.delivery_team_id) || deliveryTeamId
       deliveryVehicleId =
@@ -1715,6 +1813,7 @@ export async function createDeliveryExpense(payload: CreateDeliveryExpensePayloa
       .from("delivery_expenses")
       .insert({
         delivery_id: parsed.deliveryId,
+        shift_id: parsed.shiftId,
         driver_id: context.profile.id,
         outlet_id: deliveryOutletId,
         vehicle_id: deliveryVehicleId,
@@ -1752,6 +1851,133 @@ export async function createDeliveryExpense(payload: CreateDeliveryExpensePayloa
     )
 
     return { expenseId, status: "PENDING" as const }
+  })
+}
+
+export async function joinDeliveryShift(vehicleId: string) {
+  const parsedVehicleId = parseService(serviceUuid, vehicleId)
+  return runDeliveryService(deliveryDriverRoles, async (context) => {
+    const { data, error } = await context.supabase.rpc("join_delivery_shift", {
+      p_vehicle_id: parsedVehicleId,
+      p_change_lorry: false,
+    })
+    if (error) throw new Error(error.message)
+    return { shiftId: readString(data) }
+  })
+}
+
+export async function changeDeliveryShift(vehicleId: string) {
+  const parsedVehicleId = parseService(serviceUuid, vehicleId)
+  return runDeliveryService(deliveryDriverRoles, async (context) => {
+    const { data, error } = await context.supabase.rpc("join_delivery_shift", {
+      p_vehicle_id: parsedVehicleId,
+      p_change_lorry: true,
+    })
+    if (error) throw new Error(error.message)
+    return { shiftId: readString(data) }
+  })
+}
+
+export async function arrangeDeliveryRoute(shiftId: string, deliveryIds: string[]) {
+  const parsed = parseService(routeOrderSchema, { shiftId, deliveryIds })
+  return runDeliveryService(deliveryDriverRoles, async (context) => {
+    const shift = await getActiveShiftForUser(context)
+    if (readString(shift.id) !== parsed.shiftId) throw new Error("This is not your active shift.")
+    const { error } = await context.supabase.rpc("reorder_delivery_shift_route", {
+      p_shift_id: parsed.shiftId,
+      p_delivery_ids: parsed.deliveryIds,
+    })
+    if (error) throw new Error(error.message)
+    return { shiftId: parsed.shiftId }
+  })
+}
+
+export async function recordDeliveryCash(
+  shiftId: string,
+  deliveryId: string | null,
+  amount: number,
+  remark?: string | null
+) {
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a cash amount greater than zero.")
+  const parsedDeliveryId = deliveryId ? parseService(serviceUuid, deliveryId) : null
+  return runDeliveryService(deliveryDriverRoles, async (context) => {
+    const shift = await getActiveShiftForUser(context)
+    if (readString(shift.id) !== shiftId) throw new Error("This is not your active shift.")
+    if (parsedDeliveryId) {
+      const delivery = await getDeliveryForUpdate(context.supabase, parsedDeliveryId)
+      if (readString(delivery.shift_id) !== shiftId) {
+        throw new Error("This delivery is outside your active lorry shift.")
+      }
+    }
+    const { error } = await context.supabase.from("delivery_cash_records").insert({
+      shift_id: shiftId, delivery_id: parsedDeliveryId, amount,
+      remark: remark?.trim() || null, recorded_by: context.profile.id,
+    })
+    if (error) throw new Error(error.message)
+    await insertAuditLog(context.supabase, context.profile, "DELIVERY_CASH_RECORDED", "delivery_shifts", shiftId, { deliveryId, amount })
+    return { shiftId }
+  })
+}
+
+export async function reportDeliveryVehicleIssue(shiftId: string, note: string) {
+  const cleanNote = note.trim()
+  if (cleanNote.length < 2) throw new Error("Enter a short vehicle issue note.")
+  return runDeliveryService(deliveryDriverRoles, async (context) => {
+    const shift = await getActiveShiftForUser(context)
+    if (readString(shift.id) !== shiftId) throw new Error("This is not your active shift.")
+    await insertAuditLog(context.supabase, context.profile, "DELIVERY_VEHICLE_ISSUE_REPORTED", "delivery_shifts", shiftId, { note: cleanNote })
+    return { shiftId }
+  })
+}
+
+export async function addDeliveryShiftStop(payload: {
+  shiftId: string
+  deliveryType: DeliveryJobType
+  locationName: string
+  phone?: string | null
+  address?: string | null
+  note?: string | null
+}) {
+  const parsed = parseService(shiftStopSchema, payload)
+  return runDeliveryService(deliveryDriverRoles, async (context) => {
+    const shift = await getActiveShiftForUser(context)
+    if (readString(shift.id) !== parsed.shiftId) throw new Error("This is not your active shift.")
+    const { count } = await context.supabase.from("deliveries")
+      .select("id", { count: "exact", head: true }).eq("shift_id", parsed.shiftId)
+    const deliveryNo = generatedDeliveryNo("STOP")
+    const { data, error } = await context.supabase.from("deliveries").insert({
+      delivery_no: deliveryNo,
+      delivery_type: parsed.deliveryType,
+      status: "AVAILABLE",
+      outlet_id: readString(shift.outlet_id) || null,
+      delivery_team_id: readString(shift.delivery_team_id) || null,
+      shift_id: parsed.shiftId,
+      vehicle_id: readString(shift.vehicle_id),
+      route_sequence: (count ?? 0) + 1,
+      customer_name: parsed.locationName,
+      customer_phone: parsed.phone,
+      delivery_address: parsed.address,
+      delivery_note: parsed.note,
+      requested_delivery_date: new Date().toISOString().slice(0, 10),
+      created_by: context.profile.id,
+      updated_by: context.profile.id,
+    }).select("id").single()
+    if (error) throw new Error(error.message)
+    const deliveryId = readString(asRecord(data).id)
+    await insertDeliveryStatusLog(context, deliveryId, "AVAILABLE", "Unexpected shift stop added.")
+    await insertAuditLog(context.supabase, context.profile, "DELIVERY_STOP_ADDED", "deliveries", deliveryId, { shiftId: parsed.shiftId })
+    return { deliveryId, deliveryNo }
+  })
+}
+
+export async function endDeliveryShift(shiftId: string) {
+  const parsedShiftId = parseService(serviceUuid, shiftId)
+  return runDeliveryService(deliveryDriverRoles, async (context) => {
+    const { error } = await context.supabase.rpc("end_delivery_shift", {
+      p_shift_id: parsedShiftId,
+    })
+    if (error) throw new Error(error.message)
+    return { shiftId: parsedShiftId }
   })
 }
 
@@ -1941,6 +2167,7 @@ export async function cancelDeliveryAction(
     await updateDeliveryStatus(
       context,
       parsed.deliveryId,
+      readString(delivery.status) as DeliveryLifecycleStatus,
       "CANCELLED",
       {
         completed_at: new Date().toISOString(),

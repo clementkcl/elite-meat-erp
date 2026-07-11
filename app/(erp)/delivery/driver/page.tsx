@@ -2,10 +2,7 @@ import { DriverMobileDeliveryPage } from "@/components/delivery/driver-mobile-de
 import { moduleAccessBlock } from "@/lib/auth/module-guard"
 import { requireCurrentProfile, type UserRole } from "@/lib/auth/session"
 import {
-  getAvailableDeliveries,
-  getDeliveryVehicles,
-  getTodayDriverDeliveries,
-  getTodayDriverExpenses,
+  getDeliveryShiftHome,
 } from "@/lib/delivery/queries"
 
 const driverDeliveryRoles: UserRole[] = [
@@ -28,24 +25,10 @@ export default async function DeliveryDriverPage() {
 
   const profile = await requireCurrentProfile()
 
-  const result = await Promise.all([
-    getAvailableDeliveries(),
-    getTodayDriverDeliveries(),
-    getTodayDriverExpenses(),
-    getDeliveryVehicles(),
-  ])
-    .then(([availableDeliveries, driverDeliveries, expenses, vehicles]) => ({
-      availableDeliveries,
-      driverDeliveries,
-      expenses,
-      vehicles,
-      error: null,
-    }))
+  const result = await getDeliveryShiftHome()
+    .then((home) => ({ home, error: null }))
     .catch((error: unknown) => ({
-      availableDeliveries: [],
-      driverDeliveries: [],
-      expenses: [],
-      vehicles: [],
+      home: { shift: null, deliveries: [], expenses: [], vehicles: [], cashReceived: 0 },
       error:
         error instanceof Error
           ? error.message
@@ -54,11 +37,7 @@ export default async function DeliveryDriverPage() {
 
   return (
     <DriverMobileDeliveryPage
-      availableDeliveries={result.availableDeliveries}
-      driverDeliveries={result.driverDeliveries}
-      expenses={result.expenses}
-      vehicles={result.vehicles}
-      driverId={profile.id}
+      home={result.home}
       driverName={profile.fullName}
       loadError={result.error}
     />
